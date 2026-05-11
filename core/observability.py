@@ -106,11 +106,11 @@ async def request_id_middleware(
     """
     rid = request.headers.get(REQUEST_ID_HEADER) or uuid.uuid4().hex
     request.state.request_id = rid
-    token = tenant_context._request_id.set(rid)  # noqa: SLF001 — internal token
+    token = tenant_context.set_request_id(rid)
     try:
         response = await call_next(request)
     finally:
-        tenant_context._request_id.reset(token)  # noqa: SLF001
+        tenant_context.reset_request_id(token)
     response.headers[REQUEST_ID_HEADER] = rid
     return response
 

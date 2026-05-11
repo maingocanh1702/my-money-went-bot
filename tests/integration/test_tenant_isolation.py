@@ -183,6 +183,32 @@ async def test_set_tenant_rejects_invalid_user_id() -> None:
         tenant_context.set_tenant(-1)
 
 
+async def test_set_request_id_reset_round_trip() -> None:
+    """`set_request_id` + `reset_request_id` form a stack — middleware uses this
+    to seed request_id at entry and restore on exit without leaking across tasks.
+    """
+    tenant_context.clear_tenant()
+    assert tenant_context.get_request_id() is None
+
+    outer = tenant_context.set_request_id("outer-rid")
+    assert tenant_context.get_request_id() == "outer-rid"
+
+    inner = tenant_context.set_request_id("inner-rid")
+    assert tenant_context.get_request_id() == "inner-rid"
+
+    tenant_context.reset_request_id(inner)
+    assert tenant_context.get_request_id() == "outer-rid"
+
+    tenant_context.reset_request_id(outer)
+    assert tenant_context.get_request_id() is None
+
+
+async def test_set_request_id_rejects_empty() -> None:
+    """Empty rid is a programming error — fail loud rather than store ''."""
+    with pytest.raises(ValueError):
+        tenant_context.set_request_id("")
+
+
 async def test_delete_user_cascades_transactions(pool: asyncpg.Pool) -> None:
     """Sanity check: ON DELETE CASCADE on users(id) actually clears tx."""
     await _clean(pool)
