@@ -1,0 +1,57 @@
+# Pre-commit hooks for MyMoneyWent.
+# Run on staged files locally before commit; CI re-runs all files on PR.
+#
+# Setup:
+#     pip install -e ".[dev]"
+#     pre-commit install
+#
+# Manual run:
+#     pre-commit run --all-files
+#
+# See: docs/operations/development-workflow.md §3
+
+default_language_version:
+  python: python3.11
+
+repos:
+  # ── Ruff (lint + import sort, NO format — black owns format) ──
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.10
+    hooks:
+      - id: ruff
+        args: [--fix]
+
+  # ── Black (formatter, single source of truth for code style) ──
+  - repo: https://github.com/psf/black-pre-commit-mirror
+    rev: 24.4.2
+    hooks:
+      - id: black
+
+  # ── Mypy (strict type check on new code) ──
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0
+    hooks:
+      - id: mypy
+        files: ^(core|markets|tests)/
+        args: [--strict, --ignore-missing-imports]
+        additional_dependencies: []
+
+  # ── detect-secrets (block accidental secret commits) ──
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: |
+          (?x)^(
+            .*\.lock|
+            docs/.*|
+            __pycache__/.*|
+            \.secrets\.baseline
+          )$
+
+  # ── import-linter (enforce ADR-0001 boundary: core ↛ markets) ──
+  - repo: https://github.com/seddonym/import-linter
+    rev: v2.0
+    hooks:
+      - id: lint-imports

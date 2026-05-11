@@ -1,0 +1,8 @@
+# Dev dependencies — source of truth in pyproject.toml [project.optional-dependencies.dev].
+# This file is a pointer for tooling that prefers requirements.txt format.
+#
+# Install:
+#     pip install -e ".[dev]"
+#
+# Or equivalent:
+-e .[dev]
