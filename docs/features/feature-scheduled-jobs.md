@@ -77,14 +77,63 @@ CREATE INDEX idx_jobs_next_run ON scheduled_jobs(next_run_utc) WHERE enabled = T
 
 ### Job Types
 
-| Job | Schedule | Condition |
-|-----|----------|-----------|
-| `daily_recap` | 23:00 ±5min jitter | enabled=TRUE, ≥1 tx |
-| `trial_reminder` | Day 12 of trial | trial active |
-| `trial_downgrade` | Day 14 of trial | trial active |
-| `weekly` | Sunday 14:00 ±5min | Pro+ only |
-| `monthly_report` | Last day month 14:00 ±5min | Pro+ only |
-| `monthly_allocation` | 1st of month 08:00 ±5min | All |
+| Job | Schedule | Condition | Scope |
+|-----|----------|-----------|-------|
+| `daily_recap` | 23:00 ±5min jitter | enabled=TRUE, ≥1 tx | per-user |
+| `trial_reminder` | Day 12 of trial | trial active | per-user |
+| `trial_downgrade` | Day 14 of trial | trial active | per-user |
+| `family_trial_reminder` | Day 12 of Family trial | family.status='trialing' | per-family |
+| `family_trial_downgrade` | Day 14 of Family trial | family.status='trialing' | per-family |
+| `weekly` | Sunday 14:00 ±5min | Pro+ only | per-user |
+| `monthly_report` | Last day month 14:00 ±5min | Pro+ only | per-user |
+| `monthly_allocation` | 1st of month 08:00 ±5min | All | per-user |
+| `close_stale_memberships` 🆕 | Daily 03:00 UTC | family.status in (downgraded, cancelled), 90d past `downgraded_at`/`cancelled_at` | **global** (not per-user) |
+| `expire_pending_invites` 🆕 | Hourly :00 | `family_invites.status='pending' AND expires_at < now()` | global |
+
+### Family-related cron jobs (sync feature-family-plan.md §4.6 + §4.1)
+
+**`close_stale_memberships`** — daily, global scope, idempotent
+
+```python
+def close_stale_memberships():
+    """
+    Sau 90 ngày kể từ family downgrade/cancel, close TẤT CẢ memberships
+    (gồm owner) để unlock single-active-family invariant cho mọi user.
+    Owner archived access qua `family_accounts.owner_user_id` direct check,
+    không cần membership active.
+    """
+    cutoff = now() - timedelta(days=90)
+    stale_families = db.query(FamilyAccount).filter(
+        FamilyAccount.status.in_(["downgraded", "cancelled"]),
+        or_(
+            FamilyAccount.downgraded_at < cutoff,
+            FamilyAccount.cancelled_at < cutoff,
+        ),
+    ).all()
+    for fam in stale_families:
+        db.query(FamilyMember).filter(
+            FamilyMember.family_id == fam.id,
+            FamilyMember.removed_at.is_(None),
+        ).update({"removed_at": now()})
+    db.commit()
+```
+
+**Key design rule:** Close ALL members (gồm owner). Nếu giữ owner membership forever, owner bị `uq_user_single_active_family` chặn join family mới. Owner archived access đi qua `can_view_archived_family(user_id, family_id)` (FAM §4.6) trực tiếp trên `family_accounts.owner_user_id`.
+
+**`expire_pending_invites`** — hourly, global scope
+
+```python
+def expire_pending_invites():
+    db.query(FamilyInvite).filter(
+        FamilyInvite.status == "pending",
+        FamilyInvite.expires_at < now(),
+    ).update({"status": "expired"})
+    db.commit()
+```
+
+**Idempotency:** Cả 2 job pure UPDATE — chạy lại không tạo side effect bất thường. OK nếu cron miss 1 chu kỳ, lần sau catch up tự nhiên.
+
+**Failure handling:** Job fail → admin alert (Sentry), retry lần sau. Không block các job khác.
 
 ---
 
@@ -151,6 +200,11 @@ fire_time = base_time + timedelta(minutes=offset_min)
 - [ ] Jitter ±5min deterministic theo user_id
 - [ ] Scheduled jobs isolated per user
 - [ ] Telegram/Discord rate limit respected (spread via jitter)
+- [ ] **Family jobs:** `close_stale_memberships` chạy daily 03:00 UTC, close TẤT CẢ memberships (gồm owner) sau 90 ngày downgrade/cancel. Idempotent.
+- [ ] **Family jobs:** `expire_pending_invites` chạy hourly, flip `pending → expired` cho row quá `expires_at`. Idempotent.
+- [ ] **Family jobs:** Sau cron đóng owner membership, owner Pro vẫn xem được "Archived family" tab qua `can_view_archived_family()` direct check.
+- [ ] **Family jobs:** Sau cron, owner có thể join/tạo family mới (không bị `uq_user_single_active_family` chặn).
+- [ ] **Family trial reminders:** Day 12 + Day 14 fire đúng (track qua `family_accounts.trial_ends_at`, distinct from `users.trial_ends_at`).
 
 ---
 
@@ -159,4 +213,5 @@ fire_time = base_time + timedelta(minutes=offset_min)
 | Version | Ngày | Thay đổi |
 |---------|------|----------|
 | v1.0.0 | 2026-05-08 | Initial — tách từ PRD §3.9 |
+| v1.1.0 | 2026-05-11 | **Family Plan cron jobs (sync feature-family-plan v1.0.0 §4.6):** (1) Thêm 4 job types: `family_trial_reminder` (Day 12 family trial), `family_trial_downgrade` (Day 14), `close_stale_memberships` (daily global, 90-day grace cho downgraded/cancelled family — close ALL members gồm owner để unlock single-active-family invariant), `expire_pending_invites` (hourly global, flip pending→expired). (2) Acceptance criteria mở rộng với 5 Family-specific checks. (3) Cross-ref FAM §4.6 cho behavior contract + `can_view_archived_family()` archived owner access. |
 | v1.0.1 | 2026-05-08 | **i18n note:** Daily recap, weekly report, payment reminder messages served via `t(user.locale, key)`. |
