@@ -1,0 +1,34 @@
+# Secrets — NEVER commit these
+.env
+credentials.json
+
+# Personal notes — only for private repo
+PRIVATE_SETUP.md
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Office lock/temp files (Word/Excel save in same dir)
+~$*
+*.tmp
+
+# IDE / Tooling
+.claude/
+.vscode/
+.idea/
+
+# Logs
+*.log
+HOW_IT_WORKS.md
