@@ -1,0 +1,115 @@
+# MyMoneyWent — Multi-tenant personal finance bot
+#
+# Runtime deps stay in requirements.txt for Railway nixpacks compatibility.
+# Dev tooling + project metadata lives here.
+#
+# Install dev environment:
+#     pip install -e ".[dev]"
+#     pre-commit install
+#
+# See: docs/operations/development-workflow.md
+
+[project]
+name = "mymoneywent"
+version = "0.0.1"
+description = "Multi-tenant personal finance bot — Tiền Về Nơi Đâu (VN) / My Money Went (Global)"
+requires-python = ">=3.11"
+authors = [{name = "Ngoc-Anh Mai", email = "2maingocanh@gmail.com"}]
+license = {text = "Proprietary"}
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.4.10",
+    "black>=24.4.0",
+    "mypy>=1.10.0",
+    "import-linter>=2.0",
+    "detect-secrets>=1.5.0",
+    "pre-commit>=3.7.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["core*", "markets*", "handlers*"]
+exclude = ["tests*", "docs*", "scripts*", "migrations*"]
+
+# ─────────────────────────────────────────────────────────────────────
+# Ruff — lint + import sort. Legacy code excluded until W0.6 moves it.
+# ─────────────────────────────────────────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [
+    # Legacy single-tenant code — will be moved/cleaned in W0.6
+    "config.py",
+    "main.py",
+    "sheets.py",
+    "telegram_api.py",
+    "handlers/allocation.py",
+    "handlers/email_parser.py",
+    "handlers/manage.py",
+    "handlers/reports.py",
+    "handlers/sepay.py",
+    "handlers/transaction.py",
+    "google_apps_script.js",
+    "setup.sh",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "W",   # pycodestyle warnings
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "S",   # flake8-bandit (security)
+]
+ignore = [
+    "E501",  # line length — black handles
+    "S101",  # assert used — common in tests
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "S603", "S607"]  # asserts + subprocess ok in tests
+
+# ─────────────────────────────────────────────────────────────────────
+# Black — formatter
+# ─────────────────────────────────────────────────────────────────────
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+extend-exclude = '''
+/(
+    config\.py
+  | main\.py
+  | sheets\.py
+  | telegram_api\.py
+  | handlers/(allocation|email_parser|manage|reports|sepay|transaction)\.py
+)
+'''
+
+# ─────────────────────────────────────────────────────────────────────
+# Mypy — strict on new code paths (core/, markets/, tests/)
+# Legacy excluded; will be typed when migrated in W0.6.
+# ─────────────────────────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["core", "markets", "tests"]
+ignore_missing_imports = true
+
+# ─────────────────────────────────────────────────────────────────────
+# Pytest
+# ─────────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+asyncio_mode = "auto"
+addopts = "-ra --strict-markers --strict-config"

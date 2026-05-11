@@ -20,6 +20,41 @@ Pending. Per [BRD-VI v3.1.0](docs/brd-vi.md) Phase 1.
 
 ---
 
+## 2026-05-11 — F01 W0.1: Repo skeleton + lint boundary (Wave 0)
+
+### Added
+- `pyproject.toml` — project metadata (name=mymoneywent, version=0.0.1, py>=3.11) + tool configs (ruff/black/mypy/pytest) + `[project.optional-dependencies.dev]`. Legacy code excluded from strict checks via `extend-exclude` (will be cleaned in W0.6). Runtime deps stay in `requirements.txt` for Railway nixpacks compat.
+- `requirements-dev.txt` — pointer to `-e .[dev]`.
+- `core/__init__.py`, `markets/__init__.py`, `markets/vn/__init__.py`, `markets/global_/__init__.py` — empty package skeletons với module docstring giải thích boundary rule. **Note:** `markets/global_/` dùng trailing underscore vì `global` là Python reserved keyword (ADR-0001 intent unchanged).
+- `tests/__init__.py`, `tests/test_import_boundary.py` — 3 smoke tests: config exists, positive run clean, **negative test** (deliberate `core → markets` violation phải bị catch).
+- `.pre-commit-config.yaml` — hooks: ruff (lint+fix), black (format), mypy (strict on core/markets/tests), detect-secrets (against `.secrets.baseline`), import-linter (lint-imports).
+- `.importlinter` — 3 contracts: `core ↛ markets` (ADR-0001 strict), `markets.vn ↮ markets.global_` (market isolation 2 chiều).
+- `.secrets.baseline` — detect-secrets baseline với 22 plugins enabled. User runs `detect-secrets scan > .secrets.baseline` để populate against current repo.
+- `.github/workflows/ci.yml` — GitHub Actions trên push main + PR: pre-commit (all files) → lint-imports → pytest. Python 3.11, timeout 10min.
+
+### Changed
+- `README.md` — thêm section "Development setup" với install commands, lint/test commands, boundary rule note, link đến workflow doc.
+
+### Verified locally
+- `ruff check core/ markets/ tests/`: All checks passed
+- `black --check core/ markets/ tests/`: 6 files unchanged
+- `mypy core/ markets/ tests/`: Success, no issues found in 6 source files
+- `lint-imports`: 3 contracts kept, 0 broken
+- **Negative test:** deliberate `core/_test_violation.py` with `from markets import vn` → lint-imports correctly reports "core MUST NOT import from markets (ADR-0001) BROKEN", exit 1. Boundary enforced.
+
+### Notes
+- W0.1 = first PR của Wave 0 split (6 PRs sequential per docs/operations/development-workflow.md §4). No business logic, no DB schema. Boring foundation.
+- Pre-commit uses **black for format, ruff for lint only** (dropped `ruff-format` hook để tránh conflict với black).
+- Next PR: W0.2 — alembic migration framework + initial schema (depends Gap 1 decision = YES per project_wave0_gap_decisions.md memory).
+
+### Fixed (post-Codex adversarial review)
+- **[HIGH] `tests/test_import_boundary.py` negative test race** — rewrite negative test: thay vì write violation file vào `core/_test_boundary_violation.py` (real package tree, race-prone), build isolated mini-project trong `tmp_path` với synthetic `.importlinter` config + plant violation ở đó. Thêm `test_real_config_declares_core_markets_contract` static check để guard against accidental removal of contract block. 4 tests, all pass; verified KHÔNG còn leftover file trong `core/`.
+- **[MED] GitHub Actions floating tags** — `.github/workflows/ci.yml`: pin `actions/checkout@v4` → `@11bd71901bbe5b1630ceea73d27597364c9af683` (v4.2.2), `actions/setup-python@v5` → `@0b93645e9fea7318ecaed2b359559ac225c90a2b` (v5.3.0). Comment ghi rõ SemVer tag để readable. Thêm `.github/dependabot.yml` để auto-bump SHAs hằng tuần.
+- **[MED] Empty `.secrets.baseline`** — chạy thật `detect-secrets scan` toàn repo. Found 2 false positives trong legacy code: (1) `docs/tdd-vi.md:647` placeholder `postgresql://user:pass@host:5432/fintrack` trong env var doc; (2) `google_apps_script.js:19` template string `"your_random_email_secret_here"`. Cả 2 đã audit + marked `is_secret: false` trong baseline. New secrets in future commits sẽ bị block.
+- **[P2 mini-review] Static contract test quá permissive** — Codex mini-review trên fix diff phát hiện `test_real_config_declares_core_markets_contract` chỉ substring-match `"type = forbidden"`, `"core"`, `"markets"` trên toàn file text → một edit weakening contract (vd đổi source_modules sang `handlers`) vẫn pass nhờ decoy tokens ở sections khác. Rewrite dùng `configparser` parse exact section `[importlinter:contract:core-must-not-import-markets]`, assert `type == 'forbidden'`, `source_modules == ['core']` (exact list), `forbidden_modules == ['markets']` (exact list). Không còn substring lurking attack surface.
+
+---
+
 ## 2026-05-11 — Development workflow doc
 
 ### Added

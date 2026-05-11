@@ -1,0 +1,39 @@
+# Import boundary contracts for MyMoneyWent.
+#
+# Enforces ADR-0001 (docs/adr/0001-monorepo-not-split-repos.md):
+#   - core/ MUST NOT import from markets/
+#   - markets.vn ↮ markets.global_  (no cross-market imports)
+#
+# Run manually:    lint-imports
+# Pre-commit hook: already wired in .pre-commit-config.yaml
+# CI:              .github/workflows/ci.yml
+
+[importlinter]
+root_packages =
+    core
+    markets
+    handlers
+
+[importlinter:contract:core-must-not-import-markets]
+name = core MUST NOT import from markets (ADR-0001)
+type = forbidden
+source_modules =
+    core
+forbidden_modules =
+    markets
+
+[importlinter:contract:markets-vn-must-not-import-markets-global]
+name = markets.vn MUST NOT import from markets.global_
+type = forbidden
+source_modules =
+    markets.vn
+forbidden_modules =
+    markets.global_
+
+[importlinter:contract:markets-global-must-not-import-markets-vn]
+name = markets.global_ MUST NOT import from markets.vn
+type = forbidden
+source_modules =
+    markets.global_
+forbidden_modules =
+    markets.vn

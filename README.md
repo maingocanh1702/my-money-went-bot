@@ -66,6 +66,42 @@ Bot Telegram + Discord tự động track giao dịch ngân hàng VN. 3 entry pa
 - Payment: **Bank transfer + auto-detect** qua SePay (primary, ≤60s) + Email parsing (backup, ≤5min). 0% fee. Xem [feature-spec-payment-bank-transfer.md](docs/features/feature-payment.md). PayPal/USDT optional secondary Phase 2.
 - Backup: Backblaze B2
 
+## Development setup
+
+Python 3.11+. Setup dev environment:
+
+```bash
+# 1. Create venv (recommended)
+python3.11 -m venv .venv && source .venv/bin/activate
+
+# 2. Install runtime + dev deps
+pip install -r requirements.txt        # runtime (FastAPI, gspread, httpx, ...)
+pip install -e ".[dev]"                # dev tooling (ruff, black, mypy, import-linter, ...)
+
+# 3. Install pre-commit hooks
+pre-commit install
+
+# 4. (First-time) refresh detect-secrets baseline against current repo
+detect-secrets scan > .secrets.baseline
+```
+
+**Lint + test commands:**
+
+```bash
+pre-commit run --all-files     # ruff + black + mypy + detect-secrets + import-linter
+lint-imports                    # ADR-0001 boundary check (core ↛ markets)
+pytest tests/ -v                # smoke + unit tests
+```
+
+**Boundary enforcement:** `core/` MUST NOT import from `markets/`. Verified by `import-linter` (config in `.importlinter`). 3 contracts active:
+- `core ↛ markets` (ADR-0001 strict)
+- `markets.vn ↛ markets.global_`
+- `markets.global_ ↛ markets.vn`
+
+**Note on Python keyword:** the global market package is `markets/global_/` (trailing underscore) because `global` is a Python reserved word. ADR-0001 intent unchanged.
+
+Full workflow doc: [docs/operations/development-workflow.md](docs/operations/development-workflow.md).
+
 ## Roadmap (14-16 tuần MVP)
 
 | Phase | Tuần | Deliverable |
