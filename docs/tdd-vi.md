@@ -167,8 +167,9 @@ CREATE TABLE users (
     inbound_email   VARCHAR(64) UNIQUE,            -- u{id}@in.tienvenoidau.com
 
     -- Plan & Trial
-    plan            VARCHAR(16) NOT NULL DEFAULT 'free',  -- free/pro/business
+    plan            VARCHAR(16) NOT NULL DEFAULT 'free',  -- free/pro/family_owner/business
     trial_ends_at   TIMESTAMPTZ,
+    family_trial_used_at TIMESTAMPTZ,              -- block Family trial reuse
     plan_expires_at TIMESTAMPTZ,                   -- for paid plans
 
     -- Settings
@@ -185,7 +186,7 @@ CREATE TABLE users (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    CONSTRAINT chk_plan CHECK (plan IN ('free', 'pro', 'business')),
+    CONSTRAINT chk_plan CHECK (plan IN ('free', 'pro', 'family_owner', 'business')),
     CONSTRAINT chk_channel_type CHECK (channel_type IN ('telegram', 'messenger', 'discord')),
     CONSTRAINT chk_locale CHECK (locale IN ('vi', 'en')),
     CONSTRAINT uniq_channel_user UNIQUE (channel_type, channel_user_id)
@@ -425,6 +426,113 @@ CREATE TABLE analytics_events (
 );
 
 CREATE INDEX idx_analytics_event ON analytics_events(event_name, created_at);
+
+-- ═══════════════════════════════════════════════════════
+-- Family Plan (FAM) — xem feature-family-plan.md cho full spec
+-- ═══════════════════════════════════════════════════════
+
+CREATE TABLE family_accounts (
+    id              SERIAL PRIMARY KEY,
+    owner_user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    name            VARCHAR(64) NOT NULL,
+    status          VARCHAR(16) NOT NULL DEFAULT 'trialing',
+    trial_ends_at   TIMESTAMPTZ,
+    downgraded_at   TIMESTAMPTZ,
+    cancelled_at    TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT chk_fam_status CHECK (status IN ('active', 'trialing', 'downgraded', 'cancelled'))
+);
+
+CREATE INDEX idx_fam_owner ON family_accounts(owner_user_id);
+CREATE INDEX idx_fam_status_dates ON family_accounts(status, downgraded_at, cancelled_at);
+
+-- ───────────────────────────────────────────────────────
+
+CREATE TABLE family_members (
+    id              SERIAL PRIMARY KEY,
+    family_id       INTEGER NOT NULL REFERENCES family_accounts(id) ON DELETE CASCADE,
+    user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role            VARCHAR(8) NOT NULL,           -- 'parent' | 'child'
+    invited_by      INTEGER REFERENCES users(id),
+    joined_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    removed_at      TIMESTAMPTZ,                    -- soft delete; cron close after 90d grace
+    child_age_at_invite  SMALLINT,                  -- 13-17, NULL nếu role=parent
+    consent_accepted_at  TIMESTAMPTZ NOT NULL,     -- mandatory cho mọi member (owner self qua purchase)
+    consent_disclosure_version INTEGER NOT NULL,    -- bump trigger re-consent gate
+
+    CONSTRAINT chk_fm_role CHECK (role IN ('parent', 'child')),
+    CONSTRAINT chk_fm_child_age CHECK (
+        (role = 'parent' AND child_age_at_invite IS NULL)
+        OR (role = 'child' AND child_age_at_invite BETWEEN 13 AND 17)
+    )
+);
+
+-- Cấm duplicate trong cùng family
+CREATE UNIQUE INDEX uq_family_member_active
+    ON family_members(family_id, user_id) WHERE removed_at IS NULL;
+
+-- v1 invariant: 1 user = tối đa 1 active family membership
+CREATE UNIQUE INDEX uq_user_single_active_family
+    ON family_members(user_id) WHERE removed_at IS NULL;
+
+CREATE INDEX idx_fm_family_role ON family_members(family_id, role) WHERE removed_at IS NULL;
+
+-- ───────────────────────────────────────────────────────
+
+CREATE TABLE family_budgets (
+    id              SERIAL PRIMARY KEY,
+    family_id       INTEGER NOT NULL REFERENCES family_accounts(id) ON DELETE CASCADE,
+    user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    category_id     INTEGER REFERENCES categories(id) ON DELETE CASCADE,  -- NULL = tổng
+    amount_vnd      BIGINT NOT NULL,                -- VND nguyên (500k = 500000)
+    period          VARCHAR(16) NOT NULL DEFAULT 'monthly',
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT chk_fb_period CHECK (period IN ('monthly')),
+    CONSTRAINT chk_fb_amount_positive CHECK (amount_vnd > 0)
+);
+
+-- Uniqueness với NULL trap handling (Postgres partial indexes)
+CREATE UNIQUE INDEX uq_family_budget_category
+    ON family_budgets(family_id, user_id, category_id, period)
+    WHERE category_id IS NOT NULL;
+
+CREATE UNIQUE INDEX uq_family_budget_total
+    ON family_budgets(family_id, user_id, period)
+    WHERE category_id IS NULL;
+
+-- ───────────────────────────────────────────────────────
+
+CREATE TABLE family_invites (
+    id              SERIAL PRIMARY KEY,
+    family_id       INTEGER NOT NULL REFERENCES family_accounts(id) ON DELETE CASCADE,
+    invited_by      INTEGER NOT NULL REFERENCES users(id),
+    target_email    VARCHAR(255),
+    target_phone    VARCHAR(32),
+    target_role     VARCHAR(8) NOT NULL,
+    target_child_age SMALLINT,
+    token_hash      VARCHAR(64) NOT NULL UNIQUE,    -- sha256 của token
+    status          VARCHAR(16) NOT NULL DEFAULT 'pending',
+    expires_at      TIMESTAMPTZ NOT NULL,
+    accepted_at     TIMESTAMPTZ,
+    accepted_by_user_id INTEGER REFERENCES users(id),
+    revoked_at      TIMESTAMPTZ,
+    revoked_by      INTEGER REFERENCES users(id),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT chk_fi_role CHECK (target_role IN ('parent', 'child')),
+    CONSTRAINT chk_fi_status CHECK (status IN ('pending', 'accepted', 'expired', 'revoked')),
+    CONSTRAINT chk_fi_target_contact CHECK (target_email IS NOT NULL OR target_phone IS NOT NULL),
+    CONSTRAINT chk_fi_age CHECK (
+        (target_role = 'parent' AND target_child_age IS NULL)
+        OR (target_role = 'child' AND target_child_age BETWEEN 13 AND 17)
+    )
+);
+
+CREATE INDEX idx_fi_family_status ON family_invites(family_id, status);
+CREATE INDEX idx_fi_expires_pending ON family_invites(expires_at) WHERE status = 'pending';
 ```
 
 ### 2.2. Key Queries
@@ -755,12 +863,31 @@ Telegram ──HTTPS──→ /webhook ──validate telegram_id──→ route
 
 ### 6.3. PDPA Compliance (Nghị định 13/2023)
 
+**General:**
 - [ ] Privacy policy rõ ràng, accessible qua /help
 - [ ] Data retention policy: Free user inactive 90 ngày → archive data
 - [ ] User có thể request data export (/export)
 - [ ] User có thể request account deletion
 - [ ] Breach response plan documented
 - [ ] No data sharing với third party
+
+**Family Plan-specific retention (xem feature-family-plan.md §4.8):**
+
+| Data | Retention | Mechanism v1 |
+|------|-----------|--------------|
+| Tx của member khi active | Indefinite (per global policy) | Parent thấy full detail qua membership join |
+| Tx của member sau `/family leave` | Full detail giữ ở DB. **Query-layer hides `merchant` + `description` sau 24 tháng từ `removed_at`** | Query-layer mask, KHÔNG destructive redaction |
+| Tx sau hard delete (PDPA) | Hard delete (cascade qua `users` ON DELETE CASCADE) | Parent dashboard hiển thị placeholder "Member đã xóa data", không silent gap |
+| Family record sau cancel | 90 ngày grace re-upgrade → archive | Owner Pro thấy "Archived family" tab qua `can_view_archived_family()` (FAM §4.6) |
+| `family_invites` rows | 12 tháng sau `expires_at` | Hard delete job (F09 daily) |
+| Consent audit (`consent_accepted` events) | 12 tháng | Internal audit_log, no PII |
+
+**Key implementation rules:**
+- [ ] Hard delete user → CASCADE qua `family_members.user_id`, `family_budgets.user_id`. Family record giữ nguyên (slot member free để invite mới).
+- [ ] Query layer mask logic: nếu `family_members.removed_at IS NOT NULL AND removed_at + interval '24 months' < now()` → strip `merchant`, `description` fields trong response cho parent dashboard. Aggregate (amount, category, count) vẫn visible.
+- [ ] v1 KHÔNG ship destructive redaction job. Raw data giữ để recover nếu rule đổi và để PDPA delete operate đúng.
+- [ ] Phase 2 cân nhắc destructive redaction nếu compliance review yêu cầu.
+- [ ] Consent disclosure version bump → trigger re-consent migration. Member với `consent_disclosure_version < CURRENT_DISCLOSURE_VERSION` bị block dashboard access (handler layer gate, không cần DB column riêng).
 
 ---
 
@@ -927,3 +1054,4 @@ pool = asyncpg.create_pool(
 | v1.6.0 | 2026-05-07 | **Multi-channel + VietQR foundation (sync feature-spec-messenger-channel v1.1.1 + impl plan VietQR+email):** (1) §1.1 architecture diagram thêm Messenger client + `/webhook/messenger` endpoint. (2) §1.2 thêm 3 design decisions: multi-channel via `users.channel_type`, channel adapter pattern `services/channels/`, QR generation via vietqr.io. (3) §1.4 outbound abstraction expand — `services/messenger.py` route to adapter `services/channels/{telegram,messenger}.py`, payload type thêm `image`, payload `tag` field cho Messenger MESSAGE_TAG. (4) §2.1 schema users — thêm `channel_type` NOT NULL, `channel_user_id` NOT NULL, `last_user_message_at` (24h window), `invalid_channel`, `bot_id`. `telegram_id` từ NOT NULL UNIQUE → nullable (cho Messenger user = NULL). UNIQUE constraint `(channel_type, channel_user_id)`. CHECK `channel_type IN ('telegram', 'messenger')`. (5) §3.1 endpoint table — `/webhook` → `/webhook/telegram`, thêm GET+POST `/webhook/messenger`, document signature verify. (6) §5.2 env vars — thêm 5 Messenger vars (FB_PAGE_ID, FB_PAGE_ACCESS_TOKEN, FB_VERIFY_TOKEN, FB_APP_SECRET, ENABLE_MESSENGER_CHANNEL), thêm 3 platform bank BIN vars cho VietQR (PLATFORM_BANK_*_BIN, PLATFORM_BANK_HOLDER_NAME), thêm BOT_TOKEN_BACKUP, ENABLE_VIETQR, ENABLE_EMAIL_PARALLEL flags. (7) Header refs bumped BRD v2.8.0 → v2.9.0, PRD v1.5.0 → v1.6.0, thêm Messenger Spec + Impl Plan VietQR refs. |
 | v1.7.0 | 2026-05-08 | **i18n multilingual support:** (1) §2.1 users table — thêm `locale VARCHAR(5) NOT NULL DEFAULT 'vi'` + `CHECK locale IN ('vi', 'en')`. Auto-detect from Telegram `language_code` / Messenger profile, user confirms during onboarding. (2) Onboarding flow mới: `/start` → auto-detect locale → language confirm buttons → path select. (3) `/settings` thêm language change option. (4) All user-facing messages served via `i18n/` module (`t(locale, key)` pattern). Admin messages (`/admin_*`) hardcoded English. (5) Default categories bilingual: vi = "Chi tiêu hàng ngày / Tiết kiệm / Đăng ký dịch vụ", en = "Daily Spending / Saving / Subscription". |
 | v1.8.0 | 2026-05-08 | **Discord channel support:** (1) §1.2 design decisions — multi-channel expanded: Telegram + Messenger + Discord. Outbound routing adds `DiscordSender`. (2) §1.4 channel adapter — thêm `discord.py` (Rich Embeds, Action Row buttons, Ed25519 signature verify). Grep acceptance includes Discord. (3) §2.1 users — `channel_type CHECK` expanded: `('telegram', 'messenger', 'discord')`. `channel_user_id` comment updated cho Discord snowflake ID. (4) Feature doc ref thêm `feature-discord-channel.md`. Discord dùng cho cả VN + Global market. DM-first, slash commands, no approval process (khác Messenger). |
+| v1.9.0 | 2026-05-11 | **Family Plan schema (sync BRD v3.2.0 + PRD v1.7.0 + feature-family-plan v1.0.0):** (1) §2.1 `users.plan` CHECK extended: `('free', 'pro', 'family_owner', 'business')`. Thêm `family_trial_used_at TIMESTAMPTZ` để block Family trial reuse. (2) §2.1 thêm 4 table mới: `family_accounts` (owner, status, downgrade/cancel timestamps cho cron), `family_members` (role parent/child, consent fields NOT NULL, child age 13-17 CHECK, partial unique indexes cho dup-in-family + single-active-family invariant), `family_budgets` (amount_vnd BIGINT, partial indexes cho NULL category trap), `family_invites` (status enum, token_hash, age CHECK tighter — parent invite no age + child invite 13-17). (3) §6.3 PDPA section expanded với Family retention rules: query-layer hide merchant/description sau 24mo từ `removed_at`, hard delete CASCADE qua family_members/budgets, no destructive redaction v1, consent version gate ở handler layer (không cần status column). (4) Cross-ref [feature-family-plan.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/drafts/feature-family-plan.md) cho domain logic + entitlement resolver + lifecycle cron. |

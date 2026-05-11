@@ -287,49 +287,64 @@ Cấu trúc persona theo tier mục tiêu: **Minh & Linh là volume persona** (d
 
 ### 5.1. Pricing Tiers
 
-Cấu trúc **3-tier**: Free / Pro / Business + **14-day Pro trial cho new users**.
+Cấu trúc **4-tier**: Free / Pro / Family / Business + **14-day Pro trial cho new users** (+ 14-day Family trial nếu upgrade từ Pro).
 
 **Geo-based pricing (2 domain, 1 codebase):**
 
-| Market | Domain | Pro | Business | Currency |
-|---|---|---|---|---|
-| 🇻🇳 **Việt Nam** | `tienvenoidau.com` | **79k VND/mo** (~$3.16) | **199k VND/mo** (~$7.96) | VND |
-| 🌍 **Global** | `mymoneywent.com` | **$4/mo** (100k VND equiv) | **$9/mo** (220k VND equiv) | USD |
+| Market | Domain | Pro | Family 🆕 | Business | Currency |
+|---|---|---|---|---|---|
+| 🇻🇳 **Việt Nam** | `tienvenoidau.com` | **99k VND/mo** (~$3.96) | **169k VND/mo** (~$6.76) | **299k VND/mo** (~$11.96) | VND |
+| 🌍 **Global** | `mymoneywent.com` | **$4/mo** | TBD Phase 2 | **$9/mo** | USD |
 
-> **Lý do tách pricing:** VN market price-sensitive hơn — 79k dưới ngưỡng tâm lý 100k, 199k dưới 200k. Global pricing giữ $4/$9 để competitive với Money Lover Linked Wallet ($3-5/mo). Cùng 1 codebase, pricing resolve theo domain/locale.
+> **Pricing bump 2026-05-11:** Pro 79k→99k (+25%), Business 199k→299k (+50%) ship cùng Family launch. Ladder 79/199 quá hẹp để Family (169k) có room. Ratio mới 99/169/299 = 1:1.7:3. Existing Pro/Business **grandfather 6 tháng** giá cũ. Notice email + in-app ≥30 ngày trước renewal mới. Push-back option: 50% off 3 tháng (max 1/user). Global market giữ $4/$9 — Phase 2 rationalize.
 
 **Feature matrix (chung cho cả 2 market, chỉ khác giá):**
 
-| Feature | Free | Pro | Business |
-|---------|------|----------------------|---------------------------|
-| SePay config (auto capture) | ✅ | ✅ | ✅ |
-| /status, /today | ✅ | ✅ | ✅ |
-| Daily recap tự động | ✅ | ✅ | ✅ |
-| Bank accounts | 1 | 3 | 5 |
-| Transactions/tháng | **45** | Unlimited | Unlimited |
-| Transaction history | 30 ngày | Unlimited | Unlimited |
-| Categories | 5 total (3 default + custom) | Up to 20 custom | Unlimited |
-| Auto-categorization rules | System defaults only | System defaults + **10 custom rules** | System defaults + **unlimited custom rules** |
-| Weekly + Monthly report | ❌ | ✅ | ✅ |
-| CSV export | ❌ | ✅ | ✅ |
-| Email transaction parsing | 1 email source | 3 email sources | Unlimited |
-| Personal vs Business split | ❌ | ❌ | ✅ |
-| P&L view (income vs expense by tag) | ❌ | ❌ | ✅ |
-| Google Sheets sync | ❌ | ❌ | ✅ |
-| Priority support | ❌ | ❌ | ✅ |
+| Feature | Free | Pro | Family | Business |
+|---------|------|-----|--------|----------|
+| SePay config (auto capture) | ✅ | ✅ | ✅ | ✅ |
+| /status, /today | ✅ | ✅ | ✅ | ✅ |
+| Daily recap tự động | ✅ | ✅ | ✅ | ✅ |
+| Bank accounts | 1 | 3 | 3 per member | 5 |
+| Transactions/tháng | **45** | Unlimited | Unlimited per member | Unlimited |
+| Transaction history | 30 ngày | Unlimited | Unlimited | Unlimited |
+| Categories | 5 total | 20 custom | 20 per member | Unlimited |
+| Auto-categorization rules | System defaults only | + 10 custom | + 10 per member | + unlimited |
+| Weekly + Monthly report | ❌ | ✅ | ✅ | ✅ |
+| CSV export | ❌ | ✅ | ✅ | ✅ |
+| Email transaction parsing | 1 | 3 | 3 per member | Unlimited |
+| **Family seats (2P + 4C)** | — | — | ✅ flat bundle | — |
+| **Multi-member dashboard** | — | — | ✅ | — (team RBAC khác) |
+| **Budget limits per member/category** | — | — | ✅ | — |
+| **Real-time budget alerts** | — | — | ✅ | — |
+| Personal vs Business split | ❌ | ❌ | ❌ | ✅ |
+| P&L view (income vs expense by tag) | ❌ | ❌ | ❌ | ✅ |
+| Google Sheets sync | ❌ | ❌ | ❌ | ✅ |
+| Priority support | ❌ | ❌ | ❌ | ✅ |
 
-> **Lưu ý SePay:** Khi kết nối bank account qua SePay (cả 3 tier), user tự thanh toán chi phí gói SePay. Tiền Về Nơi Đâu không cover chi phí này.
+> **Lưu ý SePay:** Khi kết nối qua SePay (mọi tier), user tự trả gói SePay. Tiền Về Nơi Đâu không cover.
 
-**Annual plan (20% off cho cả 2 tier):**
+**Annual plan (15% off, exact math — không round sang "số đẹp"):**
 
-| Market | Pro Annual | Business Annual |
-|---|---|---|
-| 🇻🇳 VN | 758k VND/năm (63.2k/mo) | 1.91tr VND/năm (159.2k/mo) |
-| 🌍 Global | $38.40/năm ($3.20/mo) | $86.40/năm ($7.20/mo) |
+| Market | Pro Annual | Family Annual | Business Annual |
+|---|---|---|---|
+| 🇻🇳 VN | **1.010k VND/năm** (~84k/mo equiv) | **1.724k VND/năm** (~144k/mo equiv) | **3.050k VND/năm** (~254k/mo equiv) |
+| 🌍 Global | $38.40/năm | TBD Phase 2 | $86.40/năm |
 
-Tương đương ~2.4 tháng free khi trả năm.
+> Family annual exact = 1.724k. Marketing "số đẹp" 1.720k phải document explicit là rounded down (4k off).
 
-**Trial:** Mọi new user nhận 14 ngày Pro miễn phí, không cần thẻ. Day 12 prompt upgrade. Day 14 auto-downgrade Free, data preserved.
+**Trial:**
+- Mọi new user nhận **14 ngày Pro** miễn phí. Day 12 prompt upgrade. Day 14 auto-downgrade Free, data preserved.
+- User upgrade Pro → Family → **trial reset 14 ngày Family** (1 lần/user — `users.family_trial_used_at`).
+
+**Family Plan summary (full spec [feature-family-plan.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/drafts/feature-family-plan.md)):**
+- Target: phụ huynh quản lý chi tiêu con **13-17 tuổi**.
+- 6 seats flat: 2 parent + 4 child, no add-on.
+- Permission: View + Budget Limits + Real-time Alerts. KHÔNG approve-before-spend.
+- Co-parent ngang quyền owner trừ billing.
+- Consent disclosure mandatory cho mọi member.
+- Downgrade Family→Pro: 5 member stop ingest mới, historical read-only owner. Re-upgrade 90d seamless. Sau 90d cron đóng tất cả memberships.
+- Positioning: **educational, not surveillance**.
 
 ### 5.2. Chiến lược Monetization
 
@@ -337,9 +352,12 @@ Tương đương ~2.4 tháng free khi trả năm.
 
 | Persona | Tier likely | WTP estimate |
 |---------|-------------|------|
-| Minh (nhân viên văn phòng) | Free → Pro | 50-100k/mo |
-| Linh (freelancer) | Pro | 79-150k/mo |
-| Hùng+ (online seller / chủ shop) | Business | 150-300k/mo |
+| Minh (nhân viên văn phòng) | Free → Pro 99k | 50-120k/mo |
+| Linh (freelancer) | Pro 99k | 99-150k/mo |
+| **Phụ huynh (con 13-17)** 🆕 | **Family 169k** | 150-250k/mo |
+| Hùng+ (online seller / chủ shop) | Business 299k | 200-400k/mo |
+
+> **Family persona (placeholder — cần customer interview Phase 3):** Phụ huynh 35-50t có ≥1 con cấp 2-3, quen tracking finance qua app khác, muốn dạy con quản lý chi tiêu. Pain: con xài tiền không kiểm soát. WTP 169k nằm dưới "khóa học dạy con" 300-500k/tháng.
 
 #### 5.2.2. Conversion target & revenue projection (with churn modeled)
 
@@ -400,6 +418,8 @@ Free tier 45 tx/tháng đặt **dưới median chi tiêu user đô thị VN** (~
 | User add bank account thứ 2 (Free) | "Free hỗ trợ 1 tài khoản. Pro cho 3, Business cho 5" | Pro/Business |
 | User dùng emoji 🏪 hoặc tag "shop"/"business" | "Có vẻ bạn quản lý cả tiền cá nhân và shop. Business tier có tách riêng" | Business |
 | Cuối tháng (Free user) | "Xem báo cáo tháng đầy đủ với Pro" | Pro |
+| User mention con/cháu trong tx description ≥3 lần | "Quản lý chi tiêu của con? Family Plan có dashboard riêng" | Family |
+| Pro user có 2+ FS thuộc người khác (last4 khác) ≥3 tháng | "Có vẻ bạn share account. Family Plan có separate dashboard cho cả nhà" | Family |
 
 Quy tắc: max 1 upgrade message/tuần/user.
 
@@ -897,6 +917,7 @@ Awareness (seller community content) → Click "Business demo" landing
 | v2.8.0 | 2026-05-06 | **Sync với 3 spec mới (admin-tools v1.1.0, DR runbook v1.1.0, observability v1.1.0) + implementation plan v1.2.0:** (1) **§7 risk register expanded** từ 10 → 14 risks: thêm Risk 11 (abuse/spam attacks — DR §8c playbook), Risk 12 (founder support burnout @ 200+ — C1 automation must ship trước 250), Risk 13 (Telegram bot suspended — BOT_TOKEN_BACKUP + @TienVeNoiDauUpdates channel), Risk 14 (cost burn > revenue valley of death 100-300 users — cost dashboard + error budget). Risk 9 PDPA + Risk 10 scale cross-ref tới implementation plan §C4 + §5b. (2) **§10 success criteria** expanded thành 5 groups: Functional (+admin tools commands /admin_help auto-gen, rate limit 30/min, /admin_cost; +@TienVeNoiDauUpdates channel), Reliability (+error budget 0.1% rolling 30-day, +7 critical alerts armed, +PLATFORM_TOKEN silence monitoring), Cost (+cost dashboard, +margin >50% sustained), Onboarding (giữ), **Operational readiness mới** (DR runbook 8 scenarios, B2 password manager, SSE-B2 encryption, pg_dumpall globals, trusted contact briefed). (3) No scope/timeline change — tất cả là spec consolidation. |
 | v2.9.0 | 2026-05-07 | **Multi-platform strategy update — Telegram + Discord first, Zalo & Messenger coming soon:** (1) **Platform priority thay đổi**: MVP build cho **Telegram + Discord** (co-primary), Zalo & Messenger defer Phase 3+ (coming soon). Discord thêm vào MVP vì bot API mature, slash commands, VN gaming/MMO/tech community overlap lớn với Hùng+ dropshipper segment, cùng codebase qua `messenger.send()` abstraction. (2) **§1.6 Bot ownership** expanded: platform priority table, `DISCORD_BOT_TOKEN` env, multi-platform giảm SPOF risk (1 platform down → platform kia vẫn hoạt động). (3) **§2.2** mục tiêu trung hạn: Platform mở rộng = Zalo/Messenger (coming soon), không còn là platform #2. (4) **§4.3 Phase 3+** thêm Status column: Zalo OA + Messenger = 🔜 Coming soon. (5) **§7 Risk 2** Telegram block giảm xuống Thấp vì Discord là co-primary fallback. (6) **§8 Phase 1-2** deliverables thêm Discord adapter. (7) **§12 GTM** thêm Discord server organic channel, risk Hùng+ giảm Cao → Trung bình. (8) Glossary Channel Identity cập nhật cho multi-platform. |
 | v3.0.0 | 2026-05-07 | **MAJOR PRICING REVISION — VN market pricing:** (1) **Pricing đổi từ USD sang VND-first**: Pro $4 (100k VND) → **79k VND (~$3.16)**, Business $9 (220k VND) → **199k VND (~$7.96)**. Lý do: đặt dưới ngưỡng tâm lý VN (79k < 100k, 199k < 200k) để maximize conversion trong price-sensitive market. (2) **Revenue projection recalculated** với conservative 5% paid (4% Pro + 1% Business): @100 users = 515k VND ($20.60)/mo, @500 users = 2,575k VND ($103)/mo. (3) **Break-even dịch lên ~150-200 users** (vs ~50-100 trước). @100 users lỗ ~$4.40/mo — founder subsidize. (4) **LTV giảm**: Pro $45 (vs $57), Business $114 (vs $129). CAC payback < $15-25. (5) **MRR target hạ**: $100-300 (vs $150-450). (6) **Competitive positioning mạnh hơn**: Pro 758k/năm rẻ hơn 17-50% so với Money Lover Linked Wallet. Business 199k dưới ngưỡng 200k tâm lý. (7) **WTP anchor updated**: VND-denominated (50-300k range). (8) **Annual plan**: Pro 758k/năm, Business 1.91tr/năm (20% off giữ nguyên). Trade-off: margin mỏng hơn nhưng conversion volume play cho VN market. |
+| v3.2.0 | 2026-05-11 | **Family Plan tier mới + pricing bump:** (1) §5.1 pricing 4-tier: Free / Pro **99k** (+25% từ 79k) / **Family 169k** 🆕 / Business **299k** (+50% từ 199k). Ladder ratio 1:1.7:3. (2) Family feature set: 2P+4C flat bundle, multi-member dashboard, budget limits per member/category, real-time alerts, co-parent ngang quyền owner trừ billing. Target persona phụ huynh con 13-17. (3) Grandfather: existing Pro/Business active tại T-30 giữ giá cũ 6 tháng, notice ≥30 ngày, push-back 50% off 3 tháng. (4) Annual exact math: Pro 1.010k, Family 1.724k, Business 3.050k (15% off). (5) Pro→Family upgrade reset trial 14 ngày (`family_trial_used_at`). (6) §5.2.1 persona mapping thêm Family persona placeholder. (7) §5.2.3 thêm 2 upgrade triggers cho Family. (8) Family VN-first Phase 3+; Global giữ $4/$9 rationalize Phase 2. (9) Cross-ref [feature-family-plan.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/drafts/feature-family-plan.md). |
 | v3.1.0 | 2026-05-07 | **NEW MVP FEATURE — Auto-categorization rule-based:** (1) **§4.1 #9 mới**: Auto-categorization theo nội dung giao dịch (description matching). Platform cung cấp **default rules** cho VN phổ biến (SHOPEE, GRAB, LAZADA, TIKI, VIETTEL, FPT, ĐIỆN, NƯỚC...). User tạo **custom rules** (keyword → category mapping). Khi match → auto-categorize + notify, không hỏi. User override bất kỳ lúc nào. (2) **Tier gating**: Free = system defaults only, Pro = +10 custom rules, Business = unlimited custom rules. (3) **§4.1 #8 sửa**: Transaction categorization giờ là manual fallback khi không match rule. (4) **§4.1 #15 sửa**: Free tier limits thêm "system default rules only". (5) **§4.1 #20 mới**: Pro custom auto-cat rules (10 rules). (6) **§4.3 sửa**: "Auto-categorization ML-based" → "Auto-categorization **ML upgrade**" — nâng cấp rule-based → ML model, supplement không replace. (7) **§5.1 pricing table** thêm row Auto-categorization rules. (8) Sync `brd-en.md` + `pricing-redesign.md`. |
 
 ---

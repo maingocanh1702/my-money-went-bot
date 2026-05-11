@@ -44,6 +44,9 @@
 | 11 | User Messenger | Tap "Get Started" | Auto-detect locale từ Messenger profile |
 | 11b | User Discord | /start DM | Auto-detect locale từ Discord interaction |
 | 12 | User mới | Chọn Path C → Gmail | Hướng dẫn cụ thể Gmail forwarding |
+| 13 | User mới | Click Family invite link → `/start fam_<token>` | Detect invite token → setup minimal account → show Family disclosure screen (consent gate) trước khi join. Xem [feature-family-plan.md §3.2](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/drafts/feature-family-plan.md). |
+| 14 | User đã có tài khoản | Click Family invite link | Skip account create. Show disclosure screen → accept → DB transaction: insert `family_members` + mark `family_invites.status='accepted'` với row lock chống race (xem FAM §4.7 seat enforcement). |
+| 15 | User | Reject Family invite | `family_invites.status` không đổi (vẫn pending) hoặc revoked nếu user explicit. Không tạo membership. |
 
 ### 2.2. Edge Cases
 
@@ -63,6 +66,11 @@
 | 12 | Cross-Feature | User đổi username sau signup | Update field mỗi inbound |
 | 13 | Data Integrity | `language_code` = NULL | Default locale 'vi' |
 | 14 | Data Integrity | `language_code` = 'pt-BR' | Non-vi → detect as 'en' |
+| 15 | Security | Family invite token spoofing | Token là sha256 hash trong DB (`family_invites.token_hash`), plaintext token chỉ trong link. Verify qua hash compare, không expose token raw. |
+| 16 | Data Integrity | User accept Family invite nhưng đã thuộc family khác | DB partial unique `uq_user_single_active_family` reject. UI hiển thị "Bạn đang trong family X. Rời family đó trước khi join family mới." (xem FAM §2.2.9) |
+| 17 | Data Integrity | User accept invite quá `expires_at` | Reject với "Invite đã hết hạn". Background job mỗi giờ flip `pending → expired`. |
+| 18 | Concurrency | 2 user accept invite cùng family seat đầy lúc | Service-layer row lock `with_for_update()` trên `family_accounts` — chỉ 1 accept thành công, lần thứ 2 raise `SeatLimitExceeded`. |
+| 19 | Cross-Feature | Child <13 nhập age 13-17 để pass CHECK | Self-declared age không verify được. v1 minimize false advertising risk qua disclosure copy ("Family Plan dành cho con 13-17"), không hard-block. |
 
 ---
 
@@ -107,6 +115,34 @@ Confirm, or choose another language:
 
 ### Path C — Email Forwarding
 - **Ready:** Email address + chọn provider (Gmail/Outlook/Khác)
+
+### Path D — Family Invite Accept (NEW — sync FAM §3.2)
+
+Trigger: user click Family invite link `https://tienvenoidau.com/fam/{token}` → app deep link `/start fam_<token>`.
+
+**Flow:**
+1. **Detect invite:** Bot lookup `family_invites WHERE token_hash = sha256(token) AND status='pending' AND expires_at > now()`.
+2. **Verify validity:**
+   - Token invalid / expired / revoked → error message, không tạo account.
+   - User already authenticated + thuộc family khác → reject (xem 2.2 #16).
+3. **Show disclosure screen** (canonical wording from FAM §3.2):
+   - Co-parent invite → co-parent disclosure (parent khác sẽ thấy tx của bạn).
+   - Child invite → child disclosure (bố mẹ sẽ thấy gì + không thấy gì + quyền leave/PDPA).
+4. **Accept gate:** User phải bấm `[Tôi đồng ý — Join Family]` trước khi DB transaction.
+5. **DB transaction (FAM §4.7):**
+   - Row lock `family_accounts.with_for_update()`.
+   - Re-check invite validity + seat limit.
+   - Insert `family_members` với `consent_accepted_at=now()` + `consent_disclosure_version=CURRENT_VERSION`.
+   - Mark `family_invites.status='accepted'`, set `accepted_at` + `accepted_by_user_id`.
+6. **Post-join:** Redirect tới path normal (Path A/B/C để link funding source riêng), hoặc bot welcome theo role.
+
+**Error cases (xem 2.2):**
+- Invite expired → "Invite đã hết hạn. Yêu cầu mời lại."
+- Seat đầy (race) → "Family đã đủ thành viên." (raise `SeatLimitExceeded`)
+- User trong family khác → "Bạn đang trong family X. Rời family đó trước." (xem FAM §2.2.9)
+- Child age tự khai <13 → soft warning, không hard-block self-declared age.
+
+> **Copy lock:** Disclosure wording canonical ở FAM §3.2. Edit phải bump `consent_disclosure_version` + migration cho user cũ re-consent.
 
 ---
 
@@ -217,6 +253,11 @@ Confirm, or choose another language:
 - [ ] `/start` khi có account → status
 - [ ] Completion rate ≥80% trong 1 session
 - [ ] Median time: A ≤5', B ≥15', C ≥10'
+- [ ] **Path D (Family invite accept):** `/start fam_<token>` detect invite + verify hash + show disclosure screen với canonical wording (co-parent vs child role).
+- [ ] **Path D:** Accept gate enforce — DB insert chỉ happen sau user explicit accept.
+- [ ] **Path D:** DB transaction dùng `with_for_update()` row lock chống race seat allocation (FAM §4.7).
+- [ ] **Path D:** Single-active-family invariant enforce — user thuộc family khác bị reject với rõ ràng message.
+- [ ] **Path D:** Expired invite + revoked invite handled với error message rõ ràng, không tạo dangling state.
 
 ---
 
@@ -226,3 +267,4 @@ Confirm, or choose another language:
 |---------|------|----------|
 | v1.0.0 | 2026-05-08 | Initial — tách từ PRD §3.1 |
 | v1.1.0 | 2026-05-08 | **i18n language select:** (1) Thêm bước language_detect + language_confirm TRƯỚC path select. Auto-detect từ Telegram `language_code` / Discord interaction `locale` / Messenger profile, user confirm/override. (2) Default categories bilingual (vi/en). (3) State machine mới: `/start` → language_confirm → onboard_welcome. (4) Thêm 3 analytics events (detected/confirmed/overridden). (5) Thêm 2 edge cases (NULL/unknown language_code). |
+| v1.2.0 | 2026-05-11 | **Family invite-accept flow (Path D — sync feature-family-plan v1.0.0):** (1) §2.1 thêm 3 use case (#13-15) cho click invite link / accept disclosure / reject. (2) §2.2 thêm 5 edge case (#15-19) cho token spoofing, multi-family reject, expired, seat race, child age self-decl. (3) §3 thêm Path D screen với 6-step flow (detect → verify → disclosure → accept gate → DB transaction với row lock → post-join redirect). Canonical disclosure wording owned by FAM §3.2. (4) §10 acceptance thêm 5 Family-specific checks. Cross-ref FAM §3.2, §4.7. |

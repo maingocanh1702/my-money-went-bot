@@ -286,6 +286,44 @@ users 1 ─── n funding_sources 1 ─── n transactions
 
 **Trong giai đoạn Sheets (hôm nay, trước khi migrate sang Postgres):** `funding_sources` được simulate bằng worksheet riêng (sheet name `FUNDING_SOURCES`) với các column tương đương — xem `feature-funding-sources-tech.md` §2.
 
+### 4.4. Family Plan integration (FAM)
+
+**Locked decision (2026-05-11):** `funding_sources` **KHÔNG thêm column nào** để support Family Plan.
+
+- FS ownership đã là user-level qua `user_id` (canonical §4 above).
+- Family visibility là membership-level — parent dashboard query qua join:
+  ```sql
+  SELECT fs.*
+  FROM funding_sources fs
+  JOIN family_members fm ON fm.user_id = fs.user_id AND fm.removed_at IS NULL
+  WHERE fm.family_id = :parent_family_id
+  ```
+- **Why no `family_id` on `funding_sources`:** denormalize sẽ tạo bug khi child rời family / cancel — phải cập nhật FK, race condition với ingestion, child join family mới phải update FS records. Membership join là idempotent và safe.
+
+**Cross-feature contract — `can_ingest_transaction()` entitlement service:**
+
+F02 worker MUST gọi entitlement service trước khi insert tx (KHÔNG hard-code tier/family logic trong worker):
+
+```python
+def can_ingest_transaction(user_id: int, fs: FundingSource) -> bool:
+    """
+    True nếu user_id còn quyền ingest tx cho funding source này.
+    Routes through plan + family membership + family status.
+    """
+    # ... full spec ở feature-family-plan §4.5
+```
+
+Behavior summary:
+- Pro/Business plan: unconditional True (within plan quota).
+- `family_owner` plan: True nếu owned family `status in ('active','trialing')`.
+- Co-parent/child: True nếu active membership trong family `status in ('active','trialing')`.
+- Owner downgrade Family → Pro: plan flip → Pro branch handle (KHÔNG qua `family_owner`).
+- Free: fallback `free_tier_within_quota(user_id)` (F06 quota logic).
+
+Xem [feature-family-plan.md §4.5](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/drafts/feature-family-plan.md) cho full pseudo-code + behavior rules.
+
+> **Perf note:** Nếu family dashboard query thành bottleneck (>50ms p95), Phase 2 cân nhắc materialized view `family_member_fs_lookup`. KHÔNG denormalize `family_id` lên FS.
+
 ---
 
 ## 5. API Endpoints
@@ -479,3 +517,4 @@ idle ──[/accounts → ➕ Thêm]──→ await_add_bank
 | Version | Ngày | Thay đổi |
 |---------|------|----------|
 | v1.0.0 | 2026-05-11 | Initial spec — VN-only, single `funding_sources` entity với canonical identity `(user_id, kind, bank, last4)`, status enum (active/hidden/archived), auto-discovery embed-in-picker UX, FK chain `users→fs` CASCADE + `tx.fs_id→fs` SET NULL. Locked sau nhiều round in-session review. |
+| v1.1.0 | 2026-05-11 | **Family Plan integration (FAM):** §4 thêm §4.4 — `funding_sources` KHÔNG thêm column nào cho Family. Family visibility qua join `family_members.user_id = funding_sources.user_id` (membership-level), KHÔNG denormalize `family_id`. F02 worker contract: phải call `can_ingest_transaction(user_id, fs)` entitlement service trước insert. Pseudo-code + behavior rules ở [feature-family-plan §4.5](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/drafts/feature-family-plan.md). Perf fallback: materialized view Phase 2 nếu cần, KHÔNG denormalize. |

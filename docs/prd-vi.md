@@ -418,40 +418,54 @@ Muốn note lại lý do? Reply để bot ghi nhận.
 
 ### 3.6. F06 — Pricing, Tier Limits & Trial
 
-**Mô tả:** Enforce tier-based feature gating + 3-tier pricing với annual discount.
+**Mô tả:** Enforce tier-based feature gating + **4-tier pricing** với annual discount.
 
-**Pricing:**
+**Pricing (post Family launch 2026-Q3+):**
 
-| Plan | Monthly | Annual (20% off) | VND tương đương (annual) |
-|------|---------|------------------|--------------------------|
-| Free | $0 | $0 | 0đ |
-| Pro | $4/mo | **$38.40/yr** | ~960k VND/năm |
-| Business | $9/mo | **$86.40/yr** | ~2.16tr VND/năm |
+| Plan | VN Monthly | VN Annual (15% off, exact) | Global Monthly |
+|------|-----------|---------------------------|----------------|
+| Free | 0 | 0 | $0 |
+| Pro | **99k VND** | **1.010k/năm** | $4/mo |
+| **Family** 🆕 | **169k VND** | **1.724k/năm** | TBD Phase 2 |
+| Business | **299k VND** | **3.050k/năm** | $9/mo |
 
-> Annual discount = 20% off cho cả Pro và Business (≈2.4 tháng free khi trả năm).
+> **Pricing bump:** Pro 79k→99k, Business 199k→299k ship cùng Family launch. Grandfather 6 tháng giá cũ cho existing subscriber. Xem BRD §5.1 + [feature-family-plan.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/drafts/feature-family-plan.md).
+>
+> **Family annual exact = 1.724k** (169k × 12 × 0.85). Marketing rounding nếu có phải document explicit.
 
 **Tier Limits:**
 
-| Limit | Free | Pro | Business |
-|-------|------|-----|----------|
-| Transactions/tháng | 45 | Unlimited | Unlimited |
-| Bank accounts | 1 | 3 | 5 |
-| Transaction history | 30 ngày | Unlimited | Unlimited |
-| Categories | 5 (3 default + custom) | 20 | Unlimited |
-| Email sources | 1 | 3 | Unlimited |
-| Weekly/Monthly report | ❌ | ✅ | ✅ |
-| CSV export | ❌ | ✅ | ✅ |
+| Limit | Free | Pro | Family (per member) | Business |
+|-------|------|-----|---------------------|----------|
+| Transactions/tháng | 45 | Unlimited | Unlimited | Unlimited |
+| Bank accounts | 1 | 3 | 3 | 5 |
+| Transaction history | 30 ngày | Unlimited | Unlimited | Unlimited |
+| Categories | 5 | 20 | 20 | Unlimited |
+| Email sources | 1 | 3 | 3 | Unlimited |
+| Weekly/Monthly report | ❌ | ✅ | ✅ | ✅ |
+| CSV export | ❌ | ✅ | ✅ | ✅ |
+| **Family seats** | — | — | **2 parent + 4 child (flat)** | — |
+| **Multi-member dashboard** | — | — | ✅ | — |
+| **Budget limits per member/category** | — | — | ✅ | — |
+| **Real-time budget alerts** | — | — | ✅ | — |
 
-> **Lưu ý SePay:** Khi kết nối bank account qua SePay (cả 3 tier), user tự thanh toán chi phí gói SePay. MyMoneyWent không cover chi phí này.
+> **Lưu ý SePay:** User tự trả gói SePay (mọi tier).
 
-> **Email forwarding cho Free tier:** cho phép 1 email source — nhưng tx vẫn bị cap 45/tháng. Đây là entry path #3 cho user không có/không muốn dùng SePay.
+> **Family Plan scope:** Target phụ huynh quản lý chi tiêu con **13-17 tuổi**. Co-parent ngang quyền owner trừ billing. Consent disclosure mandatory. Permission: View + Set Budget + Alerts (KHÔNG approve-before-spend). Spec đầy đủ: [feature-family-plan.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/drafts/feature-family-plan.md).
 
 **Trial Logic:**
 - [ ] New user → 14-day Pro trial, auto-assigned
-- [ ] Day 12: reminder message "Trial còn 2 ngày..."
+- [ ] Day 12: reminder
 - [ ] Day 14: auto-downgrade Free, data preserved
-- [ ] Upgrade triggers: max 1 message/tuần/user (see BRD 5.2.3)
-- [ ] Annual plan: hiển thị "tiết kiệm 20% khi trả năm" trong upgrade flow
+- [ ] Pro user upgrade Family → trial reset 14 ngày (1 lần, track `users.family_trial_used_at`)
+- [ ] Upgrade triggers: max 1/tuần/user
+- [ ] Annual plan: hiển thị "tiết kiệm 15% khi trả năm"
+
+**Cross-feature contracts (Family-driven):**
+- **F02 worker** MUST call `can_ingest_transaction(user_id, fs)` entitlement service trước insert tx (FAM §4.5).
+- **F09 scheduled jobs** thêm `close_stale_memberships` daily cron (FAM §4.6).
+- **F08 funding sources**: KHÔNG thêm column nào. Family visibility qua membership join.
+- **F01 onboarding** extend với Path D (Family invite-accept flow + disclosure).
 
 **Payment flow:** Detail spec ở [feature-spec-payment-bank-transfer v1.3.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-payment.md) + [implementation-plan-payment-vietqr-email v1.0.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/implementation-plans/implementation-plan-payment-vietqr-email.md). Tóm tắt:
 - User `/upgrade` → bot tạo `pending_payment` với ref `PAY-{user_id}-{plan}-{period}-{nonce4}`
@@ -533,7 +547,16 @@ users (1) ──── (N) transactions
   │
   ├──── (1) bot_state
   │
-  └──── (N) scheduled_jobs
+  ├──── (N) scheduled_jobs
+  │
+  ├──── (N) funding_sources                    [F08]
+  │
+  ├──── (1) family_accounts (as owner)         [FAM]
+  │         ├──── (N) family_members (user_id)
+  │         ├──── (N) family_budgets
+  │         └──── (N) family_invites
+  │
+  └──── (N) family_members (as parent/child member)
 ```
 
 ### 4.2. Key Tables (xem chi tiết trong TDD)
@@ -697,6 +720,9 @@ Vì PRD section 1.4 dùng **1 shared bot** cho mọi user, có Telegram-imposed 
 - [Feature spec: Personal vs Business toggle](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-personal-business-toggle.md)
 - [Feature spec: Refactor personal → SaaS multi-tenant](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-saas-refactor.md)
 - [Feature spec: Payment via bank transfer v1.3.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-payment.md)
+- [Feature spec: Family Plan v1.0.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/drafts/feature-family-plan.md)
+- [Feature spec: Funding Sources v1.1.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-funding-sources.md)
+- [Feature spec: Pricing tiers v1.1.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-pricing-tiers.md)
 - [Feature spec: Multi-channel Messenger v1.1.1](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-messenger-channel.md)
 - [Decision: Onboarding UI strategy v1.0.1](file:///Users/maingocanh/Projects/MyMoneyWent/docs/adr/0002-onboarding-ui-strategy.md)
 - [Feature spec: Admin tools & audit](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-admin-tools.md)
@@ -724,3 +750,4 @@ Vì PRD section 1.4 dùng **1 shared bot** cho mọi user, có Telegram-imposed 
 | v1.4.0 | 2026-05-05 | **Payment auto-detect spec:** (1) §1.3 tech stack — Bank transfer + auto-detect via SePay primary + Email backup, link tới feature-spec-payment-bank-transfer.md. (2) F06 thêm Payment flow subsection — tóm tắt 4-layer matching, recurring monthly/annual reminder cadence. (3) §6 Analytics — thêm 8 payment events: `payment_initiated`, `payment_matched`, `payment_expired`, `payment_unmatched`, `payment_refunded`, `subscription_renewed`, `subscription_expired_grace`, `subscription_downgraded`. (4) Cross-ref feature spec mới. |
 | v1.5.0 | 2026-05-06 | **Sync với 3 spec mới + BRD v2.8.0:** (1) §1.3 tech stack thêm 3 row: **Admin tools** (env `ADMIN_TELEGRAM_IDS`, `ADMIN_RATE_LIMIT_PER_MIN=30`, `/admin_help` registry hybrid), **Observability** (Sentry + Railway, error budget 0.1%, dashboards `/admin_stats` `/admin_cost` `/admin_user`), **Disaster recovery** (8 scenarios, RTO 2-4h, BOT_TOKEN_BACKUP, `@FinTrackUpdates` channel). Backup row clarify SSE-B2 + `pg_dumpall --globals-only`. (2) §4.2 Key Tables thêm 5 row: `pending_payments`, `payment_matches`, `unmatched_payments`, `admin_audit_log`, `analytics_events`. (3) §5.3 Reliability NFR thêm 3 metric: error budget, disaster recovery RTO, out-of-band notification channel. Backup row clarify globals + SSE-B2. Webhook retry clarify cross-source dedup state machine. (4) §6 Analytics thêm 3 admin events: `admin_command_executed`, `admin_command_denied`, `admin_manual_payment_resolved`. (5) §7.2 References thêm 4 cross-doc link (admin tools, DR runbook, observability, implementation plan). |
 | v1.6.0 | 2026-05-07 | **Multi-channel foundation MVP + VietQR + email parallel (sync BRD v2.9.0 + feature-spec-messenger-channel v1.1.1 + impl plan VietQR+email v1.0.0):** (1) **§1.1 mô tả**: từ "Telegram bot SaaS" → "**multi-channel SaaS bot**, Telegram primary launch, Messenger feature-flagged sau Meta App Review approve". (2) **§1.4 Bot ownership rewrite**: dual-channel ownership model — `@FinTrackBot` (Telegram public launch theo timeline) + `m.me/FinTrackPage` (Messenger code + foundation ship Phase 6, public access gated bởi `ENABLE_MESSENGER_CHANNEL` flag flip ON sau App Review approve). 2 flow đăng ký separate (slash command vs Get Started postback). UNIQUE constraint changed `users.telegram_id` → `(channel_type, channel_user_id)`. AC liên quan thêm 6 entry mới (env vars Meta, channel adapter grep). (3) **§2 user flows**: thêm note multi-channel — flow logic identical, UX rendering divergent (persistent menu vs slash, quick replies vs inline keyboard). Cross-link tới UX parity matrix Messenger spec. (4) **§3.6 F06 payment flow rewrite**: thêm VietQR via vietqr.io public image URL, 2 QR (VCB primary + TCB secondary) gửi như image attachment, ref code standalone message. Detection latency: VCB ≤60s, TCB ≤5min. Cross-source dedup state machine. Messenger MESSAGE_TAG ACCOUNT_UPDATE cho subscription outbound. (5) §7.2 references thêm Messenger spec, Impl Plan VietQR, Meta docs, vietqr.io API. (6) Header BRD ref bumped v2.8.0 → v2.9.0. |
+| v1.7.0 | 2026-05-11 | **Family Plan tier mới (sync BRD v3.2.0 + feature-family-plan v1.0.0):** (1) **§3.6 F06 rewrite**: 4-tier pricing (Free / Pro 99k / Family 169k / Business 299k). Pricing bump Pro 79→99 + Business 199→299 với grandfather 6 tháng. Family-specific limits row (seats, multi-member dashboard, budget limits, real-time alerts). Annual exact math (Pro 1.010k, Family 1.724k, Business 3.050k). Pro→Family trial reset 14d. (2) Cross-feature contracts: F02 `can_ingest_transaction()`, F09 `close_stale_memberships` cron, F08 no schema change, F01 invite-accept flow extension. (3) **§4.1 ER diagram** thêm `family_accounts`, `family_members`, `family_budgets`, `family_invites`. (4) **§7.2 references** thêm Family Plan, Funding Sources, Pricing tiers specs. |
