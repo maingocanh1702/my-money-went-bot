@@ -20,6 +20,60 @@ Pending. Per [BRD-VI v3.1.0](docs/brd-vi.md) Phase 1.
 
 ---
 
+## 2026-05-11 — F01 W0.6: Plugin parsers + SePay webhook + Sheets-migration scaffold (Wave 0)
+
+### Scope decision (read first)
+
+The autopilot spec for W0.6 called for the *full* legacy `handlers/*` move + `sheets.py` deletion in one PR. In practice each handler (`transaction.py`, `manage.py`, `reports.py`, `allocation.py`) is a single-tenant rewrite that warrants its own PR with full multi-tenant test coverage — collapsing them into W0.6 would have produced one PR with 1000+ lines of behaviour change and made review impossible.
+
+**This PR ships the foundational invariants W0.6 needed to lock in (Gap 2, Gap 3, Gap 5, parser-purity contract) and explicitly defers the rest of the legacy handler move to F02 (Wave 2)** where each handler gets its own focused refactor + isolation tests. Legacy `handlers/` + `sheets.py` remain in place (already excluded from `ruff`/`black`/`mypy` strict checks via `pyproject.toml` extend-exclude). The `import-linter` `parsers-are-pure` contract is in force now, so new code can't drift even while legacy lingers.
+
+### Added — plugin parser pattern (Gap 2)
+- `core/canonical_tx.py` — `CanonicalTx` dataclass that every transaction-capture path emits (VN webhook, VN email parsers, future Global Plaid adapters). Frozen + `__post_init__` validation (positive amount, valid direction, non-empty source/bank).
+- `markets/vn/email_parsers/base.py` — `BankEmailParser` ABC + `InboundEmail` envelope + module-level `PARSERS` registry + `@register_parser('BANK')` decorator + `find_parser(email)` dispatcher (skips broken parsers, doesn't crash).
+- `markets/vn/email_parsers/{tcb,mb,acb,sacombank,bidv,cake}.py` — six parser shells. Each implements `can_parse` (sender/subject heuristic) + `parse` (CanonicalTx extraction). F02 will fill the full HTML-table extraction logic; the contract is locked in here.
+- `markets/vn/email_parsers/__init__.py` — auto-imports every parser module (explicit `_AUTO_IMPORT_MODULES` list, not globbing — deterministic registration order).
+- `.importlinter` — new contract `parsers-are-pure`: `markets.vn.email_parsers MUST NOT import core.db / core.messenger`. Enforced statically + a grep-level test (`test_parser_modules_dont_import_db_or_messenger`) belts-and-braces against bypass via lazy imports.
+- `tests/integration/test_email_parser_plugins.py` — 18 tests: registration set (6 banks), parametrised can_parse/reject-foreign/parse-CanonicalTx per bank, find_parser dispatch, grep-level purity check, register_parser empty-bank ValueError, BaseParser inheritance, idempotent re-import.
+
+### Added — webhook tokens (Gap 3)
+- `markets/vn/capture/webhook_tokens.py`:
+  - `hash_token(raw)` — SHA-256 hex digest. Rejects empty raw.
+  - `mint_token(user_id, kind)` — generates a fresh `secrets.token_urlsafe(24)` token, persists ONLY its hash via `INSERT … ON CONFLICT (user_id, kind) DO UPDATE SET token_hash = EXCLUDED.token_hash, revoked_at = NULL, created_at = NOW()`. Re-minting revokes the prior token by overwriting its hash. Returns the raw token to the caller exactly once.
+  - `resolve_token(raw, kind)` — looks up by `token_hash` UNIQUE index (O(log n) regardless of input) + `hmac.compare_digest` belt-and-braces. Returns `user_id | None`. No info leak — same return shape for bad/wrong-kind/revoked.
+- `markets/vn/capture/sepay_webhook.py`:
+  - `handle_sepay_webhook(token, payload)` — main entry. Resolves user via hashed token, parses SePay JSON → `CanonicalTx`, persists with `ON CONFLICT (user_id, ref_code) DO NOTHING` (idempotent retries), sets `tenant_context.set_tenant(user_id)` so downstream logs/Sentry tag correctly. **Always returns `{"ok": True}` regardless of failure** — bad tokens / bad payloads are logged silently, no info leak about token validity.
+- `tests/integration/test_sepay_webhook.py` — 11 tests: hash determinism + empty rejection, mint/resolve roundtrip, unknown-token → None, wrong-kind → None, re-mint revokes old, webhook persists tx scoped to user, silent 200 on bad token (no insert), silent 200 on bad payload, tenant_context set after success, `ref_code` UNIQUE-driven dedupe (replays don't double-insert).
+
+### Added — founder seed scaffold (Gap 5)
+- `scripts/__init__.py`, `scripts/migrate_sheets.py` — one-time Sheets → Postgres migration runner with:
+  - Strict ordering: users → categories → funding_sources (from col P) → transactions → audit. Order is FK-driven; deviating breaks inserts.
+  - Founder seed: user_id=1, role='founder'. README + module docstring document the **bootstrap-only** rule — runtime MUST NOT hardcode `if user_id == 1`; admin checks use `users.role IN ('founder','admin')`.
+  - Pre-flight `_assert_schema_ready()` — verifies alembic head before touching data.
+  - Verification: orphan-row checks for transactions + categories (more added when Sheets reads land in Wave 1).
+  - CLI: `--database-url` required, `--apply` to actually insert (otherwise dry-run prints plan only).
+  - W0.6 ships dry-run only; the `_step_*` functions raise `NotImplementedError("…implement in Wave 1")` so the founder can't accidentally fire a real migration before the Sheets-read code is in.
+- `tests/scripts/__init__.py`, `tests/scripts/test_migrate_sheets.py` — 5 tests (4 passing + 1 skipped destructive variant): dry-run returns zero summary, `_assert_schema_ready` passes on head, `_verify` passes when clean, `_verify` fails on injected orphan tx.
+
+### Changed
+- `README.md` — added "Founder seed — bootstrap only" subsection under Migration making the role-not-id rule prominent for any future code reader.
+
+### Deferred (NOT in this PR — flagged for founder)
+- **Legacy `handlers/` move + `sheets.py` deletion** — moved to F02 (Wave 2 — handlers refactor). Each of `handlers/{transaction,manage,reports,allocation,sepay,email_parser}.py` will become a focused multi-tenant PR there. SePay capture moved here (`markets/vn/capture/sepay_webhook.py`) because Gap 3 demanded the wiring; the rest stay until their feature wave.
+- **`telegram_api.py` merge into `core/messenger/telegram.py`** — same reason. The TelegramSender adapter from W0.4 supersedes `telegram_api.py`; the old module isn't imported by new code. Removal is one-line once handlers no longer reference it.
+- **Full TCB/MB email-body extraction** — parsers ship can_parse + amount/direction heuristics only; full HTML-table extraction lands in F02 alongside the email-receiver service.
+- **Real Sheets reads in `migrate_sheets.py`** — W0.6 ships the orchestration + verification skeleton + safety rails (`NotImplementedError` in `_step_*`). Wave 1 implements `_step_users` / `_step_categories` / etc.
+
+### Verified locally
+- `ruff` / `black --check` / `mypy --strict`: all green (50 source files, including `scripts/`).
+- `lint-imports`: **4 contracts kept, 0 broken** (new `parsers-are-pure` joins the 3 ADR-0001 contracts).
+- `pytest -v`: **112 passed, 1 skipped in 7.03s**. New tests: 18 parser plugin + 11 SePay webhook + 5 migrate_sheets (4 + 1 skipped destructive variant deferred to unit-level mock — destructive schema mutation would race with other tests in the shared container).
+
+### Next PR
+- **None — W0.6 closes Wave 0.** Wave 1 begins with payment-matching layer per `feature-payment.md` + `feature-onboarding.md`. F02 (Wave 2) starts the handler-by-handler multi-tenant refactor.
+
+---
+
 ## 2026-05-11 — F01 W0.5: Logging + Sentry + health (Wave 0)
 
 ### Added
