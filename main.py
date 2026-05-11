@@ -1,0 +1,222 @@
+"""
+main.py — FastAPI entry point
+Receives SePay webhooks and Telegram updates via a single /webhook endpoint.
+"""
+from fastapi import FastAPI, Request, BackgroundTasks
+from fastapi.responses import JSONResponse
+import asyncio
+
+from config import CHAT_ID, EMAIL_SECRET
+import sheets as sh
+import telegram_api as tg
+from handlers.sepay        import handle_sepay_webhook
+from handlers.email_parser import parse_email
+from handlers.transaction import handle_parent_selected, handle_sub_selected, handle_freetext_sub, handle_recategorize, handle_inline_new_cat_name
+from handlers.allocation  import (
+    start_monthly_allocation, handle_alloc_callback,
+    handle_alloc_amount_input, handle_new_bucket_name, handle_new_bucket_amount,
+)
+from handlers.reports     import send_monthly_status, send_today_status, run_weekly_summary, run_monthly_report, send_daily_recap, handle_daily_excuse, send_bank_breakdown
+from handlers.manage      import (
+    start_manage, handle_manage_callback,
+    handle_manage_amount, handle_manage_rename, handle_sub_rename,
+    handle_add_cat_name, handle_add_cat_amount,
+)
+
+app = FastAPI(title="Financial Tracking Bot")
+
+
+@app.on_event("startup")
+async def on_startup():
+    import os
+    print(f"[startup] running on port {os.environ.get('PORT', 8000)}")
+    try:
+        await tg.set_my_commands()
+    except Exception as e:
+        print(f"[startup] set_my_commands failed (no internet?): {e}")
+
+
+# ─── Webhook endpoint ─────────────────────────────────────────
+@app.post("/webhook")
+async def webhook(request: Request, bg: BackgroundTasks):
+    """
+    Single endpoint handling both SePay and Telegram payloads.
+    Returns 200 immediately — processing runs in background.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": True})
+
+    bg.add_task(_process, body)
+    return JSONResponse({"ok": True})          # ← 200 right away, no 302
+
+
+# ─── Email webhook (Google Apps Script → bot) ────────────────
+@app.post("/webhook/email")
+async def webhook_email(request: Request, bg: BackgroundTasks):
+    """
+    Nhận email payload từ Google Apps Script.
+    Payload: { secret, from, subject, body, date }
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": True})
+
+    # Validate secret
+    if EMAIL_SECRET and body.get("secret") != EMAIL_SECRET:
+        print(f"[email webhook] rejected: invalid secret")
+        return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
+
+    bg.add_task(_process_email, body)
+    return JSONResponse({"ok": True})
+
+
+async def _process_email(payload: dict):
+    try:
+        parsed = parse_email(
+            from_addr=payload.get("from", ""),
+            subject=payload.get("subject", ""),
+            body=payload.get("body", ""),
+            date=payload.get("date", ""),
+        )
+        if parsed is None:
+            print(f"[email] skipped — not a transaction email or unknown format")
+            return
+        print(f"[email] parsed: {parsed.get('_source')} amount={parsed.get('transferAmount')} type={parsed.get('transferType')}")
+        await handle_sepay_webhook(parsed)
+    except Exception as e:
+        import traceback
+        print("ERROR [email]:", traceback.format_exc())
+
+
+# ─── Scheduled triggers (call via cron on VPS) ───────────────
+@app.post("/trigger/weekly")
+async def trigger_weekly():
+    asyncio.create_task(run_weekly_summary())
+    return {"ok": True}
+
+
+@app.post("/trigger/monthly-report")
+async def trigger_monthly_report():
+    asyncio.create_task(run_monthly_report())
+    return {"ok": True}
+
+
+@app.post("/trigger/monthly-allocation")
+async def trigger_monthly_allocation():
+    asyncio.create_task(start_monthly_allocation())
+    return {"ok": True}
+
+
+@app.post("/trigger/daily-recap")
+async def trigger_daily_recap():
+    asyncio.create_task(send_daily_recap())
+    return {"ok": True}
+
+
+# ─── Health check ─────────────────────────────────────────────
+@app.get("/")
+async def health():
+    return {"status": "ok", "bot": "Financial Tracking Bot"}
+
+
+# ─── Main dispatcher ──────────────────────────────────────────
+async def _process(body: dict):
+    try:
+        # --- Telegram update ---
+        if "update_id" in body:
+            if "callback_query" in body:
+                await _handle_callback(body["callback_query"])
+            elif "message" in body:
+                await _handle_message(body["message"])
+        # --- SePay webhook ---
+        else:
+            await handle_sepay_webhook(body)
+    except Exception as e:
+        import traceback
+        print("ERROR:", traceback.format_exc())
+        await tg.send_text(f"⚠️ Bot gặp lỗi: `{e}`")
+
+
+async def _handle_callback(cb: dict):
+    await tg.answer_callback(cb["id"])
+    data       = cb.get("data") or ""
+    message_id = cb["message"]["message_id"]
+    parts      = data.split("_")
+    prefix     = parts[0]
+
+    if prefix == "p":
+        await handle_parent_selected(parts, message_id)
+    elif prefix == "s":
+        await handle_sub_selected(parts, message_id)
+    elif prefix == "al":
+        await handle_alloc_callback(parts, message_id)
+    elif prefix == "recat":
+        await handle_recategorize(parts, message_id)
+    elif prefix == "mg":
+        await handle_manage_callback(parts, message_id)
+
+
+async def _handle_message(message: dict):
+    if message.get("from", {}).get("is_bot"):
+        return                                  # ignore bot echoes
+
+    text  = (message.get("text") or "").strip()
+    state = sh.get_state(CHAT_ID) or {}
+
+    # Commands take priority
+    if text.startswith("/"):
+        await _handle_command(text)
+        return
+
+    # Multi-step state machine
+    step = state.get("step")
+    if step == "await_freetext":
+        await handle_freetext_sub(text, state)
+    elif step == "await_alloc_amount":
+        await handle_alloc_amount_input(text, state)
+    elif step == "await_new_bucket_name":
+        await handle_new_bucket_name(text, state)
+    elif step == "await_new_bucket_amount":
+        await handle_new_bucket_amount(text, state)
+    elif step == "await_daily_excuse":
+        await handle_daily_excuse(text, state)
+    elif step == "await_manage_amount":
+        await handle_manage_amount(text, state)
+    elif step == "await_manage_rename":
+        await handle_manage_rename(text, state)
+    elif step == "await_sub_rename":
+        await handle_sub_rename(text, state)
+    elif step == "await_add_cat_name":
+        await handle_add_cat_name(text, state)
+    elif step == "await_add_cat_amount":
+        await handle_add_cat_amount(text, state)
+    elif step == "await_inline_new_cat_name":
+        await handle_inline_new_cat_name(text, state)
+    else:
+        await tg.send_text(
+            "🤖 *Financial Tracking Bot*\n\n"
+            "Tự động ghi mọi giao dịch ngân hàng. Bạn chỉ cần phân loại — bot lo phần còn lại.\n\n"
+            "/status   — tháng này tiêu gì?\n"
+            "/today    — hôm nay tiêu bao nhiêu?\n"
+            "/banks    — chi tiêu theo từng bank account\n"
+            "/manage   — sửa categories\n"
+            "/allocate — (optional) đặt budget cho từng mục\n"
+            "/weekly   — tổng kết tuần\n"
+            "/report   — báo cáo tháng"
+        )
+
+
+async def _handle_command(text: str):
+    cmd = text.split()[0].lower()
+    if   cmd == "/status":   await send_monthly_status()
+    elif cmd == "/today":    await send_today_status()
+    elif cmd == "/banks":    await send_bank_breakdown()
+    elif cmd == "/allocate": await start_monthly_allocation()
+    elif cmd == "/weekly":   await run_weekly_summary()
+    elif cmd == "/report":   await run_monthly_report()
+    elif cmd == "/manage":   await start_manage()
+    else:
+        await tg.send_text("Unknown command. Try /status, /today, /banks, /manage, /allocate, /weekly, or /report.")
