@@ -349,3 +349,54 @@ async def test_long_provider_event_id_fits_schema_bound(pool: asyncpg.Pool) -> N
     rc = rows[0]["ref_code"]
     assert len(rc) <= 64, f"ref_code must fit VARCHAR(64), got len={len(rc)}"
     assert rc.startswith("sepay-id-"), f"Expected sepay-id- prefix, got {rc!r}"
+
+
+# ─── F02 contract pin (xfail until F02 wires funding-source resolve) ──
+#
+# Wave 0 closed without wiring F08 funding-source resolution into the SePay
+# webhook INSERT path — `_persist()` writes `funding_source_id = NULL`.
+# Per F08 decisions (memory: project_f08_funding_sources) and Wave 0 gap
+# decision W0.2, F02 MUST resolve `funding_source_id` before INSERT so the
+# entity registry is the source of truth for TK/thẻ/ví attribution.
+#
+# This test pins that contract. It currently FAILS (NULL FK after insert),
+# and is marked `xfail(strict=True)` — when F02 lands and resolution is
+# wired, the test flips to passing and pytest will RAISE on the unexpected
+# pass, forcing the dev to remove the xfail marker. Do not delete this
+# test before F02; do not flip strict=False to silence it.
+@pytest.mark.xfail(
+    strict=True,
+    reason="F02: funding_source_id must be resolved before INSERT (F08 contract)",
+)
+async def test_persisted_tx_has_resolved_funding_source_id(pool: asyncpg.Pool) -> None:
+    """Contract: every persisted tx must carry a resolved funding_source_id.
+
+    Today `_persist()` skips resolution and writes NULL. F02 must wire
+    `funding_sources` lookup keyed on `(user_id, source, bank, last4)`
+    (or call the registry's resolve helper) before the INSERT.
+    """
+    await _clean(pool)
+    uid = await _seed_user(pool, "fs-contract-user")
+    raw = await mint_token(uid, kind="sepay")
+
+    payload = {
+        "id": 99001,
+        "gateway": "TCB",
+        "transactionDate": "2026-05-11 09:42:13",
+        "accountNumber": "0123456789",
+        "transferType": "in",
+        "transferAmount": 50000,
+        "content": "NAP TIEN",
+        "referenceCode": "FT26-FS-001",
+    }
+    await handle_sepay_webhook(raw, payload)
+
+    async with pool.acquire() as conn:
+        fs_id = await conn.fetchval(
+            "SELECT funding_source_id FROM transactions WHERE user_id = $1;",
+            uid,
+        )
+    assert fs_id is not None, (
+        "F02 contract: transactions.funding_source_id must be resolved before "
+        "INSERT, got NULL. Wire funding-source resolution in sepay_webhook._persist()."
+    )
