@@ -20,6 +20,37 @@ Pending. Per [BRD-VI v3.1.0](docs/brd-vi.md) Phase 1.
 
 ---
 
+## 2026-05-11 — F01 W0.3: DB pool + tenant context (Wave 0)
+
+### Added
+- `core/db.py` — Global asyncpg pool singleton: `create_pool(dsn)` / `get_pool()` / `close_pool()`. Defaults `min_size=2`, `max_size=10`, `command_timeout=30s`, `statement_cache_size=100`. `create_pool` rejects double-init (config-race detector); `get_pool` raises if uninitialised (never auto-creates); `close_pool` is idempotent.
+- `core/tenant_context.py` — Per-request tenant context via `ContextVar` (asyncio-task-safe, propagates across `await` boundaries). API: `set_tenant(user_id, request_id=None) -> request_id`, `get_user_id()` (raises `LookupError` if unset — fail loud), `get_user_id_or_none()` (for logging/health only — NEVER in tenant-scoped queries), `get_request_id()`, `clear_tenant()`. Hard-rejects `user_id <= 0`. UUID4 hex auto-generated when request_id omitted.
+- `tests/integration/test_db_pool.py` — 5 tests: create/get/close roundtrip, double-init raises, close-idempotent, get-without-init raises, **15 concurrent queries against max_size=10 pool queue without crashing** (proves asyncpg's built-in queueing — no app-level semaphore needed).
+- `tests/integration/test_tenant_isolation.py` — 7 tests including the **THE mandatory** 2-user isolation rule that subsequent feature waves lean on:
+  - `test_user_a_query_returns_only_user_a_rows` — user-scoped SELECT returns only A's rows, validated with `assert_tenant_isolated()`.
+  - `test_user_b_query_returns_only_user_b_rows` — mirror with B.
+  - `test_tenant_context_isolation_under_concurrent_tasks` — three `asyncio.gather`ed tasks with different tenants don't cross-contaminate (ContextVar correctness proof).
+  - `test_delete_user_cascades_transactions` — schema sanity (ON DELETE CASCADE).
+  - `test_get_user_id_raises_when_unset`, `test_set_tenant_returns_request_id_and_generates_uuid`, `test_set_tenant_rejects_invalid_user_id` — API contracts.
+
+### Fixed
+- `tests/conftest.py` `pg_url_async` — was returning `postgresql+asyncpg://...` (SQLAlchemy-style), but raw `asyncpg.create_pool()` rejects that scheme with `ClientConfigurationError`. Now returns the bare `postgresql://` DSN (asyncpg-compatible). Documented that SQLAlchemy async engines (when added) need the prefixed scheme; this fixture serves raw-asyncpg callers.
+
+### Verified locally
+- `ruff` / `black --check` / `mypy --strict`: all green (15 source files).
+- `lint-imports`: 3 contracts kept, `core/db.py` + `core/tenant_context.py` cleanly stay inside `core/` (no markets imports).
+- `pytest -v`: **32 passed in 5.79s** — 4 boundary + 16 migrations + 5 db_pool + 7 tenant_isolation.
+
+### Notes
+- Pool sizing tuned for the Wave 1-2 traffic envelope (single-region, low-RPS bot). Will revisit when adding read-replicas in W3+.
+- `tenant_context.set_tenant()` returns the resolved request_id so callers can log it without a second `get_request_id()` round-trip.
+- The 15-concurrent-query exhaustion test deliberately doesn't pass `timeout=...` to `pool.acquire()` — asyncpg's FIFO queue is what we depend on, not custom timeouts.
+
+### Next PR
+- W0.4 — Messenger adapter (`core/messenger/`): `BaseSender` ABC + `SendPayload` (Gap 4 verbatim) + `TelegramSender` impl + i18n stub + adapter contract tests.
+
+---
+
 ## 2026-05-11 — F01 W0.2: Migration framework + initial schema (Wave 0)
 
 ### Added

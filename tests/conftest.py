@@ -70,8 +70,15 @@ def pg_url(pg_container: Any) -> str:
 
 @pytest.fixture(scope="session")
 def pg_url_async(pg_url: str) -> str:
-    """Asyncpg DSN — `postgresql+asyncpg://...`."""
-    return pg_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    """DSN for `asyncpg.create_pool()` — bare `postgresql://` scheme.
+
+    asyncpg rejects the SQLAlchemy-style `postgresql+asyncpg://` prefix
+    with ClientConfigurationError. SQLAlchemy async engines (when we add
+    them) take that prefix; raw asyncpg does not. So pg_url_async returns
+    the same scheme as pg_url today — the fixture exists to give
+    asyncpg-using tests a self-documenting name.
+    """
+    return pg_url
 
 
 def _alembic(cmd: list[str], db_url: str) -> subprocess.CompletedProcess[str]:
