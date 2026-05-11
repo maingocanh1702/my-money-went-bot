@@ -85,7 +85,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S101", "S603", "S607"]  # asserts + subprocess ok in tests
+"tests/**/*.py" = ["S101", "S603", "S607", "S106"]  # asserts + subprocess + fake tokens ok in tests
 
 # ─────────────────────────────────────────────────────────────────────
 # Black — formatter

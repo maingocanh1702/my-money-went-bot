@@ -20,6 +20,51 @@ Pending. Per [BRD-VI v3.1.0](docs/brd-vi.md) Phase 1.
 
 ---
 
+## 2026-05-11 — F01 W0.4: Messenger adapter interface (Wave 0)
+
+### Added
+- `core/messenger/base.py` — Adapter contract (Gap 4 schema verbatim):
+  - `SendPayload(TypedDict, total=False)` with `text_key` / `text_params` / `text` / `locale` / `markup` / `parse_mode`.
+  - `Button` dataclass — `__post_init__` enforces label_key XOR label AND callback_data XOR url.
+  - `Markup` dataclass — `rows: list[list[Button]]`. Platform-agnostic.
+  - `BaseSender` ABC — `send_validated()` wraps `send()` with `_validate_payload()` so contract violations raise `ValueError` *before* any platform API call.
+  - `register_sender(channel_type)` decorator + `senders_for(channel_type)` lookup. Idempotent on re-registration (tests can monkeypatch).
+  - `_validate_payload()` enforces exactly-one-of `text_key`/`text`, valid `parse_mode`, and `markup` is `Markup` (rejects platform-specific structures sneaking through).
+- `core/messenger/i18n.py` — Minimal `t(key, locale, **params)` stub. Loads `core/messenger/locales/{vi,en}.json` lazily, caches per locale. Unknown key → `??key??` (loud, not silent); unknown locale → falls back to `vi` (default market). `reset_cache()` for tests.
+- `core/messenger/locales/{vi,en}.json` — minimal strings: `greeting`, `tx_recorded`, `btn_confirm`/`btn_cancel`/`btn_pick_category`, `error_generic`. Enough to exercise format-string params + button labels in tests.
+- `core/messenger/telegram.py` — `TelegramSender(BaseSender)` impl:
+  - httpx `AsyncClient` injected (tests pass a mock; production gets a default with `timeout=10s`).
+  - `_resolve_chat_id` reads `users.chat_id` (falls back to legacy `users.telegram_id` for users seeded before multi-channel).
+  - `_markup_to_telegram` converts abstract `Markup` → `{"inline_keyboard": [[{text, callback_data|url}]]}`.
+  - `parse_mode` mapping: `markdown` → `MarkdownV2`, `html` → `HTML`, `plain` → omit field.
+  - Raises `RuntimeError` on Telegram `ok: false` response so Sentry catches it; `raise_for_status()` covers transport errors.
+  - `@register_sender("telegram")` factory reads `TELEGRAM_BOT_TOKEN` env.
+- `core/messenger/send.py` — Top-level `send(user_id, payload)` entry: resolves the user's `channel_type` via the DB, looks up the registered factory, awaits adapter `send_validated()`. Supports sync or async factories.
+- `core/messenger/__init__.py` — Public API + side-effect import of `telegram` so `senders_for("telegram")` finds a factory without callers having to import the adapter module.
+- `tests/unit/test_messenger_payload.py` — 9 tests covering every `Button`/`Markup`/`SendPayload` validation branch.
+- `tests/unit/test_messenger_i18n.py` — 5 tests: vi/en lookup, unknown-locale fallback, unknown-key loud marker, no-params template passthrough.
+- `tests/unit/test_messenger_telegram_mock.py` — 6 tests with httpx + `_resolve_chat_id` mocked: text_key resolves through i18n, abstract Markup → inline_keyboard, parse_mode mapping, `ok: false` raises, validation runs before any API call (assert `client.post.assert_not_awaited()`), empty bot_token rejected.
+- `tests/contract/test_messenger_contract.py` — 5 parametrised tests over `ADAPTERS = [("telegram", TelegramSender)]`. When W6 adds Discord/Messenger, those rows extend the parametrisation and inherit the same contract checks.
+
+### Changed
+- `pyproject.toml` — `[tool.ruff.lint.per-file-ignores]` for `tests/**/*.py` now also ignores `S106` ("hardcoded password"), since test code legitimately passes literal fake `bot_token="TEST_TOKEN"` values.
+
+### Verified locally
+- `ruff` / `black --check` / `mypy --strict`: all green (27 source files).
+- `lint-imports`: 3 contracts kept, 0 broken. `core/messenger/` is fully self-contained inside `core/` — no `markets/` imports.
+- `pytest -v`: **58 passed in 5.51s** (W0.1 + W0.2 + W0.3 + 6 + 5 + 9 + 5 unit + i18n + payload tests + 5 contract tests).
+
+### Notes
+- TelegramSender's chat_id lookup depends on W0.3's `core/db` pool — chains nicely now that the pool ships with W0.3.
+- i18n is a stub; W3+ will likely switch to ICU or gettext when we tier locale resources properly. Loud `??key??` markers make missing strings obvious in dev/staging.
+- Adapter registry is intentionally module-global (no DI container). Solo founder; simpler is faster.
+- Gap 4 decision is now load-bearing: every handler in W0.6 emits `SendPayload`, not raw Telegram dicts.
+
+### Next PR
+- W0.5 — Logging (structlog + tenant binding), Sentry init, /health endpoints, request_id middleware.
+
+---
+
 ## 2026-05-11 — F01 W0.3: DB pool + tenant context (Wave 0)
 
 ### Added
