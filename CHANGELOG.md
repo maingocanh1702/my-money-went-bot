@@ -20,6 +20,47 @@ Pending. Per [BRD-VI v3.1.0](docs/brd-vi.md) Phase 1.
 
 ---
 
+## 2026-05-11 — F01 W0.5: Logging + Sentry + health (Wave 0)
+
+### Added
+- `core/logging.py` — structlog config:
+  - `configure_logging(env)` wires processors: `merge_contextvars` → stdlib log level → ISO UTC timestamp → `_bind_tenant` (injects `user_id` + `request_id` from `core.tenant_context`) → stack/exc formatters → JSON (prod/staging) OR `dev.ConsoleRenderer` (dev).
+  - `get_logger(name, **initial)` returns a `BoundLogger` with optional bound fields.
+  - `render_event_for_test()` helper so tests assert tenant-binding without spinning a real logger.
+  - Idempotent — safe to call from multiple startup paths.
+- `core/observability.py` — Sentry + health + request ID:
+  - `init_sentry(dsn, environment, release, traces_sample_rate)` — no-op when DSN empty (local dev runs without Sentry project). `before_send` hook tags every event with `user_id` / `request_id` from tenant context AND fills `user.id`. `StarletteIntegration` + `FastApiIntegration` enabled.
+  - `health_app: FastAPI` sub-app:
+    - `GET /health` → always `200 {"status":"ok"}` (liveness; never blocks on deps).
+    - `GET /health/detailed` → checks DB pool via `SELECT 1`. Returns `200` + `status: ok` when pool healthy, `503` + `status: degraded` when pool uninitialised or DB query fails. Always includes `build` info (`version`, `commit` from env).
+  - `request_id_middleware`: stamps `X-Request-ID` UUID4 hex per request, propagates into `tenant_context._request_id` (via ContextVar set/reset for proper async-task scoping), echoes the same value back as response header. Honours inbound `X-Request-ID` for client→server correlation.
+- `tests/unit/test_logging.py` — 5 tests: tenant fields injected when set, omitted when unset, caller bind wins via `setdefault`, `configure_logging` idempotent, `get_logger` returns non-None bound logger.
+- `tests/unit/test_sentry.py` — 4 tests: `before_send` populates tags + user; no-op when tenant unset; `init_sentry` returns False with no DSN; returns True with DSN-shaped string.
+- `tests/integration/test_health.py` — 5 tests via in-process ASGI client:
+  - liveness always 200
+  - detailed → 503 when pool uninitialised, with `pool-not-initialised` error key
+  - detailed → 200 + `status: ok` + non-None `pool_size` + correct `build.service` when DB up
+  - request_id middleware generates UUID4 hex
+  - request_id middleware honours client-supplied X-Request-ID
+
+### Changed
+- `requirements.txt` — added `structlog==24.4.0`, `sentry-sdk[fastapi]==2.18.0`, `jinja2==3.1.4` (the last needed by sentry-sdk's `StarletteIntegration.patch_templates()` at import time even though we don't use Jinja directly).
+
+### Verified locally
+- `ruff` / `black --check` / `mypy --strict`: all green (32 source files).
+- `lint-imports`: 3 contracts kept, 0 broken. New `core/logging.py` + `core/observability.py` stay inside `core/`.
+- `pytest -v`: **72 passed in 5.62s** (W0.1–4 carried over + 5 logging + 4 sentry + 5 health).
+
+### Notes
+- We use `setdefault` semantics in `_bind_tenant` and `_sentry_before_send` so callers that already bound `user_id` (e.g. background jobs running impersonated) keep their value.
+- `traces_sample_rate` defaults to 0.0 — performance tracing off until we have a Sentry project + ROI estimate.
+- The single `# type: ignore[arg-type]` on `sentry_sdk.init(before_send=...)` is the only one in `core/` — sentry-sdk types its callback against an internal `Event` TypedDict; the runtime contract is a plain dict.
+
+### Next PR
+- W0.6 — Legacy code move. Migrate `handlers/*` → `core/handlers/*` + `markets/vn/`. Refactor email_parser to plugin (Gap 2). Wire SePay handler to webhook_tokens lookup (Gap 3). Migrate founder sheet data → Postgres (Gap 5). Delete `sheets.py`.
+
+---
+
 ## 2026-05-11 — F01 W0.4: Messenger adapter interface (Wave 0)
 
 ### Added
