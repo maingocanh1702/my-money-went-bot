@@ -20,6 +20,38 @@ Pending. Per [BRD-VI v3.1.0](docs/brd-vi.md) Phase 1.
 
 ---
 
+## 2026-05-11 — F01 W0.2: Migration framework + initial schema (Wave 0)
+
+### Added
+- `alembic.ini` + `migrations/env.py` + `migrations/script.py.mako` — Alembic harness. `DATABASE_URL` env var resolves connection URL at runtime; asyncpg/psycopg URL normalised so the same migrations run against testcontainers Postgres in CI and the real Railway Postgres. No SQLAlchemy models — raw DDL via `op.execute`, schema is source of truth.
+- `migrations/versions/0001_initial_schema.py` — 11 tables per TDD §2.1: `users`, `bank_connections`, `categories`, `funding_sources` (F08 / Gap 1), `transactions` (with `funding_source_id INTEGER NULL REFERENCES funding_sources(id) ON DELETE SET NULL` per Gap 1), `webhook_tokens` (Gap 3 — dedicated hashed-token table, replaces `users.webhook_token` column), `bot_state`, `scheduled_jobs`, `monthly_reports`, `admin_audit_log`, `analytics_events`. `users.role` column with CHECK (`user`/`founder`/`admin`) added for Gap 5 founder seed. Indexes per TDD §2.1.
+- `tests/conftest.py` — session-scoped `pg_container` (testcontainers Postgres 16-alpine) + `pg_url` / `pg_url_async` DSN fixtures + `migrated_db` (auto `alembic upgrade head`) + `assert_tenant_isolated()` helper. `_has_docker()` skip-guard so non-Docker dev envs don't break collection.
+- `tests/integration/test_migrations.py` — 5 tests + parametrised `test_each_table_queryable` (one per expected table = 11 cases): upgrade-creates-tables, FK shape check on `transactions.funding_source_id`, `webhook_tokens` shape (token_hash + kind CHECK), full `downgrade base` roundtrip, INSERT/SELECT smoke. **All 20 tests pass locally** (14.98s including container spin).
+- `requirements.txt` — runtime deps: `asyncpg==0.30.0`, `sqlalchemy[asyncio]==2.0.36`.
+- `pyproject.toml` `[project.optional-dependencies.dev]` — `alembic>=1.13`, `testcontainers>=4.7` (postgres module ships in base since 4.x, no extra needed), `asyncpg`, `sqlalchemy[asyncio]`, `psycopg[binary]>=3.2`.
+
+### Gap decisions applied (locked, no founder re-ask)
+- **Gap 1** — `funding_sources` table shell created in 0001 + `transactions.funding_source_id` FK nullable. F08 ON-DELETE logic ships in Wave 2; W0.2 only schema.
+- **Gap 3** — Webhook tokens live in dedicated `webhook_tokens` table with `token_hash TEXT UNIQUE` (SHA256 hex). Raw token never stored. `users.webhook_token` column NOT created — replaced by this table.
+- **Gap 5** — Added `users.role` enum (`user`/`founder`/`admin`) so founder seed (user_id=1, role='founder') has a column to populate in W0.6's data migration. Bootstrap-only — runtime MUST NOT hardcode `if user_id == 1`.
+
+### Verified locally
+- `ruff check core/ markets/ tests/ migrations/`: All checks passed (S608 false positive fixed by switching to `psycopg.sql.Identifier`).
+- `black --check`: 11 files unchanged.
+- `mypy --strict`: Success, 11 source files.
+- `lint-imports`: 3 contracts kept, 0 broken.
+- `pytest -v`: 20 passed in 14.98s (alembic upgrade/downgrade roundtrip + schema shape + INSERT/SELECT + parametrised table-exists per all 11 tables + 4 boundary tests from W0.1 carried over).
+
+### Notes
+- W0.2 is the foundation for W0.3 (DB pool) and W0.6 (data migration). W0.3 will branch from this PR head.
+- `sub_categories`, `pending_payments`, `payment_matches`, `unmatched_payments` from TDD §2.1 deferred — those tables come in their respective feature waves (F02, F-payment).
+- 11 tables created vs. autopilot spec's "10" — discrepancy in spec wording (it listed 11 names). Going with the explicit list.
+
+### Next PR
+- W0.3 — DB access layer (`core/db.py` asyncpg pool) + `core/tenant_context.py` (ContextVar-based) + 2-user tenant isolation integration test (THE mandatory rule).
+
+---
+
 ## 2026-05-11 — F01 W0.1: Repo skeleton + lint boundary (Wave 0)
 
 ### Added

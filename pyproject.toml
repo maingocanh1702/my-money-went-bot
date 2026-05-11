@@ -20,14 +20,22 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = [
-    "ruff>=0.4.10",
-    "black>=24.4.0",
-    "mypy>=1.10.0",
-    "import-linter>=2.0",
+    # Pinned to pre-commit hook versions so local `black/ruff/mypy` and
+    # `pre-commit run` agree on formatting/lint output. CI uses pre-commit
+    # too; drift here causes false-positive "would reformat" locally.
+    "ruff==0.4.10",
+    "black==24.4.2",
+    "mypy==1.10.0",
+    "import-linter>=2.5",
     "detect-secrets>=1.5.0",
     "pre-commit>=3.7.0",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
+    "alembic>=1.13.0",
+    "testcontainers>=4.7.0",   # postgres module ships in base in 4.x (no extra)
+    "asyncpg>=0.30.0",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "psycopg[binary]>=3.2.0",
 ]
 
 [build-system]
