@@ -125,7 +125,7 @@
 | W0.5 | `core/logging.py` structlog + `core/observability.py` Sentry + `/health` endpoints | 14 | ✅ Merged |
 | W0.6 | Plugin email parsers (6 bank shells) + SePay webhook handler + founder seed scaffold + `parsers-are-pure` contract | 34 | ✅ Merged |
 | W0.7 | Public `request_id` helpers in `core/tenant_context` + F02 funding-source `xfail(strict=True)` contract pin | +3 (1 round-trip, 1 empty-reject, 1 xfail) | 🟢 Code done 2026-05-12 |
-| **Total** | | **109 explicit + 3 cross-cutting + 3 W0.7 = 115 passed, 1 skipped, 1 xfail** | **4 import-linter contracts** |
+| **Total** | | **109 explicit + 3 cross-cutting + 3 W0.7 = 118 passed, 1 skipped, 1 xfail** | **4 import-linter contracts** |
 
 > **Test count note:** Per-PR numbers (4+20+12+25+14+34=109) are PR-scoped counts. Final aggregate `112 passed, 1 skipped` (per CHANGELOG) reflects 3 extra cases from parametrize expansions / cross-PR fixtures collected at full-suite run.
 
