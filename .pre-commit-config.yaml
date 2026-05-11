@@ -11,7 +11,7 @@
 # See: docs/operations/development-workflow.md §3
 
 default_language_version:
-  python: python3.11
+  python: python3
 
 repos:
   # ── Ruff (lint + import sort, NO format — black owns format) ──
@@ -28,13 +28,19 @@ repos:
       - id: black
 
   # ── Mypy (strict type check on new code) ──
+  # additional_dependencies: include pytest + libs whose stubs are needed
+  # so mypy under the isolated pre-commit env sees the same types as our
+  # local `.venv` mypy run. Without these, `pytest.fixture` / `parametrize`
+  # decorators report "Untyped decorator" errors.
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.10.0
     hooks:
       - id: mypy
         files: ^(core|markets|tests)/
         args: [--strict, --ignore-missing-imports]
-        additional_dependencies: []
+        additional_dependencies:
+          - pytest>=8.0.0
+          - pytest-asyncio>=0.23.0
 
   # ── detect-secrets (block accidental secret commits) ──
   - repo: https://github.com/Yelp/detect-secrets
@@ -51,7 +57,10 @@ repos:
           )$
 
   # ── import-linter (enforce ADR-0001 boundary: core ↛ markets) ──
+  # W0.2: bumped to v2.5 — upstream renamed hook id from `lint-imports` to
+  # `import-linter` somewhere between v2.0 and v2.5. CLI command is still
+  # `lint-imports` (see CI workflow + tests/test_import_boundary.py).
   - repo: https://github.com/seddonym/import-linter
-    rev: v2.0
+    rev: v2.5
     hooks:
-      - id: lint-imports
+      - id: import-linter
