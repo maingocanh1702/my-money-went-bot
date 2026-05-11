@@ -24,7 +24,7 @@ Tenant isolation rule (HARD invariant, see W0.3 acceptance):
 from __future__ import annotations
 
 import uuid
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 
 _user_id: ContextVar[int | None] = ContextVar("mmw_user_id", default=None)
 _request_id: ContextVar[str | None] = ContextVar("mmw_request_id", default=None)
@@ -63,6 +63,25 @@ def get_user_id_or_none() -> int | None:
 def get_request_id() -> str | None:
     """Return the current request_id, or None if unset."""
     return _request_id.get()
+
+
+def set_request_id(request_id: str) -> Token[str | None]:
+    """Set just the request_id (without touching user_id) and return a reset token.
+
+    Use this in middleware that seeds request_id before authentication has
+    resolved a user — e.g. `request_id_middleware`. Pair with `reset_request_id`
+    in a try/finally so nested tasks don't leak state across requests.
+
+    For the common case of "set both at request entry", prefer `set_tenant`.
+    """
+    if not request_id:
+        raise ValueError("request_id must be a non-empty string")
+    return _request_id.set(request_id)
+
+
+def reset_request_id(token: Token[str | None]) -> None:
+    """Restore request_id to its prior value via the token from `set_request_id`."""
+    _request_id.reset(token)
 
 
 def clear_tenant() -> None:

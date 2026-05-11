@@ -5,6 +5,7 @@
 > **Cập nhật lần cuối:** 2026-05-12
 > **Trạng thái:** Active
 > **Tham chiếu:** [BRD-vi v3.1.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/brd-vi.md) · [PRD-vi v1.7.1](file:///Users/maingocanh/Projects/MyMoneyWent/docs/prd-vi.md) · [TDD-vi v1.8.1](file:///Users/maingocanh/Projects/MyMoneyWent/docs/tdd-vi.md)
+> **Execution tracking:** [Implementation Tracker](implementation-tracker.md) (PR-level status board) · [Phase 1](implementation-plans/phase-1-foundation-remaining.md) · [Phase 2](implementation-plans/phase-2-handlers.md) · [Phase 3](implementation-plans/phase-3-pricing.md) · [Phase 4](implementation-plans/phase-4-sepay-onboarding.md) · [Phase 5](implementation-plans/phase-5-email-parsing.md) · [Phase 6](implementation-plans/phase-6-polish-deploy.md)
 
 > **Note:** Project dùng Telegram / Discord / Messenger làm frontend (chat-based UI). Không có web/mobile UI → không cần file `.pen` hay screen design.
 
@@ -14,19 +15,20 @@
 
 **Tổng tiến độ: 30%** `██████░░░░░░░░░░░░░░` (Foundation shipping)
 
-| Phase | Status | Progress |
-|-------|--------|----------|
-| Phase 0: Docs & Specs | ✅ Complete | 100% |
-| Phase 1: Foundation | 🟡 In Progress | ~75% |
-| Phase 2: Handlers Refactor | ⬜ Not Started | 0% |
-| Phase 3: Pricing Logic | ⬜ Not Started | 0% |
-| Phase 4: SePay Onboarding | ⬜ Not Started | 0% |
-| Phase 5: Email Parsing | ⬜ Not Started | 0% |
-| Phase 6: Polish + Deploy | ⬜ Not Started | 0% |
-| Phase 7: Closed Beta | ⬜ Not Started | 0% |
-| Phase 8: Public Soft Launch | ⬜ Not Started | 0% |
-| Phase 9-10: Growth + Business Tier | ⬜ Not Started | 0% |
-| Phase 11: Family Plan | ⬜ Not Started | 0% |
+| Phase | Status | Progress | Tasks |
+|-------|--------|----------|-------|
+| Phase 0: Docs & Specs | ✅ Complete | 100% | — |
+| Phase 1: Foundation | 🟡 In Progress | ~75% | [26 tasks](file:///Users/maingocanh/Projects/MyMoneyWent/docs/tasks/phase-1-foundation.md) |
+| Phase 2: Handlers Refactor | ⬜ Not Started | 0% | [13 tasks](file:///Users/maingocanh/Projects/MyMoneyWent/docs/tasks/phase-2-handlers.md) |
+| Phase 3: Pricing Logic | ⬜ Not Started | 0% | [5 tasks](file:///Users/maingocanh/Projects/MyMoneyWent/docs/tasks/phase-3-pricing.md) |
+| Phase 4: SePay Onboarding | ⬜ Not Started | 0% | [5 tasks](file:///Users/maingocanh/Projects/MyMoneyWent/docs/tasks/phase-4-sepay-onboarding.md) |
+| Phase 5: Email Parsing | ⬜ Not Started | 0% | [13 tasks](file:///Users/maingocanh/Projects/MyMoneyWent/docs/tasks/phase-5-email-parsing.md) |
+| Phase 6: Polish + Deploy | ⬜ Not Started | 0% | [27 tasks](file:///Users/maingocanh/Projects/MyMoneyWent/docs/tasks/phase-6-polish-deploy.md) |
+| Phase 7: Closed Beta | ⬜ Not Started | 0% | [15 tasks](file:///Users/maingocanh/Projects/MyMoneyWent/docs/tasks/phase-7-8-beta-launch.md) |
+| Phase 8: Public Soft Launch | ⬜ Not Started | 0% | ↑ same file |
+| Phase 9-10: Growth + Business Tier | ⬜ Not Started | 0% | — (create when Phase 8 ships) |
+| Phase 11: Family Plan | ⬜ Not Started | 0% | — (create when F06 addendum merged) |
+
 
 ---
 
@@ -64,7 +66,7 @@
 ## 3. Timeline
 
 **Target launch:** Tháng 9/2026 (tuần 15-16 from dev start)
-**Wave 0 complete:** 2026-05-11 (6 PRs: W0.1-W0.6 merged, 112 tests passing)
+**Wave 0 complete:** 2026-05-11 (6 PRs: W0.1-W0.6 merged, 112 tests passing) + 2026-05-12 W0.7 cleanup (public `request_id` API + F02 contract pin)
 **Phase 1 remaining:** ~1 tuần (Docker Compose + Discord adapter + remaining integration)
 
 ```
@@ -84,7 +86,7 @@
 
 ### Phase 0: Docs & Specs ✅ COMPLETE (2026-05-11)
 
-> 6 PRs merged (W0.1→W0.6). All specs written. Foundation code shipped.
+> All specs, ADRs, and operation docs locked. Code lives in Phase 1 (Wave 0 PRs).
 
 | Deliverable | Status | Link |
 |-------------|:------:|------|
@@ -100,13 +102,19 @@
 | Development Workflow | ✅ | [development-workflow.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/operations/development-workflow.md) |
 | Feature Specs (F01-F14, FAM) | ✅ | [docs/features/](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features) |
 | BE Tech Docs (17 files) | ✅ | [docs/features/BE/](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/BE) |
-| Feature: Family Plan — Product | ✅ v1.2.0 | [feature-family-plan.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/drafts/feature-family-plan.md) |
+| Feature: Family Plan — Product | ✅ v1.2.0 | [feature-family-plan.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-family-plan.md) |
 | Feature: Family Plan — BE Tech | ✅ v1.1.0 | [feature-family-plan-tech.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/BE/feature-family-plan-tech.md) |
 | Observability Plan | ✅ | [observability-plan.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/operations/observability-plan.md) |
 | DR Runbook | ✅ | [disaster-recovery.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/runbooks/disaster-recovery.md) |
 | Competitive Research | ✅ | [research/](file:///Users/maingocanh/Projects/MyMoneyWent/docs/research) |
 
-**Wave 0 Code (shipped in Phase 0):**
+---
+
+### Phase 1: Foundation 🟡 (~75% complete)
+
+> Wave 0 PRs (W0.1→W0.6) shipped 2026-05-11 — most infra done. Remaining: Docker Compose, Discord adapter, final integration wiring.
+
+**Wave 0 PRs (shipped):**
 
 | PR | Scope | Tests | Status |
 |----|-------|:-----:|:------:|
@@ -116,13 +124,12 @@
 | W0.4 | `core/messenger/` (BaseSender ABC + SendPayload + TelegramSender + i18n stub) | 25 | ✅ Merged |
 | W0.5 | `core/logging.py` structlog + `core/observability.py` Sentry + `/health` endpoints | 14 | ✅ Merged |
 | W0.6 | Plugin email parsers (6 bank shells) + SePay webhook handler + founder seed scaffold + `parsers-are-pure` contract | 34 | ✅ Merged |
-| **Total** | | **112 passed, 1 skipped** | **4 import-linter contracts** |
+| W0.7 | Public `request_id` helpers in `core/tenant_context` + F02 funding-source `xfail(strict=True)` contract pin | +3 (1 round-trip, 1 empty-reject, 1 xfail) | 🟢 Code done 2026-05-12 |
+| **Total** | | **109 explicit + 3 cross-cutting + 3 W0.7 = 115 passed, 1 skipped, 1 xfail** | **4 import-linter contracts** |
 
----
+> **Test count note:** Per-PR numbers (4+20+12+25+14+34=109) are PR-scoped counts. Final aggregate `112 passed, 1 skipped` (per CHANGELOG) reflects 3 extra cases from parametrize expansions / cross-PR fixtures collected at full-suite run.
 
-### Phase 1: Foundation 🟡 (~75% complete)
-
-> Most infra shipped in W0. Remaining: Docker Compose, Discord adapter, final integration wiring.
+**Task breakdown:**
 
 | Task | Status | Notes |
 |------|:------:|-------|
@@ -267,8 +274,8 @@
 
 | Phase | Tuần | Backend | Bot/Frontend | Docs |
 |-------|:----:|:-------:|:------------:|:----:|
-| 0: Docs & Specs | Done | ✅ W0 infra | ✅ Telegram adapter | ✅ 100% |
-| 1: Foundation | ~1 rem | 🟡 75% | 🟡 Discord pending | ✅ |
+| 0: Docs & Specs | Done | — | — | ✅ 100% |
+| 1: Foundation | ~1 rem | 🟡 75% (W0 infra shipped) | 🟡 Telegram ✅ / Discord pending | ✅ |
 | 2: Handlers | 3-4 | ⬜ Services | ⬜ Commands | ✅ |
 | 3: Pricing | 5 | ⬜ Tier logic | ⬜ Gating | ✅ |
 | 4: SePay | 6 | 🟡 Handler exists | ⬜ Onboarding | ✅ |
@@ -298,7 +305,7 @@
 
 | Risk | Phase | Impact | Mitigation |
 |------|:-----:|:------:|------------|
-| Email parser Phase 5 slip | 5 | High | Parser shells exist (W0.6). Giảm scope xuống 3 banks nếu cần |
+| Email parser Phase 5 slip | 5 | Medium | Parser shells + plugin framework exist (W0.6). Fallback: giảm scope xuống 3 banks MVP (TCB, Cake, MB) |
 | Low conversion Free→Pro | 8+ | Medium | Monitor hit-limit-rate, adjust 45→60-75 if churn > upgrade |
 | Business tier validation fail | 9 | High | Reposition as personal+freelancer tracker |
 | Railway cost > $50/mo | 8+ | Medium | Trigger Hetzner migration |
@@ -327,4 +334,4 @@
 | Version | Ngày | Thay đổi |
 |---------|------|----------|
 | v1.0.0 | 2026-05-11 | Initial roadmap. 11 phases. Phase 0 at 75%. Chat-based UI, no .pen needed. |
-| v1.1.0 | 2026-05-12 | **Major accuracy fix:** Phase 0 → COMPLETE (W0.1-W0.6 merged, 112 tests, 4 contracts). Phase 1 → 75% (infra shipped, Discord + Docker pending). F08 = Funding Sources (corrected from "Data Isolation"). BE Tech Docs → ✅ (17 files exist). Added F-i18n, F-saas to module table. F15 spec status → ✅. Blocker "Bot Finance migration" → ✅ resolved (strangler fig W0.6). Family blocker reworded: decisions locked, doc merge pending. Timeline baseline updated (W0 done = potential compression). Wave 0 PR detail table added. |
+| v1.1.0 | 2026-05-12 | **Major accuracy fix:** Phase 0 → COMPLETE (specs/ADRs/ops docs locked). Phase 1 → 75% (W0.1-W0.6 PRs shipped, 112 cases / 14 files, 4 contracts; Discord + Docker pending). F08 = Funding Sources (corrected from "Data Isolation"). BE Tech Docs → ✅ (17 files exist). Added F-i18n, F-saas to module table. F15 spec status → ✅. Blocker "Bot Finance migration" → ✅ resolved (strangler fig W0.6). Family blocker reworded: decisions locked, doc merge pending. Timeline baseline updated (W0 done = potential compression). Wave 0 PR detail table moved from Phase 0 → Phase 1 (Phase 0 = specs only, code is Phase 1). Family Plan canonical link → `docs/features/feature-family-plan.md` (drafts/ stale v1.0.0 superseded). Email parser slip risk impact: High → Medium (shells exist). |
