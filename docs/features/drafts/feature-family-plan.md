@@ -1,6 +1,6 @@
 # Feature: Family Plan — Quản lý chi tiêu của con (FAM)
 
-> **Version:** v1.0.0 (in-session review iterations — không bump theo memory rule. Bump v1.1.0 khi consumed/handed off.)
+> **Version:** v1.2.0
 > **Ngày tạo:** 2026-05-11
 > **Trạng thái:** Draft (pending lock)
 > **Owner:** Founder (dev)
@@ -99,7 +99,7 @@ Khi mua Family Plan, co-parent bạn invite sau sẽ thấy tx của BẠN (ngan
 | 6 | System | Child spend → tx ingest qua F02 | Entitlement check (§4.5) → nếu pass, insert tx, tính accumulated. ≥80% budget → alert parent + child. ≥100% → alert "vượt". |
 | 7 | Parent | `/family dashboard` | View tổng hợp: spend tháng này của từng member + budget remaining + chart per child. |
 | 8 | Parent (owner) | `/family remove <member>` | Member bị remove. FS stop sync (xem 2.2.4). |
-| 9 | Co-parent | `/family billing transfer` | Yêu cầu chuyển ownership. Owner hiện tại confirm. |
+| 9 | Co-parent | `/family billing transfer` | _(Phase 2)_ Yêu cầu chuyển ownership. Owner hiện tại confirm. |
 | 10 | Parent (owner) | Downgrade Family → Pro | Family `status='downgraded'`. Owner giữ Pro cho profile mình; 5 member còn lại xem 2.2.4. |
 | 11 | Child | `/my spending` | Xem chi tiêu tháng + breakdown category. Self-view. |
 | 12 | Child | `/my budgets` | Xem các budget đang áp lên mình + spent/remaining. |
@@ -127,7 +127,7 @@ Grandfather **6 tháng** giá cũ. Email + in-app notice ≥30 ngày trước re
 - Historical data đã ingested: **read-only visible trong dashboard owner**. Tab "Archived family data — view only".
 - 5 member tự login: banner "Family này đã downgrade. Data của bạn read-only. Mua Pro riêng để tiếp tục."
 - Re-upgrade Family trong **90 ngày** → resume sync seamless, không phải re-invite.
-- Sau 90 ngày → cron job set `removed_at=now()` cho **toàn bộ memberships, gồm cả owner**. Owner vẫn xem archived data qua `family_accounts.owner_user_id` direct check (§4.6 `can_view_archived_family`); mọi user có thể join/tạo family mới. Re-invite required nếu owner re-upgrade.
+- Sau 90 ngày → cron job flip `status='archived'`, set `archived_at=now()`, set `removed_at=now()` cho **toàn bộ memberships, gồm cả owner**. Owner vẫn xem archived data qua `family_accounts.owner_user_id` direct check (§4.6 `can_view_archived_family`); mọi user có thể join/tạo family mới. `archived` là terminal — không re-upgrade, phải tạo family mới.
 
 **2.2.5. Child seat allocated bị remove → slot free**
 4 child seats là pool, remove 1 → free 1 slot. Lịch sử child cũ vẫn read-only trong dashboard owner.
@@ -159,7 +159,21 @@ Khi member request delete:
 
 ---
 
-## 3. UX Flow
+## 3. Screens & States
+
+### 3.0. State coverage matrix
+
+| Screen | Loading | Ready | Error | Empty |
+|--------|:-------:|:-----:|:-----:|:-----:|
+| `/upgrade` (Family option) | N/A (static menu) | §3.1 | "⚠️ Không load được thông tin gói. Thử lại sau." | N/A |
+| `/family` menu | "⏳ Đang tải…" | §3.2 | "⚠️ Không load được Family. Thử lại sau." | N/A (luôn có ít nhất owner) |
+| Co-parent accept screen | N/A (static) | §3.2 | "⚠️ Link invite không hợp lệ hoặc đã hết hạn." | N/A |
+| Child accept screen | N/A (static) | §3.2 | "⚠️ Link invite không hợp lệ hoặc đã hết hạn." | N/A |
+| `/family dashboard` | "⏳ Đang tải dữ liệu Family…" | §3.3 | "⚠️ Không load được dashboard. Thử lại sau." | "Chưa có member nào ngoài bạn. Mời co-parent hoặc con để bắt đầu! [+ Invite]" |
+| Budget alert | N/A (push) | §3.4 | N/A (toast — retry silently) | N/A |
+| `/my spending` (child) | "⏳ Đang tải…" | §3.5 | "⚠️ Không load được. Thử lại sau." | "Chưa có giao dịch nào tháng này." |
+| `/my budgets` (child) | "⏳ Đang tải…" | §3.5 | "⚠️ Không load được. Thử lại sau." | "Chưa có budget nào được set cho bạn." |
+| Consent re-accept gate | N/A | Banner: "Disclosure đã cập nhật. [Xem & chấp nhận]" | N/A | N/A |
 
 ### 3.1. Upgrade flow (parent flow)
 
@@ -436,11 +450,11 @@ CREATE UNIQUE INDEX uq_family_budget_total
 | Revoke pending invite | ✅ | ✅ | ❌ |
 | Remove child | ✅ | ✅ | ❌ |
 | Remove co-parent | ✅ | ❌ | ❌ |
-| Remove owner | ❌ (phải transfer trước) | ❌ | ❌ |
+| Remove owner | ❌ (v1: owner leave = cancel) | ❌ | ❌ |
 | Leave family (self) | ✅ (= cancel family) | ✅ | ✅ |
 | Billing — pay/cancel/downgrade | ✅ | ❌ | ❌ |
-| Request ownership transfer | — | ✅ (request only) | ❌ |
-| Approve ownership transfer | ✅ (incoming request) | — | ❌ |
+| Request ownership transfer _(Phase 2)_ | — | ✅ (request only) | ❌ |
+| Approve ownership transfer _(Phase 2)_ | ✅ (incoming request) | — | ❌ |
 
 > **Owner leave = cancel family:** owner `/family leave` không transfer trước → prompt "Bạn là owner. Rời family = cancel toàn bộ. Confirm?"
 
@@ -569,7 +583,7 @@ def close_stale_memberships():
 | Family status | Membership state (during 90d) | Membership state (after 90d) |
 |---------------|------------------------------|------------------------------|
 | `active`/`trialing` | All `removed_at=NULL` | (n/a — không trigger) |
-| `downgraded`/`cancelled` | All members `removed_at=NULL` để resume seamless nếu re-upgrade | **All members `removed_at=now()` (gồm owner).** Owner vẫn xem archived data qua `family_accounts.owner_user_id` direct check. |
+| `downgraded`/`cancelled` | All members `removed_at=NULL` để resume seamless nếu re-upgrade | `status='archived'`, `archived_at=now()`. **All members `removed_at=now()` (gồm owner).** Owner vẫn xem archived data qua `family_accounts.owner_user_id` direct check. Terminal — tạo family mới nếu cần. |
 
 **Archived-family owner access resolver:**
 
@@ -651,9 +665,36 @@ def accept_invite(invite_id: int, user_id: int):
 
 ---
 
-## 5. Pricing & Migration
+## 5. Analytics Events
 
-### 5.1. Target pricing post-launch
+| Event | Trigger | Properties |
+|-------|---------|------------|
+| `fam_plan_purchased` | Owner mua/upgrade Family | `user_id`, `from_plan`, `is_trial`, `billing_cycle` |
+| `fam_plan_downgraded` | Owner downgrade Family → Pro | `user_id`, `family_id`, `member_count` |
+| `fam_plan_reupgraded` | Owner re-upgrade trong 90d grace | `user_id`, `family_id`, `days_since_downgrade` |
+| `fam_invite_sent` | Parent gửi invite | `user_id`, `family_id`, `target_role`, `channel` (email/phone) |
+| `fam_invite_accepted` | Member accept invite + consent | `user_id`, `family_id`, `role`, `days_to_accept` |
+| `fam_invite_declined` | Member decline invite | `family_id`, `target_role` |
+| `fam_invite_expired` | Cron flip expired | `family_id`, `target_role`, `days_pending` |
+| `fam_invite_revoked` | Parent revoke pending invite | `user_id`, `family_id`, `invite_id` |
+| `fam_budget_set` | Parent set/update budget | `user_id`, `child_user_id`, `category_id`, `amount_vnd`, `is_update` |
+| `fam_budget_alert_80` | System fire 80% alert | `child_user_id`, `family_id`, `category_id`, `spent`, `budget` |
+| `fam_budget_alert_100` | System fire 100% alert | `child_user_id`, `family_id`, `category_id`, `spent`, `budget` |
+| `fam_dashboard_viewed` | Parent view `/family dashboard` | `user_id`, `family_id`, `member_count` |
+| `fam_member_removed` | Parent remove member | `user_id`, `target_user_id`, `target_role` |
+| `fam_member_left` | Member self `/family leave` | `user_id`, `role`, `family_id` |
+| `fam_ownership_transferred` | _(Phase 2)_ Ownership transfer complete | `from_user_id`, `to_user_id`, `family_id` |
+| `fam_consent_reaccepted` | Member re-consent sau version bump | `user_id`, `old_version`, `new_version` |
+| `fam_child_spending_viewed` | Child view `/my spending` | `user_id`, `family_id` |
+| `fam_child_budgets_viewed` | Child view `/my budgets` | `user_id`, `family_id` |
+
+> Naming convention: `fam_{entity}_{action}`. Theo TDD §2.1 events bảng `analytics_events`.
+
+---
+
+## 6. Pricing & Migration
+
+### 6.1. Target pricing post-launch
 
 | Tier | Current (VN) | Target (VN, post Family launch) | Change |
 |------|--------------|--------------------------------|--------|
@@ -671,20 +712,22 @@ Annual (15% off, **exact math**):
 
 > **Rollout dependency:** Family Plan launch **requires F06 vNext pricing addendum** trước implementation. Sequence: F06 → BRD-vi §5 → PRD-vi §3.6 → checkout/billing service → Family spec consumable. F06 chưa update = Family launch block.
 
-### 5.2. Grandfathering existing subscribers
+### 6.2. Grandfathering existing subscribers
 
 - **Subscribers active tại ngày T-30 (T = launch day):** giữ giá cũ **6 tháng** (Pro 79k, Business 199k).
 - Email + in-app notice 30 ngày trước launch + 30 ngày trước renewal mới.
 - Sau 6 tháng renew theo giá mới. Cancel → giữ access đến hết kỳ.
 - **Push-back option:** 50% off 3 tháng tiếp + full price. Max 1 lần/user.
 
-### 5.3. Annual discount với Family
+### 6.3. Annual discount với Family
 
-15% off hiện tại. Cân nhắc bump lên 20% vì switching cost cao (multi-member setup). Open question §7.
+15% off hiện tại. Cân nhắc bump lên 20% vì switching cost cao (multi-member setup). Open question Appendix B.
 
 ---
 
-## 6. Cut / Out of scope v1 (Phase 2 backlog)
+## 7. Cut / Out of scope v1 (Phase 2 backlog)
+
+> **Note:** API Endpoints, Error Codes, State Machine, Scenarios by Status, Timeout Spec, Caching Strategy → xem [BE/feature-family-plan-tech.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/BE/feature-family-plan-tech.md)
 
 | Feature | Lý do cut khỏi v1 |
 |---------|-------------------|
@@ -702,18 +745,20 @@ Annual (15% off, **exact math**):
 
 ---
 
-## 7. Open Questions
+## Appendix A. Open Questions
 
 1. **Family annual discount: 15% hay 20%?** Recommend 20%. Lock trước F06.
 2. **Pricing bump rollout date** — sau Wave 0 (Q3 2026) hay sớm hơn?
 3. **Phase 2 priority** giữa: child-side gamified vs allowance vs share-fs vs family fork. Customer interview 5-7 parent VN.
 4. **Marketing positioning** A/B test landing page trước launch.
 5. **TDD §6.3 alignment** — open ticket cho TDD owner thêm Family retention rules.
-6. **Co-parent ownership transfer UX** — v1 ship hay defer Phase 2?
+6. ~~**Co-parent ownership transfer UX** — v1 ship hay defer Phase 2?~~ → **Deferred Phase 2.** V1 owner leave = cancel family.
 
 ---
 
 ## 8. Acceptance Criteria (v1 done = check all)
+
+> Acceptance criteria cho BE-specific items (API idempotency, rate limit, caching) → xem BE tech doc §5 Testing Plan.
 
 **Core:**
 - [ ] User upgrade Pro → Family qua `/upgrade`, 14-day trial trigger nếu chưa dùng.
@@ -771,8 +816,11 @@ Annual (15% off, **exact math**):
 
 ---
 
-## 9. Changelog
+## Changelog
 
 | Version | Date | Notes |
 |---------|------|-------|
-| v1.0.0 | 2026-05-11 | Initial draft + 3 review rounds merged in-session (per memory rule không bump). Locked: pricing 169k, seat 2P+4C, role parent/child, child 13-17, invite via email/phone + accept, downgrade behavior, grandfather 6mo. Review fixes: consent required cho mọi member (owner self + co-parent + child); permission matrix full với owner vs co-parent split; entitlement `can_ingest_transaction` cross-feature + `family_owner` branch check status; F08 không thêm column; single-active-family invariant + 90-day lifecycle cron đóng **TẤT CẢ** members (gồm owner) sau grace; owner archived access qua `can_view_archived_family()` direct check; data model fixes (amount_vnd, partial indexes, invite status enum, tighter CHECK age constraint); query-layer retention hide 24mo; F06 addendum block-on; annual exact math 1.724k; `cancelled_at` field added; consent gate dùng version compare không cần status column. **Bump v1.1.0 khi consumed/handed off.** |
+| v1.0.0 | 2026-05-11 | Initial draft. Locked: pricing 169k, seat 2P+4C, role parent/child, child 13-17, invite via email/phone + accept, downgrade behavior, grandfather 6mo. Consent model (owner self + co-parent + child), permission matrix, entitlement `can_ingest_transaction`, F08 no-column decision, single-active-family invariant + 90-day lifecycle cron, `can_view_archived_family()`, data model fixes, query-layer retention 24mo, F06 addendum block-on, annual exact math 1.724k. |
+| v1.1.0 | 2026-05-11 | **FE/BE split restructure + review fixes:** §3 → "Screens & States" + 4-state matrix (9 screens). §5 Analytics Events (18 events). Tech sections → `BE/feature-family-plan-tech.md` (v1.0.0). Ownership transfer deferred Phase 2 (resolve open question #6). Renumber: Pricing → §6, Cut scope → §7, Open Questions → Appendix A. |
+| v1.2.0 | 2026-05-11 | **Archived status + integrity fixes:** Add `archived` terminal status (cron 90d flips downgraded/cancelled → archived). `owner_user_id` nullable (ON DELETE SET NULL) cho PDPA hard-delete. Lifecycle table + cron description updated. Sync with BE tech doc v1.1.0. |
+
