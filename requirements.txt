@@ -9,3 +9,9 @@ pytz==2026.1.post1
 # Database (W0.2+)
 asyncpg==0.30.0
 sqlalchemy[asyncio]==2.0.36
+
+# Observability (W0.5+)
+structlog==24.4.0
+sentry-sdk[fastapi]==2.18.0
+# jinja2 needed by sentry-sdk's StarletteIntegration template patch
+jinja2==3.1.4
