@@ -227,6 +227,12 @@ Repo này được fork từ `Bot Finance/` (personal bot). Strategy:
 4. ⏳ Phase 1: Migrate single-tenant → multi-tenant DB schema
 5. ⏳ Phase 1: Import founder's existing data (Apr 2026 onwards) làm test cohort
 
+### Founder seed — bootstrap only
+
+The Sheets → Postgres migration (`scripts/migrate_sheets.py`, Gap 5) seeds the founder row as `users(id=1, role='founder')`. **Runtime code MUST NOT hardcode `if user_id == 1`** — admin powers come from `users.role IN ('founder', 'admin')`. The `user_id=1` identity is incidental (it happens to be the first row inserted); the founder role is what authorises admin commands.
+
+This decouples the bootstrap mechanic (one founder seeded by a one-time script) from the runtime model (any user with `role='founder'` is treated as such), so future migrations or DB rebuilds can re-seed without subtly breaking authorisation paths.
+
 **Original Bot Finance repo:** giữ nguyên ở `/Users/maingocanh/Projects/Bot Finance` làm reference + để founder vẫn tiếp tục dùng cho personal trong giai đoạn dev.
 
 ## Validation gates (VN track — must pass before next phase)

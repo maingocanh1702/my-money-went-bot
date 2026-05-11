@@ -37,3 +37,16 @@ source_modules =
     markets.global_
 forbidden_modules =
     markets.vn
+
+# Gap 2 — bank email parsers MUST be pure:
+#   - no DB writes (no `core.db`)
+#   - no messenger sends (no `core.messenger`)
+# Pipeline orchestration lives in markets.vn.capture, NOT in parsers.
+[importlinter:contract:parsers-are-pure]
+name = markets.vn.email_parsers MUST be pure (no DB / no messenger)
+type = forbidden
+source_modules =
+    markets.vn.email_parsers
+forbidden_modules =
+    core.db
+    core.messenger
