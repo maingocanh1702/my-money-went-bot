@@ -94,7 +94,20 @@ ignore = [
 [tool.black]
 line-length = 100
 target-version = ["py311"]
+# extend-exclude only applies when black walks the dir tree itself.
+# pre-commit passes file paths explicitly to the hook, which bypasses
+# extend-exclude. force-exclude DOES apply to explicit paths — required
+# so legacy files don't get reformatted on CI's `pre-commit run --all-files`.
 extend-exclude = '''
+/(
+    config\.py
+  | main\.py
+  | sheets\.py
+  | telegram_api\.py
+  | handlers/(allocation|email_parser|manage|reports|sepay|transaction)\.py
+)
+'''
+force-exclude = '''
 /(
     config\.py
   | main\.py
