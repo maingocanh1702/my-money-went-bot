@@ -101,6 +101,26 @@ class LintReport:
         return "\n".join(lines)
 
 
+def parse_risk_tier(fe_path: Path | None) -> str | None:
+    """Read risk_tier from the spec's <!-- autopilot:meta --> block.
+
+    Returns the upper-cased tier string ("P0" | "P1" | "P2") or None if the
+    block is missing, malformed, or the field is absent. Callers should
+    default to P1 when this returns None — per plan §6.5 the safest fallback
+    for an unclassified spec is "treat as P1 (no auto-merge)".
+    """
+    if fe_path is None or not fe_path.exists():
+        return None
+    text = fe_path.read_text(encoding="utf-8", errors="ignore")
+    match = META_BLOCK_PATTERN.search(text)
+    if not match:
+        return None
+    rt = re.search(r"^\s*risk_tier:\s*(\S+)", match.group(1), re.MULTILINE)
+    if not rt:
+        return None
+    return rt.group(1).strip().upper()
+
+
 def resolve_spec_paths(cfg: Config, feature_id: str) -> tuple[Path | None, Path | None]:
     """Best-effort match feature_id to FE + BE files.
 

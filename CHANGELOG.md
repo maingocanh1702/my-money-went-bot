@@ -14,6 +14,58 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added — Autopilot orchestrator v0.2.0 (pre-pilot blockers)
+
+- `--auto-merge` opt-in flag on `python -m tools.autopilot run`/`resume`
+  (default OFF). Phase E only invoked when explicitly passed AND spec
+  `risk_tier=P2`. P0/P1 specs refused with exit 4. P2 specs prompt y/N
+  on stdin. Per plan v0.1.6 Blocker #5.
+- Atomic `state.json` write (tmp + POSIX rename) — survives crash
+  mid-save without truncating the prior good state. Plan Blocker #4.
+- Chunked codegen driver — `run_codegen` now drives 4 sequential
+  `claude -p` invocations (plan → skeleton → tests → verify), with
+  context flowing through git commits since the probe confirmed no
+  multi-turn flag exists. Plan Blocker #2 Option A.
+- Claude-CLI fallback commit — orchestrator commits dirty working
+  tree when Claude exits without committing (probe 2026-05-12 showed
+  this is common with `-p`). Per-invocation forensic log persisted to
+  `.autopilot/state/<feature>/<kind>-NN.log`. Plan Blocker #1 + NTH-2.
+- `spec_lint.parse_risk_tier` — reads `risk_tier` from a spec's
+  `autopilot:meta` block; powers the auto-merge gate.
+- Manual-merge ready-report writer — `.autopilot/state/<feature>/
+  ready-report.md` summarizes branch state + suggested squash command
+  + post-merge smoke checklist for the founder.
+
+### Changed
+
+- Default `python -m tools.autopilot run <feature>` behavior: stops at
+  `READY` (no auto-merge). Pass `--auto-merge` explicitly to enable
+  Phase E, allowed only for P2 features per plan §6.5.
+- `pyproject.toml`: `[[tool.mypy.overrides]]` for `tools.autopilot.*`
+  documents the "mypy strict NOT scoped to tools/" stance from plan
+  §1.1; pre-commit mypy hook gains `--config-file=pyproject.toml` so
+  the override applies under the isolated hook env too.
+
+### Documentation
+
+- F07 (Settings) spec migrated to autopilot template format — adds
+  `autopilot:meta`, `autopilot:gaps` (10 gaps closed/deferred against
+  current W0.2 schema), `autopilot:test_plan` (5 categories + tenant
+  isolation). `python -m tools.autopilot lint F07` reports 0 warnings.
+- `docs/operations/orchestrator-usage.md` — new section documenting
+  the `--auto-merge` flag, gate flow, and first-pilot policy.
+- `docs/operations/probes/claude-cli-2026-05-12.md` — Blocker #1
+  probe findings: claude -p behavior, no multi-turn flag, fallback
+  commit pattern required.
+
+### Notes
+
+- Resolves Blockers #1–#5 from
+  [autopilot-implementation-plan.md](docs/operations/autopilot-implementation-plan.md)
+  v0.1.6. F07 first-pilot is unblocked.
+- No production schema or runtime code changed in this batch — purely
+  orchestrator tooling + spec migration. F02/foundation code untouched.
+
 ### Phase 1 — Foundation refactor (target: Tuần 1-2)
 
 Pending. Per [BRD-VI v3.1.0](docs/brd-vi.md) Phase 1.

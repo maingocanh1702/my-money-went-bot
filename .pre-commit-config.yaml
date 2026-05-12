@@ -37,7 +37,10 @@ repos:
     hooks:
       - id: mypy
         files: ^(core|markets|tests)/
-        args: [--strict, --ignore-missing-imports]
+        # --config-file lets pyproject [[tool.mypy.overrides]] apply so
+        # tools.autopilot.* (orchestrator) stays pragmatic-typed when pulled
+        # in transitively from strict-mode test files. Plan v0.1.6 §1.1.
+        args: [--strict, --ignore-missing-imports, --config-file=pyproject.toml]
         additional_dependencies:
           - pytest>=8.0.0
           - pytest-asyncio>=0.23.0

@@ -49,12 +49,22 @@ def state_path(cfg: Config, feature_id: str) -> Path:
 
 
 def save(cfg: Config, state: FeatureState) -> Path:
+    """Atomic write: serialize to .tmp then rename. POSIX rename is atomic,
+    so a crash mid-write leaves either the previous good state or the new
+    one — never a truncated file (Blocker #4).
+    """
     import datetime as _dt
 
     state.last_updated_at = _dt.datetime.now(_dt.UTC).isoformat()
     path = state_path(cfg, state.feature_id)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(state.to_json(), encoding="utf-8")
+    tmp = path.with_suffix(".json.tmp")
+    try:
+        tmp.write_text(state.to_json(), encoding="utf-8")
+        tmp.replace(path)
+    finally:
+        if tmp.exists():
+            tmp.unlink(missing_ok=True)
     return path
 
 

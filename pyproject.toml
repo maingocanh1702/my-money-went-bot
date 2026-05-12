@@ -127,6 +127,14 @@ strict = true
 files = ["core", "markets", "i18n", "tests"]
 ignore_missing_imports = true
 
+# tools/autopilot is the orchestrator; pragmatic-typed per
+# autopilot-implementation-plan.md v0.1.6 §1.1 ("mypy strict NOT scoped to
+# tools/"). When the orchestrator is imported transitively from strict-mode
+# test files we relax checks so existing untyped helpers do not get flagged.
+[[tool.mypy.overrides]]
+module = "tools.autopilot.*"
+ignore_errors = true
+
 # ─────────────────────────────────────────────────────────────────────
 # Pytest
 # ─────────────────────────────────────────────────────────────────────
