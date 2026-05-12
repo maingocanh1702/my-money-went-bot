@@ -114,6 +114,28 @@ def run(
             tracker.update_status(cfg, feature_id, feature_state.phase)
         else:
             print(f"Resuming {feature_id} from phase {feature_state.phase}")
+        # v0.2.2: ensure the git checkout matches feature_state.branch
+        # before re-entering active work. Without this, a founder who
+        # runs ``autopilot resume`` from ``main`` would have Phase C run
+        # codex review against an empty diff (observed on F07 i18n fix
+        # session 4). Only run sync for phases where the feature branch
+        # is needed for the next step:
+        #   - CODEGEN: Phase B verify runs subprocess checks against the
+        #     working tree — wrong branch invalidates the result.
+        #   - VERIFIED / REVIEWING: Phase C codex review diffs base..branch
+        #     and needs the working tree to match.
+        # Skip:
+        #   - INIT: Phase A creates the branch; pre-create sync would HALT
+        #     BRANCH_MISSING and block crash recovery.
+        #   - READY: Phase D writes ready-report via ref-based git_ops
+        #     (commit_log / diff_stat against the branch ref directly).
+        #     A founder resuming READY just to inspect / regenerate the
+        #     report should not be forced to have the branch present.
+        #   - MERGED: post-merge the branch is typically deleted.
+        if feature_state.phase in ("CODEGEN", "VERIFIED", "REVIEWING"):
+            sync_outcome = _sync_branch_to_state(cfg, feature_state)
+            if sync_outcome is not None:
+                return sync_outcome
     else:
         if existing is not None and existing.phase not in ("MERGED",):
             print(
@@ -178,6 +200,19 @@ def run(
 
     # --- Phase C: REVIEWING ---
     if feature_state.phase in ("VERIFIED", "REVIEWING"):
+        # v0.2.2: the post-fix-confirm gate is sourced from persistent
+        # state fields rather than local variables, so resume from HALTED
+        # honors the same gate as an uninterrupted run.
+        #
+        # - "Any fix applied" is derived from ``fixed_finding_hashes``
+        #   (already persisted in state.json — each fix appends to it).
+        # - "Rounds since last fix" tracks ``consecutive_clean_rounds``,
+        #   which is also persisted: it's bumped on each clean round and
+        #   reset on each finding-with-fix.
+        #
+        # Both fields survive HALT/resume cycles. The HALTED-restoration
+        # branch above resets ``consecutive_clean_rounds`` to 0 so the
+        # confirmation tail starts fresh after operator intervention.
         while feature_state.current_round < cfg.max_review_rounds:
             feature_state.current_round += 1
             print(f"\n=== Codex review round {feature_state.current_round} ===")
@@ -213,11 +248,26 @@ def run(
             if review.clean:
                 feature_state.consecutive_clean_rounds += 1
                 state.save(cfg, feature_state)
-                if feature_state.consecutive_clean_rounds >= cfg.required_clean_rounds_before_merge:
+                # v0.2.2 termination logic:
+                # - If we've applied at least one fix (proxied by non-empty
+                #   ``fixed_finding_hashes``), require N clean rounds AFTER
+                #   that fix before declaring READY. ``consecutive_clean_rounds``
+                #   tracks the post-fix tail because it's reset on each fix.
+                # - If no fixes were ever needed, fall back to the legacy
+                #   ``required_clean_rounds_before_merge`` gate.
+                any_fixes_applied = bool(feature_state.fixed_finding_hashes)
+                gate = (
+                    cfg.confirmation_rounds_after_last_fix
+                    if any_fixes_applied
+                    else cfg.required_clean_rounds_before_merge
+                )
+                if feature_state.consecutive_clean_rounds >= gate:
                     break
                 # Need another clean round; skip to top of loop with no fix.
                 continue
 
+            # New finding surfaced — reset the confirmation counter. The
+            # fix below will start a fresh confirmation tail.
             feature_state.consecutive_clean_rounds = 0
 
             trigger = circuit_breaker.evaluate(review, feature_state, cfg)
@@ -266,7 +316,9 @@ def run(
                 cfg,
                 feature_state,
                 "MAX_ROUNDS",
-                f"hit {cfg.max_review_rounds} rounds without {cfg.required_clean_rounds_before_merge} consecutive clean",
+                f"hit {cfg.max_review_rounds} rounds without "
+                f"{cfg.confirmation_rounds_after_last_fix} confirmation "
+                f"rounds after last fix",
             )
         state.transition(feature_state, "READY")
         state.save(cfg, feature_state)
@@ -317,6 +369,52 @@ def run(
         merge_sha=None,
         summary=f"Already at {feature_state.phase} — nothing to do.",
     )
+
+
+def _sync_branch_to_state(
+    cfg: Config,
+    feature_state: FeatureState,
+) -> RunOutcome | None:
+    """Ensure HEAD matches ``feature_state.branch`` before re-entering work.
+
+    Returns ``None`` on success (or no-op when already aligned). Returns a
+    HALT ``RunOutcome`` if the recorded branch is missing — recovery requires
+    founder intervention (e.g. branch ref clobbered by a concurrent agent).
+
+    v0.2.2 fix #3: previously a founder running ``autopilot resume`` from
+    ``main`` would have Phase C codex review the empty diff between main
+    and main, producing a false-clean halt that wasted budget. Branch sync
+    here is mandatory for sustainable resume semantics.
+    """
+    current = git_ops.current_branch(cfg)
+    if current is None:
+        # Codex v0.2.2 R6 P1: detached-HEAD state. Refuse to silently sync
+        # a feature branch over an arbitrary checked-out SHA — operator
+        # likely intended that SHA. Founder reconciles manually.
+        return _halt(
+            cfg,
+            feature_state,
+            "DETACHED_HEAD",
+            f"Repository is in detached-HEAD state; cannot safely sync to "
+            f"feature_state.branch={feature_state.branch!r}. Run "
+            f"`git checkout {feature_state.branch}` (or check the intended "
+            f"target ref) before re-running resume.",
+        )
+    if current == feature_state.branch:
+        return None
+    if not git_ops.branch_exists(cfg, feature_state.branch):
+        return _halt(
+            cfg,
+            feature_state,
+            "BRANCH_MISSING",
+            f"feature_state.branch={feature_state.branch!r} not found "
+            f"(current branch: {current!r}). Recovery: inspect git "
+            f"reflog and restore the ref, or edit state.json to point "
+            f"at the correct branch before re-running resume.",
+        )
+    print(f"Syncing branch checkout: {current!r} → {feature_state.branch!r}")
+    git_ops.checkout(cfg, feature_state.branch)
+    return None
 
 
 def _halt(

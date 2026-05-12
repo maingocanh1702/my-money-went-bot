@@ -2,10 +2,13 @@
 
 The save path must produce either the previous good state OR the new one,
 never a truncated file, even if a crash interrupts the write.
+
+v0.2.2: also covers state.load schema tolerance for cross-version safety.
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -131,6 +134,53 @@ def test_transition_halted_twice_preserves_first_active_phase() -> None:
     assert s.last_active_phase == "VERIFIED"
     state_mod.transition(s, "HALTED")  # idempotent
     assert s.last_active_phase == "VERIFIED"
+
+
+def test_load_filters_unknown_fields_with_warning(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """state.json with extra keys (e.g. from a newer schema) loads cleanly.
+
+    v0.2.2 fix #5: prior behavior was ``FeatureState(**raw)`` raising
+    TypeError on unknown kwargs, which bricked resume after v0.2.1 added
+    ``last_active_phase`` — older orchestrator code reading a newer file
+    would fail outright instead of degrading gracefully.
+    """
+    cfg = _cfg(tmp_path)
+    path = state_mod.state_path(cfg, "F99")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "feature_id": "F99",
+        "branch": "feat/F99-x",
+        "base_branch": "main",
+        "fe_spec": "docs/features/x.md",
+        "be_spec": "docs/features/BE/x-tech.md",
+        "phase": "VERIFIED",
+        "current_round": 0,
+        "consecutive_clean_rounds": 0,
+        "fixed_finding_hashes": [],
+        "halt_reason": None,
+        "halt_artifact_path": None,
+        "started_at": "2026-05-13T00:00:00+00:00",
+        "last_updated_at": "2026-05-13T00:00:00+00:00",
+        "initial_head_sha": "abc",
+        "last_active_phase": None,
+        # Two future / unknown keys.
+        "future_field_v0_3": "some value",
+        "experimental_metric": 42,
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with caplog.at_level("WARNING"):
+        loaded = state_mod.load(cfg, "F99")
+
+    assert loaded is not None
+    assert loaded.feature_id == "F99"
+    assert loaded.phase == "VERIFIED"
+    # Warning surfaced with both unknown keys named.
+    assert "ignoring unknown fields" in caplog.text
+    assert "future_field_v0_3" in caplog.text
+    assert "experimental_metric" in caplog.text
 
 
 def test_load_state_predating_v0_2_1_defaults_last_active_phase_to_none(

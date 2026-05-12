@@ -13,9 +13,10 @@ from dataclasses import dataclass
 from .codex import (
     ARCH_KEYWORDS,
     CONCURRENCY_KEYWORDS,
-    SECURITY_KEYWORDS,
+    SECURITY_KEYWORDS_SOFT,
     Finding,
     ReviewResult,
+    has_severe_security_match,
 )
 from .config import Config
 from .state import FeatureState
@@ -50,11 +51,24 @@ def evaluate(
                 "architectural finding requires founder review",
                 detail=_format_finding(f),
             )
-        # 2: security/auth finding.
-        if f.matches_keywords(SECURITY_KEYWORDS):
+        # 2: security/auth finding (v0.2.2 tiered).
+        #   - SEVERE keywords ("injection", "auth bypass", ...) HALT
+        #     regardless of severity. These name concrete vuln classes.
+        #   - SOFT keywords ("token", "secret", "hmac", ...) only HALT
+        #     when paired with P0/P1 severity. Soft mentions at P2/P3
+        #     fall through to the normal fix flow — they're typically
+        #     incidental (e.g. webhook token rendering bug) and have
+        #     historically (F07 v0.2.1) caused false-positive halts.
+        if has_severe_security_match(f):
             return BreakerTrigger(
                 "SECURITY_FINDING",
-                "security/auth finding — founder audit before auto-fix",
+                "security/auth finding (severe keyword) — founder audit before auto-fix",
+                detail=_format_finding(f),
+            )
+        if f.matches_keywords(SECURITY_KEYWORDS_SOFT) and f.severity in ("P0", "P1"):
+            return BreakerTrigger(
+                "SECURITY_FINDING",
+                "security/auth finding (soft keyword + P0/P1) — founder audit",
                 detail=_format_finding(f),
             )
         # 3: concurrency finding (allow if just retry/idempotency, but flag others).

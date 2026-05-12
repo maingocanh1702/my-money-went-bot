@@ -110,6 +110,20 @@ def _stub_git(monkeypatch: pytest.MonkeyPatch) -> None:
         "tools.autopilot.loop.git_ops.diff_stat",
         lambda _c, _b, _br: "",
     )
+    # v0.2.2: resume now syncs branch checkout. Stub current_branch to
+    # match the seeded feature_state.branch so the sync is a no-op.
+    monkeypatch.setattr(
+        "tools.autopilot.loop.git_ops.current_branch",
+        lambda _c: "feat/F99-x",
+    )
+    monkeypatch.setattr(
+        "tools.autopilot.loop.git_ops.branch_exists",
+        lambda _c, _b: True,
+    )
+    monkeypatch.setattr(
+        "tools.autopilot.loop.git_ops.checkout",
+        lambda _c, _b: None,
+    )
 
 
 def _stub_lint(monkeypatch: pytest.MonkeyPatch, fe: Path, be: Path) -> None:

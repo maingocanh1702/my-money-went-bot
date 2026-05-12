@@ -9,10 +9,14 @@ columns. Match by feature_id appearing in the PR column (1st).
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 
+from . import git_ops
 from .config import Config
+
+log = logging.getLogger(__name__)
 
 STATUS_EMOJI = {
     "INIT": "🟡",  # in progress
@@ -44,7 +48,40 @@ def update_status(
     feature_id: str,
     phase: str,
 ) -> TrackerUpdate:
-    """Find tracker row for feature_id and update its status emoji."""
+    """Find tracker row for feature_id and update its status emoji.
+
+    v0.2.2: NO-OP when current branch is not ``cfg.base_branch``. Previously
+    the function wrote ``docs/implementation-tracker.md`` on whatever branch
+    was checked out, polluting feature branches with status-update noise
+    commits and (via ``git_ops.commit_all`` fallback) silently introducing
+    a side-channel write that interfered with squash-merge diffs. Tracker
+    updates are now founder's manual responsibility after the squash, or
+    a future v0.2.3 may centralize via an explicit ``sync-tracker`` CLI.
+    """
+    try:
+        branch = git_ops.current_branch(cfg)
+    except Exception as exc:  # noqa: BLE001 — tracker is best-effort
+        log.debug("tracker.update_status: current_branch failed (%s) — proceeding", exc)
+        branch = cfg.base_branch
+    if branch != cfg.base_branch:
+        # Codex v0.2.2 R6 P1 follow-on: ``current_branch`` now returns
+        # ``None`` on detached HEAD. Treat that as "not on base" → no-op
+        # (same conservative behaviour as before, when "HEAD" string was
+        # returned literally and failed the != base comparison).
+        descriptor = "detached HEAD" if branch is None else f"feature branch {branch!r}"
+        log.debug(
+            "tracker.update_status: no-op (current branch %r != base %r)",
+            branch,
+            cfg.base_branch,
+        )
+        return TrackerUpdate(
+            feature_id=feature_id,
+            old_status=None,
+            new_status="",
+            row_index=-1,
+            success=False,
+            note=f"no-op on {descriptor} (writes only on {cfg.base_branch!r})",
+        )
     if not cfg.tracker_path.exists():
         return TrackerUpdate(
             feature_id=feature_id,
