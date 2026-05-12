@@ -118,6 +118,21 @@ Phase A scope deliberately excludes legacy handler wiring (`handlers/*.py`
 still hardcoded Vietnamese) — that integration lands with F02 per Wave 0
 retro's strangler-fig decision (W0.6 deferred cutover).
 
+### Added — Webhook `display_suffix` (W0.8)
+
+- `webhook_tokens.display_suffix VARCHAR(8)` column (migration 0002).
+  Populated by `mint_token` from `raw_token[-6:]`. Auth path
+  (`resolve_token`) unchanged — suffix is cosmetic-only. Unblocks F07
+  webhook URL display rule (G3 closed, option b).
+- `get_display_suffix(user_id, kind)` read helper in
+  `markets/vn/capture/webhook_tokens.py` for F07 to consume.
+
+### Notes
+
+- Legacy rows (predating migration 0002) have `display_suffix = NULL`;
+  F07 displays without suffix for those — accepted UX trade-off.
+- VARCHAR(8) over CHAR(6) for future-proofing; only 6 chars used today.
+
 ---
 
 ## 2026-05-11 — F01 W0.6: Plugin parsers + SePay webhook + Sheets-migration scaffold (Wave 0)
