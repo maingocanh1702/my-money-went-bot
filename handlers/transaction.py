@@ -1,3 +1,5 @@
+# ⚠️ DEPRECATED — Legacy handler. Moves to core/handlers/transaction.py in Phase 2 F02.
+# DO NOT add new features here. See docs/implementation-plans/phase-2-handlers.md
 """
 handlers/transaction.py — finalize + confirm transaction labeling
 """

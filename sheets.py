@@ -1,3 +1,7 @@
+# ⚠️ DEPRECATED — Legacy single-tenant Google Sheets integration.
+# DO NOT add new features here. New code goes in core/ + markets/.
+# Replacement: PostgreSQL via core/db.py + Alembic migrations.
+# Delete target: Phase 2 F02 cutover. See docs/implementation-plans/phase-2-handlers.md
 import asyncio
 import json
 import gspread

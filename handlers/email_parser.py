@@ -1,3 +1,5 @@
+# ⚠️ DEPRECATED — Legacy email parser. New parsers go in markets/vn/email_parsers/.
+# DO NOT add new bank parsers here. See docs/implementation-plans/phase-2-handlers.md
 """
 handlers/email_parser.py — Parse bank notification emails thành transaction data
 

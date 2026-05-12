@@ -10,36 +10,35 @@
 
 → **Read [Market Strategy Overview](docs/market-strategy-overview.md) first** to understand how the 2 tracks coexist.
 
-**Status:** Pre-development. VN track ready cho Phase 1 SaaS foundation refactor (brd-vi.md v3.1.0 + 5 critical specs written ✅: admin tools v1.1.0, DR runbook v1.2.0, observability v1.1.0, Messenger channel v1.1.1, VietQR+email impl plan v1.0.0). Global track pending validation sprint per brd-en.md Section 11. Phase 1-2 foundation work (multi-tenant DB, messenger interface, auth) is **shared infrastructure** for both tracks.
+**Status:** Phase 1 Foundation ~75% complete. Wave 0 shipped (6 PRs, 118 tests, 5 import-linter contracts). Remaining: Discord adapter + Docker Compose + smoke E2E. Global track pending validation sprint per brd-en.md Section 11.
 **Target launch (VN):** Tháng 9/2026 — Telegram + Discord MVP, Messenger Phase 3+
 **Target launch (Global):** TBD post-validation
+
+> **→ [docs/START_HERE.md](docs/START_HERE.md)** — quick reference for current tasks, source of truth rules, and execution context.
 
 ---
 
 ## Quick links
 
-- ⭐ [**Market Strategy Overview** — VN vs Global](docs/market-strategy-overview.md) — read first
-- 🇻🇳 [**BRD v3.1.0 — VN canonical spec** (Tiền Về Nơi Đâu)](docs/brd-vi.md)
-- 🌐 [**BRD v4.0.0 — Global canonical spec** (My Money Went)](docs/brd-en.md) — pending validation
-- [Strategic rationale — Global market](docs/strategic-pivot-global.md) — background for brd-en.md
-- 🇻🇳 [PRD-VI v1.7.1 — VN product requirements](docs/prd-vi.md)
-- 🇻🇳 [TDD-VI v1.8.1 — VN technical design](docs/tdd-vi.md)
-- 🌐 [PRD-EN v2.0.0 — Global product requirements](docs/prd-en.md)
-- 🌐 [TDD-EN v1.0.0 — Global technical design](docs/tdd-en.md)
-- [Persona Hùng+ deep dive](docs/research/persona-business-deep-dive.md)
-- [Pricing tier redesign](docs/strategy/pricing-redesign.md)
-- [Cost projection (Railway)](docs/strategy/cost-projection.md)
-- [Feature spec: Personal vs Business toggle](docs/features/feature-personal-business-toggle.md)
-- [Feature spec: Refactor personal → SaaS multi-tenant v1.3.0](docs/features/feature-saas-refactor.md)
-- [Feature spec: Payment via bank transfer v1.3.0 (SePay + Email auto-detect + VietQR)](docs/features/feature-payment.md)
-- [Feature spec: Multi-channel Messenger v1.1.1](docs/features/feature-messenger-channel.md)
-- [Implementation plan: Messenger channel build v1.0.0](docs/implementation-plans/implementation-plan-messenger.md)
-- [Decision: Onboarding UI strategy (chat-only vs web)](docs/adr/0002-onboarding-ui-strategy.md)
-- [Implementation plan: VietQR + email parallel v1.0.0](docs/implementation-plans/implementation-plan-payment-vietqr-email.md)
-- [Implementation plan: scale to 500 users and more v1.3.0](docs/implementation-plans/implementation-plan-500-users-and-more.md)
-- [Feature spec: Admin tools & audit v1.1.0](docs/features/feature-admin-tools.md)
-- [Runbook: Disaster recovery v1.2.0](docs/runbooks/disaster-recovery.md)
+**Execution context:**
+- 🚀 [**START HERE** — current tasks + source of truth](docs/START_HERE.md)
+- 📋 [Implementation Tracker — PR status board](docs/implementation-tracker.md)
+- 🗺️ [Roadmap — phase timeline + progress](docs/mymoneywent-roadmap.md)
+- ⚙️ [Development Workflow — 10-step process](docs/operations/development-workflow.md)
+
+**Product specs:**
+- ⭐ [**Market Strategy Overview** — VN vs Global](docs/market-strategy-overview.md)
+- 🇻🇳 [BRD v3.1.0 — VN canonical spec](docs/brd-vi.md) · [PRD-VI v1.7.1](docs/prd-vi.md) · [TDD-VI v1.8.1](docs/tdd-vi.md)
+- 🌐 [BRD v4.0.0 — Global spec](docs/brd-en.md) · [PRD-EN v2.0.0](docs/prd-en.md) · [TDD-EN v1.0.0](docs/tdd-en.md)
+- [Strategic rationale — Global market](docs/strategic-pivot-global.md)
+
+**Feature specs (18 FE + 17 BE):** [docs/features/](docs/features/) · [docs/features/BE/](docs/features/BE/)
+
+**Key references:**
+- [ADR-0001: Monorepo](docs/adr/0001-monorepo-not-split-repos.md) · [ADR-0002: Onboarding UI](docs/adr/0002-onboarding-ui-strategy.md)
+- [Disaster recovery runbook v1.2.0](docs/runbooks/disaster-recovery.md)
 - [Observability plan v1.1.0](docs/operations/observability-plan.md)
+- [Persona Hùng+ deep dive](docs/research/persona-business-deep-dive.md)
 
 ## Product summary (VN market — per [brd-vi.md v3.1.0](docs/brd-vi.md))
 
@@ -93,10 +92,12 @@ lint-imports                    # ADR-0001 boundary check (core ↛ markets)
 pytest tests/ -v                # smoke + unit tests
 ```
 
-**Boundary enforcement:** `core/` MUST NOT import from `markets/`. Verified by `import-linter` (config in `.importlinter`). 3 contracts active:
+**Boundary enforcement:** `core/` MUST NOT import from `markets/`. Verified by `import-linter` (config in `.importlinter`). 5 contracts active:
 - `core ↛ markets` (ADR-0001 strict)
 - `markets.vn ↛ markets.global_`
 - `markets.global_ ↛ markets.vn`
+- `markets.vn.email_parsers` ↛ `core.db` / `core.messenger` (parser purity — W0.6)
+- `i18n` ↛ `core` / `markets` / `handlers` (i18n purity)
 
 **Note on Python keyword:** the global market package is `markets/global_/` (trailing underscore) because `global` is a Python reserved word. ADR-0001 intent unchanged.
 
@@ -121,68 +122,71 @@ Phase 2 (~tháng 11-12): Business tier launch — Personal/Business toggle + Tag
 
 - 🏗️ [**ADR-0001: Monorepo over split repos**](docs/adr/0001-monorepo-not-split-repos.md) (2026-05-10) — single repo cho cả 2 markets, dùng `core/ + markets/vn/ + markets/global/` adapter pattern. Re-evaluate Q3 2026 hoặc sau 7 explicit triggers.
 
-## Repo structure (current — pre-refactor)
+## Repo structure (current — post Wave 0, 2026-05-13)
 
-Code hiện tại là legacy single-tenant VN. Phase 1-2 refactor sẽ migrate sang target structure (xem section dưới).
+> ⚠️ **Legacy files** (`main.py`, `sheets.py`, `telegram_api.py`, `handlers/`) remain in root until Phase 2 F02 strangler cutover. Do NOT build new features on these — new code goes in `core/` + `markets/`.
 
 ```
 MyMoneyWent/
-├── README.md                  # This file
-├── CHANGELOG.md                # Repo-level changelog
-├── main.py                    # Entry point (legacy single-tenant — to refactor)
-├── config.py                  # Configuration
-├── sheets.py                  # Google Sheets integration (legacy)
-├── telegram_api.py            # Telegram bot wrapper
-├── handlers/                  # Command + event handlers (to refactor multi-tenant)
-│   ├── allocation.py
-│   ├── email_parser.py        # ⭐ Existing email parser → markets/vn/capture/
-│   ├── manage.py
-│   ├── reports.py
-│   ├── sepay.py               # → markets/vn/capture/sepay_webhook.py
-│   └── transaction.py         # → core/ (shared)
-├── requirements.txt, railway.toml, crontab.txt, setup.sh
-├── .env.example, .gitignore
+├── README.md
+├── CHANGELOG.md
+├── pyproject.toml              # Build config + dev deps
+├── alembic.ini                 # Migration config
+│
+├── core/                       # ✅ Market-agnostic foundation (Wave 0)
+│   ├── canonical_tx.py         #   CanonicalTx dataclass (W0.6)
+│   ├── db.py                   #   asyncpg pool (min=2, max=10) (W0.3)
+│   ├── tenant_context.py       #   ContextVar per-request isolation (W0.3)
+│   ├── logging.py              #   structlog + tenant binding (W0.5)
+│   ├── observability.py        #   Sentry + /health endpoints (W0.5)
+│   ├── locale_svc.py           #   Locale resolution
+│   └── messenger/              #   Channel adapter pattern (W0.4)
+│       ├── base.py             #     BaseSender ABC + SendPayload
+│       └── telegram.py         #     TelegramSender (Discord pending W1.2)
+│
+├── markets/                    # ✅ Market-specific adapters (ADR-0001)
+│   ├── vn/                     #   🇻🇳 VN market
+│   │   ├── capture/            #     SePay webhook + webhook_tokens (W0.6)
+│   │   └── email_parsers/      #     6 bank parser shells (W0.6)
+│   └── global_/                #   🌐 Global (planned, stub only)
+│
+├── i18n/                       # Language packs (vi.py, en.py)
+├── migrations/versions/        # Alembic (0001_initial_schema — 11 tables)
+├── scripts/migrate_sheets.py   # Founder seed scaffold (W0.6, dry-run only)
+├── tests/                      # 118 tests passing
+│   ├── unit/
+│   ├── integration/
+│   ├── contract/
+│   └── fixtures/
+│
+├── main.py                     # ⚠️ LEGACY — entry point (refactor Phase 2)
+├── config.py                   # Configuration
+├── sheets.py                   # ⚠️ LEGACY — Google Sheets (delete Phase 2)
+├── telegram_api.py             # ⚠️ LEGACY — replaced by core/messenger/
+├── handlers/                   # ⚠️ LEGACY — all move to core/handlers/ Phase 2
+│
+├── .autopilot/                 # Automation tooling + execution prompts
+│   ├── prompts/                #   Autopilot execution prompts
+│   └── state/                  #   Orchestrator state
+│
 └── docs/
-    ├── market-strategy-overview.md  # ⭐ READ FIRST — VN vs Global tracks
-    ├── strategic-pivot-global.md    # Global market strategic background
-    ├── brd-vi.md              # 🇻🇳 VN canonical BRD v3.1.0 (Tiền Về Nơi Đâu)
-    ├── brd-en.md              # 🌐 Global canonical BRD v4.0.0 (My Money Went)
-    ├── prd-vi.md              # 🇻🇳 VN PRD v1.7.1
-    ├── prd-en.md              # 🌐 Global PRD v2.0.0
-    ├── tdd-vi.md              # 🇻🇳 VN TDD v1.8.1
-    ├── tdd-en.md              # 🌐 Global TDD v1.0.0
-    ├── adr/                   # Architecture Decision Records
-    │   ├── 0001-monorepo-not-split-repos.md
-    │   └── 0002-onboarding-ui-strategy.md
-    ├── features/              # 16 feature specs (kebab-case)
-    │   ├── feature-admin-tools.md, feature-categorization.md, ...
-    │   └── BE/                # 15 backend tech specs
-    ├── implementation-plans/  # 4 implementation plans
-    │   ├── implementation-plan-telegram.md, implementation-plan-messenger.md
-    │   ├── implementation-plan-payment-vietqr-email.md
-    │   └── implementation-plan-500-users-and-more.md
-    ├── strategy/              # Pricing + cost projections
-    │   ├── pricing-redesign.md
-    │   └── cost-projection.md
-    ├── operations/            # Production ops
-    │   └── observability-plan.md
-    ├── runbooks/              # Operational runbooks
-    │   └── disaster-recovery.md
-    ├── marketing/             # Landing page + marketing assets
-    │   ├── landing-page-handoff-vi.md
-    │   └── landing-page-handoff-en.md
-    ├── reviews/               # Code reviews
-    │   └── review-bank-account-tracking.md
-    ├── research/              # All competitive/user research consolidated
-    │   ├── 2026-05-07-competitive-round1/   # was plans/reports/
-    │   ├── 2026-05-08-feature-landscape-round3/  # was assets/research/
-    │   ├── persona-business-deep-dive.md
-    │   ├── competitive-pricing-research.md
-    │   ├── researcher-{ynab,monarch,copilot,money-lover,spendee}.md
-    │   └── ... (18 docs total)
-    └── archive/               # Original Bot Finance docs + early SaaS planning + restructure history
-                                # Includes: brd-fintrack-v2.9.0-archived.md (legacy FinTrack BRD,
-                                # superseded by brd-vi.md + brd-en.md split)
+    ├── START_HERE.md            # ⭐ Entry point — current tasks + source of truth
+    ├── mymoneywent-roadmap.md   # Phase timeline + overall progress
+    ├── implementation-tracker.md # PR-level status board
+    ├── implementation-plans/    # Per-phase PR detail (source of truth for tasks)
+    ├── brd-vi.md, brd-en.md     # Business requirements (VN + Global)
+    ├── prd-vi.md, prd-en.md     # Product requirements
+    ├── tdd-vi.md, tdd-en.md     # Technical design
+    ├── features/                # 18 feature specs (FE)
+    │   └── BE/                  #   17 backend tech specs
+    ├── adr/                     # Architecture Decision Records (2)
+    ├── strategy/                # Pricing + cost projections
+    ├── operations/              # Dev workflow + observability + retros
+    ├── runbooks/                # DR runbook
+    ├── research/                # Competitive + user research (22 docs)
+    ├── marketing/               # Landing page handoffs
+    ├── reviews/                 # Code reviews
+    └── archive/                 # Historical docs (indexed in archive/README.md)
 ```
 
 ## Repo structure (target — Phase 1 refactor goal, per ADR-0001)

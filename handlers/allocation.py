@@ -1,3 +1,5 @@
+# ⚠️ DEPRECATED — Legacy handler. Moves to core/handlers/allocation.py in Phase 2 F02.
+# DO NOT add new features here. See docs/implementation-plans/phase-2-handlers.md
 """
 handlers/allocation.py — Monthly budget allocation flow
 """

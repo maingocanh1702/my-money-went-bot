@@ -1,3 +1,6 @@
+# ⚠️ LEGACY — Single-tenant entry point. Will be refactored in Phase 2 F02.
+# DO NOT add new handlers here. New code goes in core/handlers/.
+# See docs/implementation-plans/phase-2-handlers.md
 """
 main.py — FastAPI entry point
 Receives SePay webhooks and Telegram updates via a single /webhook endpoint.

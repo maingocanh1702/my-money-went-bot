@@ -1,3 +1,6 @@
+# ⚠️ DEPRECATED — Legacy Telegram API wrapper.
+# DO NOT add new features here. Use core/messenger/telegram.py (BaseSender pattern).
+# Delete target: Phase 2 F02 cutover. See docs/implementation-plans/phase-2-handlers.md
 import httpx
 from config import BOT_TOKEN, CHAT_ID
 
