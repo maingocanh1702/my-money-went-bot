@@ -48,6 +48,7 @@
 | PR | Wave | Feature | Status | Branch | Gates | Notes |
 |----|------|---------|:------:|--------|:-----:|-------|
 | W0.7 | Wave 0 follow-up | Public `request_id` helpers + F02 xfail contract pin | 🟢 | `chore/W0.7-tenant-context-public-api` | 🔒T 🔒X | Code done 2026-05-12 (uncommitted in working tree). `core/tenant_context.set_request_id/reset_request_id` + middleware refactor + xfail strict pin on `funding_source_id` contract. Branch + commit per `wave0-retrospective.md` post-W0 section. |
+| W0.8 | Wave 0 follow-up | Webhook `display_suffix VARCHAR(8)` migration (G3 option b) | ⬜ | `feat/webhook-display-suffix-migration` | 🔒T 🔒X | Schema P1 — additive nullable column on `webhook_tokens`. Migration 0002 + `mint_token` populates `raw[-6:]` + `get_display_suffix` read helper. Auth path (`resolve_token`) untouched. **Blocks F07 pilot.** Requires inline Codex review with 2× clean rounds per plan §6.5. See `docs/prompts/webhook-display-suffix-migration-autopilot.md`. |
 | W1.1 | Wave 0 extras | Docker Compose dev + prod | ⬜ | `infra/W1.1-docker-compose` | 🔒X | Postgres + bot service compose, env wiring |
 | W1.2 | Wave 6 (early) | Discord adapter (`core/messenger/discord.py`) | ⬜ | `feat/W1.2-discord-adapter` | 🔒I 🔒X | Contract test reuse từ W0.4; impl `BaseSender` ABC |
 | W1.3 | n/a | Phase 1 integration smoke | ⬜ | `chore/W1.3-phase1-smoke` | 🔒T 🔒X | E2E test: 2 channels (TG+Discord) → 2 users → tenant isolated |
@@ -64,7 +65,7 @@
 | F04 | Wave 3 | F04 — Category management (`/manage`) | ⬜ | `feat/F04-category-mgmt` | 🔒T 🔒X | CRUD + parent/sub tree |
 | F03 | Wave 3 | F03 — Categorization auto-rules + manual | ⬜ | `feat/F03-categorization` | 🔒T 🔒X | After F04 (needs categories) |
 | F05 | Wave 4 | F05 — Reports `/status`, `/today`, `/weekly` | ⬜ | `feat/F05-reports` | 🔒T 🔒X | Pure read; no writes |
-| F07 | Wave 1 | F07 — Settings `/settings` | ⬜ | `feat/F07-settings` | 🔒T 🔒X | Locale + TZ + daily recap toggle |
+| F07 | Wave 1 | F07 — Settings `/settings` | ⬜ | `feat/F07-settings` | 🔒T 🔒X | Locale + TZ + daily recap toggle. **Blocked on W0.8** (`display_suffix` migration) — G3 closed to option (b), suffix display rule depends on column landing first. |
 | F11a | Wave 1 | F11 — Admin auth framework only (commands defer Phase 6) | ⬜ | `feat/F11a-admin-auth` | 🔒T 🔒X | `ADMIN_IDS` env + decorator; actual `/admin_*` commands ship Phase 6 |
 | F-i18n | Wave 1 | F-i18n — VI/EN locale switcher | ❌ | `feat/F-i18n` | 🔒X | Stub đã land W0.4; expand to all user-facing strings |
 
@@ -178,16 +179,16 @@ Nếu 1 trong 5 fail → KHÔNG generate autopilot prompt. Manual mode (founder 
 
 | Phase | Total PRs | Merged | In progress | Blocked | Deferred | % |
 |-------|:---------:|:------:|:-----------:|:-------:|:--------:|:-:|
-| 1 | 4 | 0 | 1 (W0.7) | 0 | 0 | 0% |
-| 2 | 9 | 0 | 0 | 0 | 0 | 0% |
+| 1 | 5 | 0 | 1 (W0.7) | 1 (W0.8 blocks F07) | 0 | 0% |
+| 2 | 9 | 0 | 0 | 1 (F07 on W0.8) | 0 | 0% |
 | 3 | 1 | 0 | 0 | 0 | 0 | 0% |
 | 4 | 2 | 0 | 0 | 0 | 0 | 0% |
 | 5 (MVP) | 6 | 0 | 0 | 0 | 0 | 0% |
 | 5b (post-launch) | — | — | — | — | 3 (P-ACB, P-STB, P-BIDV) | n/a |
 | 6 | 10 | 0 | 0 | 0 | 0 | 0% |
-| **MVP total** | **32** | **0** | **1** | **0** | **0** | **0%** |
+| **MVP total** | **33** | **0** | **1** | **2** | **0** | **0%** |
 
-(Wave 0 = 6 PRs đã merged, không count vào MVP remaining. W0.7 = post-W0 cleanup, code done 2026-05-12, awaiting commit. Phase 5b = 3 parsers deferred, unlock per demand signal.)
+(Wave 0 = 6 PRs đã merged, không count vào MVP remaining. W0.7 = post-W0 cleanup, code done 2026-05-12, awaiting commit. W0.8 = webhook `display_suffix` migration, ships before F07 pilot per G3 option b. Phase 5b = 3 parsers deferred, unlock per demand signal.)
 
 ---
 
@@ -197,3 +198,4 @@ Nếu 1 trong 5 fail → KHÔNG generate autopilot prompt. Manual mode (founder 
 |---------|------|----------|
 | v1.0.0 | 2026-05-12 | Initial tracker. 34 PRs MVP remaining across Phase 1-6. Hybrid granularity (wave for infra/deploy, feature for biz logic). Per-phase detail docs linked. Phase 7-11 deferred. |
 | v1.0.1 | 2026-05-12 | Added W0.7 (post-W0 follow-up): public `request_id` helpers + F02 xfail contract pin. F02 row + Phase 1 totals updated. See `wave0-retrospective.md` § Post-W0 follow-ups. |
+| v1.0.2 | 2026-05-12 | Added W0.8 (Wave 0 follow-up): webhook `display_suffix VARCHAR(8)` migration per G3 option (b). F07 marked Blocked-on-W0.8. Phase 1 total 4→5; MVP total 32→33; Blocked column reflects F07+W0.8 chain. See `docs/prompts/webhook-display-suffix-migration-autopilot.md`. |
