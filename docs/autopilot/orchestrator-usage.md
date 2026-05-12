@@ -6,10 +6,10 @@
 > **Owner:** Founder (dev)
 > **Mục đích:** Single-command full-auto execution of one feature spec, từ code-gen → test → Codex review → fix loop → CHANGELOG → tracker → squash-merge vào main. Zero touch nếu spec đã lock + circuit breaker không trip.
 > **Tham chiếu:**
-> - [development-workflow.md](./development-workflow.md) — manual 10-step workflow (orchestrator codifies it)
+> - [development-workflow.md](../operations/development-workflow.md) — manual 10-step workflow (orchestrator codifies it)
 > - [automation-state.md](./automation-state.md) — automation primitives inventory
-> - [wave0-retrospective.md](./wave0-retrospective.md) — 7 lessons (orchestrator design embeds them)
-> - [Level 3 template](../prompts/level3-autopilot-template.md) — paste-prompt predecessor
+> - [wave0-retrospective.md](../operations/wave0-retrospective.md) — 7 lessons (orchestrator design embeds them)
+> - [Level 3 template](prompts/level3-autopilot-template.md) — paste-prompt predecessor
 
 ---
 
@@ -240,10 +240,10 @@ python -m tools.autopilot run <feature>
 
 ## Cross-references
 
-- Spec template: [spec-template.md](./spec-template.md), [spec-template-be.md](./spec-template-be.md)
-- Manual workflow (when not using autopilot): [development-workflow.md](./development-workflow.md)
-- Wave 0 lessons (codified into orchestrator): [wave0-retrospective.md](./wave0-retrospective.md)
-- Level 3 paste-prompt predecessor: [../prompts/level3-autopilot-template.md](../prompts/level3-autopilot-template.md)
+- Spec template: [spec-template.md](../operations/spec-template.md), [spec-template-be.md](../operations/spec-template-be.md)
+- Manual workflow (when not using autopilot): [development-workflow.md](../operations/development-workflow.md)
+- Wave 0 lessons (codified into orchestrator): [wave0-retrospective.md](../operations/wave0-retrospective.md)
+- Level 3 paste-prompt predecessor: [prompts/level3-autopilot-template.md](prompts/level3-autopilot-template.md)
 
 ---
 

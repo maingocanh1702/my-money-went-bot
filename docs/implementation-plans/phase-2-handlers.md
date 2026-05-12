@@ -8,7 +8,7 @@
 > **Tham chiếu:**
 > - [Implementation Tracker](../implementation-tracker.md)
 > - [Dev Workflow §4 Wave 1-4](../operations/development-workflow.md)
-> - [Project memory: W0.6 scope split](../../memory/project_w06_scope_split.md)
+> - W0.6 scope split summary: [Development Workflow §4](../operations/development-workflow.md) + [Wave 0 Retrospective](../operations/wave0-retrospective.md)
 
 ---
 
@@ -248,7 +248,7 @@ Contract (2): F02 `resolve_funding_source()` called correct args
 
 > **The big one.** Inherits W0.6 deferred scope. Strangler-fig: each legacy handler = own commit, then squash.
 
-### Scope (per memory `project_w06_scope_split.md`)
+### Scope (per W0.6 scope split summary in Development Workflow + Wave 0 Retrospective)
 
 1. Rewrite `handlers/transaction.py` → `core/handlers/transaction.py` multi-tenant
 2. Rewrite `handlers/manage.py` → `core/handlers/manage.py` (note: overlaps F04 — coordinate)

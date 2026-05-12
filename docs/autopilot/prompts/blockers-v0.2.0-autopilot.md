@@ -508,8 +508,8 @@ rm -rf .autopilot/state/blockers-v0.2.0/
 
 ## Cross-references
 
-- [Implementation plan v0.1.6](../operations/autopilot-implementation-plan.md) — source of truth for what each blocker means
+- [Implementation plan v0.1.6](../autopilot-implementation-plan.md) — source of truth for what each blocker means
 - [Wave 0 autopilot prompt](./wave0-autopilot.md) — Mode 3 batch pattern this prompt follows
 - [Level 3 template](./level3-autopilot-template.md) — per-feature autopilot pattern (different mode)
-- [Development workflow](../operations/development-workflow.md) §2 — 10-step per-feature
-- [Wave 0 retrospective](../operations/wave0-retrospective.md) — 7 lessons embedded in this prompt
+- [Development workflow](../../operations/development-workflow.md) §2 — 10-step per-feature
+- [Wave 0 retrospective](../../operations/wave0-retrospective.md) — 7 lessons embedded in this prompt

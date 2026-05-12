@@ -18,7 +18,7 @@
 
 1. **This tracker** — single page status board. Mỗi PR = 1 row với (Phase, Wave, Feature, Status, Branch, Gates).
 2. **Per-phase plan** (`implementation-plans/phase-N-*.md`) — detail mỗi PR: scope, test plan, file diff estimate, acceptance criteria, decision lockdown checklist.
-3. **Execution prompt** (`operations/execution-prompt-<id>.md`) — autopilot prompt generate fresh **ngay trước** khi chạy wave (Mode 3 chained). KHÔNG sinh upfront để tránh stale.
+3. **Execution prompt** (`autopilot/prompts/<id>.md`) — autopilot prompt generate fresh **ngay trước** khi chạy wave (Mode 3 chained). KHÔNG sinh upfront để tránh stale.
 
 **PR ID convention:**
 - Infra wave: `W<phase>.<seq>` — vd `W1.1` (Phase 1 wave 1), `W6.2` (Phase 6 wave 2)

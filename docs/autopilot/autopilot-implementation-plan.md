@@ -7,9 +7,9 @@
 > **Mục đích:** Single-page tracker cho hành trình orchestrator từ scaffold (DONE) → first end-to-end auto flow (BLOCKED) → multi-feature production use (FUTURE).
 > **Tham chiếu:**
 > - [orchestrator-usage.md](./orchestrator-usage.md) — usage doc (the "what")
-> - [development-workflow.md](./development-workflow.md) — manual 10-step workflow (orchestrator codifies)
-> - [wave0-retrospective.md](./wave0-retrospective.md) — 7 lessons (embedded in design)
-> - [Level 3 template](../prompts/level3-autopilot-template.md) — paste-prompt predecessor
+> - [development-workflow.md](../operations/development-workflow.md) — manual 10-step workflow (orchestrator codifies)
+> - [wave0-retrospective.md](../operations/wave0-retrospective.md) — 7 lessons (embedded in design)
+> - [Level 3 template](prompts/level3-autopilot-template.md) — paste-prompt predecessor
 
 ---
 

@@ -534,6 +534,6 @@ codex review --base main
 
 ## Cross-references
 
-- [development-workflow.md](../operations/development-workflow.md) — workflow rules
-- [wave0-retrospective.md](../operations/wave0-retrospective.md) — 7 lessons
-- [execution-prompt-wave0-autopilot.md](../operations/execution-prompt-wave0-autopilot.md) — Mode 3 (Wave 0 foundation)
+- [development-workflow.md](../../operations/development-workflow.md) — workflow rules
+- [wave0-retrospective.md](../../operations/wave0-retrospective.md) — 7 lessons
+- [execution-prompt-wave0-autopilot.md](execution-prompt-wave0-autopilot.md) — Mode 3 (Wave 0 foundation)
