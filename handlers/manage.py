@@ -1,3 +1,5 @@
+# ⚠️ DEPRECATED — Legacy handler. Moves to core/handlers/manage.py in Phase 2 F04.
+# DO NOT add new features here. See docs/implementation-plans/phase-2-handlers.md
 """
 handlers/manage.py — Edit & Delete categories, sub-categories, allocations
 Entry point: /manage command

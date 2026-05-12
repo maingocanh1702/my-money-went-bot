@@ -1,3 +1,5 @@
+# ⚠️ DEPRECATED — Legacy SePay handler. New capture logic in markets/vn/capture/.
+# DO NOT add new features here. See docs/implementation-plans/phase-2-handlers.md
 """
 handlers/sepay.py — SePay webhook handler
 Triggered when a bank transaction arrives.

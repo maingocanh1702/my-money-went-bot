@@ -1,3 +1,5 @@
+# ⚠️ DEPRECATED — Legacy handler. Moves to core/handlers/reports.py in Phase 2 F05.
+# DO NOT add new features here. See docs/implementation-plans/phase-2-handlers.md
 """
 handlers/reports.py — /status, /today, weekly summary, monthly report
 """

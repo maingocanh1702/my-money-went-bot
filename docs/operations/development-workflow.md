@@ -192,6 +192,10 @@ Link BE tech: docs/features/BE/feature-X-tech.md
 - **Optional feature tag** chỉ cho major irreversible migrations: `feature/F08-funding-sources`. Đừng gọi đây là release version — đây là markers, không phải releases.
 - Solo dev đừng tag spam. Mỗi tag phải có nghĩa.
 
+**Post-merge updates:**
+- Update `docs/START_HERE.md` "Current next tasks" section to reflect new current task.
+- Update `docs/implementation-tracker.md` PR status → ✅ Merged.
+
 ---
 
 ## 3. Pre-commit hooks (setup Wave 0)
