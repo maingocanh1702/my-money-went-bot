@@ -85,6 +85,8 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"scripts/build-dashboard.py" = ["N999", "S603", "S607"]
+"scripts/sync-tracker-from-gh.py" = ["N999", "S603", "S607"]
 "tests/**/*.py" = ["S101", "S603", "S607", "S106"]  # asserts + subprocess + fake tokens ok in tests
 "tools/autopilot/*.py" = ["S603", "S607"]  # orchestrator wraps trusted CLIs (git/codex/claude)
 

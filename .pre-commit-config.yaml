@@ -74,3 +74,18 @@ repos:
     rev: v2.5
     hooks:
       - id: import-linter
+
+  # ── Auto-rebuild dashboard when tracker or build script changes ──
+  # Local hook for instant feedback — rebuilds docs/dashboard.{html,md} and
+  # auto-stages them in the same commit so view + tracker stay in lockstep.
+  # GH Action `dashboard.yml` is the safety net for pushes that bypass this hook
+  # (web UI edits, direct push without `pre-commit run`, cron).
+  - repo: local
+    hooks:
+      - id: build-dashboard
+        name: Rebuild dashboard from tracker + git state
+        entry: bash -c 'python scripts/build-dashboard.py && git add docs/dashboard.html docs/dashboard.md'
+        language: system
+        files: ^(docs/implementation-tracker\.md|scripts/build-dashboard\.py)$
+        pass_filenames: false
+        require_serial: true

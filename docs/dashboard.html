@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>MyMoneyWent — progress dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root {
+  --bg-page: #f6f4ef;
+  --bg-surface: #ffffff;
+  --bg-secondary: #f1efe8;
+  --bg-hover: rgba(0,0,0,0.025);
+  --bg-warning: #faeeda;
+  --bg-info: #e6f1fb;
+  --bg-success: #eaf3de;
+  --bg-danger: #fcebeb;
+  --text-primary: #1a1915;
+  --text-secondary: #5f5e5a;
+  --text-tertiary: #888780;
+  --text-warning: #854f0b;
+  --text-info: #185fa5;
+  --text-success: #3b6d11;
+  --text-danger: #a32d2d;
+  --border-tertiary: rgba(0,0,0,0.10);
+  --border-secondary: rgba(0,0,0,0.18);
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-page: #1a1915;
+    --bg-surface: #25241f;
+    --bg-secondary: #2c2c2a;
+    --bg-hover: rgba(255,255,255,0.04);
+    --bg-warning: #412402;
+    --bg-info: #042c53;
+    --bg-success: #173404;
+    --bg-danger: #501313;
+    --text-primary: #f1efe8;
+    --text-secondary: #b4b2a9;
+    --text-tertiary: #888780;
+    --text-warning: #faeeda;
+    --text-info: #e6f1fb;
+    --text-success: #eaf3de;
+    --text-danger: #fcebeb;
+    --border-tertiary: rgba(255,255,255,0.10);
+    --border-secondary: rgba(255,255,255,0.22);
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 1.25rem 1rem 2rem; font-family: var(--font-sans); background: var(--bg-page); color: var(--text-primary); line-height: 1.4; }
+.container { max-width: 1080px; margin: 0 auto; }
+.page-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 1rem; }
+h1 { font-size: 18px; font-weight: 500; margin: 0; }
+.meta { font-size: 11px; color: var(--text-tertiary); margin: 0; font-family: var(--font-mono); }
+.meta code { font-family: var(--font-mono); }
+
+/* Status dots — shared visual language */
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; box-sizing: border-box; }
+.dot.merged { background: #3b6d11; }
+.dot.ready { background: #639922; }
+.dot.in-review { background: #185fa5; }
+.dot.in-progress { background: #ba7517; }
+.dot.blocked { background: #a32d2d; }
+.dot.deferred { background: var(--text-tertiary); opacity: 0.45; }
+.dot.not-started { background: transparent; border: 1.5px solid var(--border-secondary); }
+
+/* Hero strip — current PR + KPIs side by side */
+.hero { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 2fr); gap: 10px; margin-bottom: 10px; }
+.hero-current { background: var(--bg-surface); border: 0.5px solid var(--border-tertiary); border-radius: var(--radius-lg); padding: 12px 14px; display: flex; gap: 12px; align-items: center; min-height: 76px; }
+.hero-current .dot { width: 14px; height: 14px; }
+.hero-current .hero-text { min-width: 0; flex: 1; }
+.hero-current .hero-label { font-size: 10px; color: var(--text-tertiary); margin: 0 0 3px; text-transform: uppercase; letter-spacing: 0.06em; }
+.hero-current .hero-title { font-size: 15px; font-weight: 500; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hero-current .hero-sub { font-size: 11px; color: var(--text-secondary); margin: 3px 0 0; font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hero-current.empty .hero-title { color: var(--text-tertiary); }
+
+.hero-kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.kpi { background: var(--bg-surface); border: 0.5px solid var(--border-tertiary); border-radius: var(--radius-md); padding: 10px 8px; text-align: center; display: flex; flex-direction: column; justify-content: center; }
+.kpi.alert { background: var(--bg-danger); border-color: var(--bg-danger); }
+.kpi.alert .kpi-val { color: var(--text-danger); }
+.kpi.alert .kpi-lbl { color: var(--text-danger); }
+.kpi-val { font-size: 20px; font-weight: 500; margin: 0; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.kpi-lbl { font-size: 10px; color: var(--text-secondary); margin: 3px 0 0; text-transform: uppercase; letter-spacing: 0.05em; }
+.kpi-sub { font-size: 10px; color: var(--text-tertiary); margin: 1px 0 0; }
+
+/* Next-up chips strip */
+.next-strip { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 14px; padding: 8px 12px; background: var(--bg-secondary); border-radius: var(--radius-md); }
+.next-label { font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500; margin-right: 4px; }
+.next-chip { background: var(--bg-surface); border: 0.5px solid var(--border-tertiary); border-radius: var(--radius-md); padding: 4px 10px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; color: var(--text-primary); }
+.next-chip .pr-id { font-family: var(--font-mono); color: var(--text-secondary); font-size: 11px; }
+
+/* Phase kanban board */
+.board { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.phase-card { background: var(--bg-surface); border: 0.5px solid var(--border-tertiary); border-radius: var(--radius-lg); padding: 12px 14px; display: flex; flex-direction: column; min-height: 0; }
+.phase-card.active { border-color: var(--border-secondary); }
+.phase-card-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.phase-card-name { font-size: 13px; font-weight: 500; margin: 0; }
+.phase-card-meta { font-size: 11px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.phase-card-bar { background: var(--bg-secondary); height: 4px; border-radius: 999px; overflow: hidden; margin-bottom: 10px; }
+.phase-card-bar > div { background: var(--text-info); height: 100%; transition: width 0.3s; }
+.phase-card-bar > div.zero { background: var(--border-tertiary); width: 100% !important; opacity: 0.35; }
+.phase-prs { display: flex; flex-direction: column; gap: 2px; }
+.pr-row { display: grid; grid-template-columns: 12px 64px minmax(0, 1fr); gap: 8px; align-items: center; padding: 4px 6px; border-radius: 5px; font-size: 12px; line-height: 1.3; transition: background 0.1s; }
+.pr-row:hover { background: var(--bg-hover); }
+.pr-row.current { background: var(--bg-info); }
+.pr-row.current .pr-id, .pr-row.current .pr-name { color: var(--text-info); }
+.pr-row .pr-id { font-family: var(--font-mono); color: var(--text-secondary); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pr-row .pr-name { color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 5px; min-width: 0; }
+.pr-row .pr-name-text { overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.pr-row.deferred .pr-name, .pr-row.deferred .pr-id { color: var(--text-tertiary); }
+.sync-badge { font-size: 10px; font-family: var(--font-mono); padding: 1px 5px; border-radius: 999px; flex-shrink: 0; line-height: 1.3; }
+.sync-badge.unpushed { background: var(--bg-warning); color: var(--text-warning); }
+.sync-badge.unpulled { background: var(--bg-info); color: var(--text-info); }
+
+/* Risk callout */
+.callout { padding: 10px 14px; border-radius: var(--radius-md); display: flex; gap: 10px; align-items: flex-start; font-size: 12px; margin-top: 14px; }
+.callout.warn { background: var(--bg-warning); color: var(--text-warning); }
+.callout strong { display: block; margin-bottom: 2px; font-weight: 500; }
+
+/* Legend */
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 11px; color: var(--text-secondary); margin-top: 1rem; padding-top: 0.75rem; border-top: 0.5px solid var(--border-tertiary); align-items: center; }
+.legend .item { display: inline-flex; align-items: center; gap: 5px; }
+
+@media (max-width: 760px) {
+  .hero { grid-template-columns: 1fr; }
+  .hero-kpis { grid-template-columns: repeat(6, 1fr); }
+}
+@media (max-width: 540px) {
+  .hero-kpis { grid-template-columns: repeat(3, 1fr); }
+  .kpi-val { font-size: 18px; }
+  .pr-row { grid-template-columns: 12px 56px minmax(0, 1fr); gap: 6px; }
+  .sync-badge { font-size: 9px; padding: 1px 4px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="page-head">
+  <h1>MyMoneyWent — progress dashboard</h1>
+  <p class="meta">Updated 2026-05-13 03:44 · <code>feat/dashboard-realtime</code></p>
+</div>
+
+<div class="hero">
+<div class="hero-current">
+  <span class="dot ready"></span>
+  <div class="hero-text">
+    <p class="hero-label">Đang làm</p>
+    <p class="hero-title">W0.7 · Public `request_id` helpers + F02 xfail contract pin</p>
+    <p class="hero-sub">Ready to merge · chore/W0.7-tenant-context-public-api</p>
+  </div>
+</div>
+<div class="hero-kpis">
+  <div class="kpi"><p class="kpi-val">0%</p><p class="kpi-lbl">MVP</p><p class="kpi-sub">0/33</p></div>
+  <div class="kpi"><p class="kpi-val">0%</p><p class="kpi-lbl">Phase 1</p><p class="kpi-sub">0/5</p></div>
+  <div class="kpi"><p class="kpi-val">2</p><p class="kpi-lbl">In flight</p></div>
+  <div class="kpi alert"><p class="kpi-val">1</p><p class="kpi-lbl">Blocked</p></div>
+  <div class="kpi alert"><p class="kpi-val">↑23</p><p class="kpi-lbl">Unpushed</p><p class="kpi-sub">1 PR</p></div>
+  <div class="kpi"><p class="kpi-val">↓0</p><p class="kpi-lbl">Unpulled</p><p class="kpi-sub">0 PR</p></div>
+</div>
+</div>
+
+<div class="next-strip">
+  <span class="next-label">Next</span>
+  <span class="next-chip">
+  <span class="dot not-started"></span>
+  <span class="pr-id">W0.8</span>
+  Webhook `display_suffix VARCHAR(8)` mi…
+</span><span class="next-chip">
+  <span class="dot not-started"></span>
+  <span class="pr-id">W1.1</span>
+  Docker Compose dev + prod
+</span><span class="next-chip">
+  <span class="dot not-started"></span>
+  <span class="pr-id">W1.2</span>
+  Discord adapter (`core/messenger/disco…
+</span><span class="next-chip">
+  <span class="dot not-started"></span>
+  <span class="pr-id">W1.3</span>
+  Phase 1 integration smoke
+</span>
+</div>
+
+<div class="board">
+<div class="phase-card active">
+  <div class="phase-card-head">
+    <p class="phase-card-name">Phase 1</p>
+    <span class="phase-card-meta">0/5 · 0%</span>
+  </div>
+  <div class="phase-card-bar"><div class="zero" style="width:0%;"></div></div>
+  <div class="phase-prs"><div class="pr-row ready" title="Ready to merge · chore/W0.7-tenant-context-public-api">
+  <span class="dot ready"></span>
+  <span class="pr-id">W0.7</span>
+  <span class="pr-name"><span class="pr-name-text">Public `request_id` helpers + F02 xfail contract pin</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/webhook-display-suffix-migration">
+  <span class="dot not-started"></span>
+  <span class="pr-id">W0.8</span>
+  <span class="pr-name"><span class="pr-name-text">Webhook `display_suffix VARCHAR(8)` migration (G3 option b)</span></span>
+</div><div class="pr-row not-started" title="Not started · infra/W1.1-docker-compose">
+  <span class="dot not-started"></span>
+  <span class="pr-id">W1.1</span>
+  <span class="pr-name"><span class="pr-name-text">Docker Compose dev + prod</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/W1.2-discord-adapter">
+  <span class="dot not-started"></span>
+  <span class="pr-id">W1.2</span>
+  <span class="pr-name"><span class="pr-name-text">Discord adapter (`core/messenger/discord.py`)</span></span>
+</div><div class="pr-row not-started" title="Not started · chore/W1.3-phase1-smoke">
+  <span class="dot not-started"></span>
+  <span class="pr-id">W1.3</span>
+  <span class="pr-name"><span class="pr-name-text">Phase 1 integration smoke</span></span>
+</div></div>
+</div><div class="phase-card active">
+  <div class="phase-card-head">
+    <p class="phase-card-name">Phase 2</p>
+    <span class="phase-card-meta">0/9 · 0%</span>
+  </div>
+  <div class="phase-card-bar"><div class="zero" style="width:0%;"></div></div>
+  <div class="phase-prs"><div class="pr-row in-review" title="In review · feat/F07-settings · local: in-review">
+  <span class="dot in-review"></span>
+  <span class="pr-id">F07</span>
+  <span class="pr-name"><span class="pr-name-text">Settings `/settings`</span><span class="sync-badge unpushed" title="23 commits chưa push lên origin">↑23</span></span>
+</div><div class="pr-row blocked" title="Blocked · feat/F-i18n">
+  <span class="dot blocked"></span>
+  <span class="pr-id">F-i18n</span>
+  <span class="pr-name"><span class="pr-name-text">VI/EN locale switcher</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/F01-onboarding-start">
+  <span class="dot not-started"></span>
+  <span class="pr-id">F-onboarding</span>
+  <span class="pr-name"><span class="pr-name-text">F01 — `/start` + user create + trial assign</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/F02-tx-capture-cutover">
+  <span class="dot not-started"></span>
+  <span class="pr-id">F02</span>
+  <span class="pr-name"><span class="pr-name-text">Transaction capture EXPANDED (inherit W0.6 legacy cutover)</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/F03-categorization">
+  <span class="dot not-started"></span>
+  <span class="pr-id">F03</span>
+  <span class="pr-name"><span class="pr-name-text">Categorization auto-rules + manual</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/F04-category-mgmt">
+  <span class="dot not-started"></span>
+  <span class="pr-id">F04</span>
+  <span class="pr-name"><span class="pr-name-text">Category management (`/manage`)</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/F05-reports">
+  <span class="dot not-started"></span>
+  <span class="pr-id">F05</span>
+  <span class="pr-name"><span class="pr-name-text">Reports `/status`, `/today`, `/weekly`</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/F08-funding-sources">
+  <span class="dot not-started"></span>
+  <span class="pr-id">F08</span>
+  <span class="pr-name"><span class="pr-name-text">Funding sources resolver + handlers</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/F11a-admin-auth">
+  <span class="dot not-started"></span>
+  <span class="pr-id">F11a</span>
+  <span class="pr-name"><span class="pr-name-text">F11 — Admin auth framework only (commands defer Phase 6)</span></span>
+</div></div>
+</div><div class="phase-card">
+  <div class="phase-card-head">
+    <p class="phase-card-name">Phase 3</p>
+    <span class="phase-card-meta">0/1 · 0%</span>
+  </div>
+  <div class="phase-card-bar"><div class="zero" style="width:0%;"></div></div>
+  <div class="phase-prs"><div class="pr-row not-started" title="Not started · feat/F06-pricing-tiers">
+  <span class="dot not-started"></span>
+  <span class="pr-id">F06</span>
+  <span class="pr-name"><span class="pr-name-text">Tier limits + 14d trial + gating middleware</span></span>
+</div></div>
+</div><div class="phase-card">
+  <div class="phase-card-head">
+    <p class="phase-card-name">Phase 4</p>
+    <span class="phase-card-meta">0/2 · 0%</span>
+  </div>
+  <div class="phase-card-bar"><div class="zero" style="width:0%;"></div></div>
+  <div class="phase-prs"><div class="pr-row not-started" title="Not started · feat/F01b-sepay-paths">
+  <span class="dot not-started"></span>
+  <span class="pr-id">F01b</span>
+  <span class="pr-name"><span class="pr-name-text">Path A (Quick connect) + Path B (Wizard)</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/F01c-first-tx-flow">
+  <span class="dot not-started"></span>
+  <span class="pr-id">F01c</span>
+  <span class="pr-name"><span class="pr-name-text">First-tx celebration flow</span></span>
+</div></div>
+</div><div class="phase-card">
+  <div class="phase-card-head">
+    <p class="phase-card-name">Phase 5</p>
+    <span class="phase-card-meta">0/6 · 0%</span>
+  </div>
+  <div class="phase-card-bar"><div class="zero" style="width:0%;"></div></div>
+  <div class="phase-prs"><div class="pr-row not-started" title="Not started · feat/F01d-email-forwarding">
+  <span class="dot not-started"></span>
+  <span class="pr-id">F01d</span>
+  <span class="pr-name"><span class="pr-name-text">Path C onboarding (email forwarding guides)</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/F02-dedup">
+  <span class="dot not-started"></span>
+  <span class="pr-id">F02-dedup</span>
+  <span class="pr-name"><span class="pr-name-text">Cross-source dedup (SePay + Email)</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/parser-cake">
+  <span class="dot not-started"></span>
+  <span class="pr-id">P-Cake</span>
+  <span class="pr-name"><span class="pr-name-text">Parser: Cake (VPBank)</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/parser-mb">
+  <span class="dot not-started"></span>
+  <span class="pr-id">P-MB</span>
+  <span class="pr-name"><span class="pr-name-text">Parser: MB Bank</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/parser-tcb">
+  <span class="dot not-started"></span>
+  <span class="pr-id">P-TCB</span>
+  <span class="pr-name"><span class="pr-name-text">Parser: Techcombank full extraction</span></span>
+</div><div class="pr-row not-started" title="Not started · infra/W5.1-postmark-inbound">
+  <span class="dot not-started"></span>
+  <span class="pr-id">W5.1</span>
+  <span class="pr-name"><span class="pr-name-text">Postmark inbound + `/inbound/{token}` route</span></span>
+</div><div class="pr-row deferred" title="Deferred · feat/parser-acb">
+  <span class="dot deferred"></span>
+  <span class="pr-id">P-ACB</span>
+  <span class="pr-name"><span class="pr-name-text">Parser: ACB (deferred to Phase 5b)</span></span>
+</div><div class="pr-row deferred" title="Deferred · feat/parser-bidv">
+  <span class="dot deferred"></span>
+  <span class="pr-id">P-BIDV</span>
+  <span class="pr-name"><span class="pr-name-text">Parser: BIDV (deferred to Phase 5b)</span></span>
+</div><div class="pr-row deferred" title="Deferred · feat/parser-stb">
+  <span class="dot deferred"></span>
+  <span class="pr-id">P-STB</span>
+  <span class="pr-name"><span class="pr-name-text">Parser: Sacombank (deferred to Phase 5b)</span></span>
+</div></div>
+</div><div class="phase-card">
+  <div class="phase-card-head">
+    <p class="phase-card-name">Phase 6</p>
+    <span class="phase-card-meta">0/10 · 0%</span>
+  </div>
+  <div class="phase-card-bar"><div class="zero" style="width:0%;"></div></div>
+  <div class="phase-prs"><div class="pr-row not-started" title="Not started · feat/F09-scheduled-jobs">
+  <span class="dot not-started"></span>
+  <span class="pr-id">F09</span>
+  <span class="pr-name"><span class="pr-name-text">Scheduled jobs (APScheduler, TZ jitter ±5min)</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/F10a-payment-vietqr-sepay">
+  <span class="dot not-started"></span>
+  <span class="pr-id">F10a</span>
+  <span class="pr-name"><span class="pr-name-text">F10 — Payment VietQR + SePay auto-detect (4-layer fuzzy)</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/F10b-payment-email-backup">
+  <span class="dot not-started"></span>
+  <span class="pr-id">F10b</span>
+  <span class="pr-name"><span class="pr-name-text">F10 — Email backup detect (TCB email path)</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/F10c-payment-recurring">
+  <span class="dot not-started"></span>
+  <span class="pr-id">F10c</span>
+  <span class="pr-name"><span class="pr-name-text">F10 — Manual review fallback + recurring billing</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/F11b-admin-commands">
+  <span class="dot not-started"></span>
+  <span class="pr-id">F11b</span>
+  <span class="pr-name"><span class="pr-name-text">F11 — Admin commands (`/admin_stats`, `/admin_cost`, `/admin_user`, `/admin_resolve`)</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/F13-messenger-channel">
+  <span class="dot not-started"></span>
+  <span class="pr-id">F13</span>
+  <span class="pr-name"><span class="pr-name-text">Messenger adapter (feature-flagged `ENABLE_MESSENGER_CHANNEL=false`)</span></span>
+</div><div class="pr-row not-started" title="Not started · infra/W6.1-sentry-alerts">
+  <span class="dot not-started"></span>
+  <span class="pr-id">W6.1</span>
+  <span class="pr-name"><span class="pr-name-text">Sentry alerts — 7 critical (per observability-plan.md)</span></span>
+</div><div class="pr-row not-started" title="Not started · infra/W6.2-railway-deploy">
+  <span class="dot not-started"></span>
+  <span class="pr-id">W6.2</span>
+  <span class="pr-name"><span class="pr-name-text">Railway deploy + custom domain (tienvenoidau.com)</span></span>
+</div><div class="pr-row not-started" title="Not started · infra/W6.3-backup-b2">
+  <span class="dot not-started"></span>
+  <span class="pr-id">W6.3</span>
+  <span class="pr-name"><span class="pr-name-text">Backup automation (B2 + pg_dump daily, SSE-B2)</span></span>
+</div><div class="pr-row not-started" title="Not started · chore/W6.4-dr-restore-test">
+  <span class="dot not-started"></span>
+  <span class="pr-id">W6.4</span>
+  <span class="pr-name"><span class="pr-name-text">DR runbook full validation (test restore)</span></span>
+</div></div>
+</div>
+</div>
+
+<div class="callout warn">
+  <div>
+    <strong>Risk còn active</strong>
+    Legacy handler migration drag (F02 strangler fig) · F06 Family Plan addendum chờ merge · Meta App Review pages_messaging (F13 flip ON pending)
+  </div>
+</div>
+
+<div class="legend">
+  <span class="item"><span class="dot merged"></span> Merged</span>
+  <span class="item"><span class="dot in-review"></span> In review</span>
+  <span class="item"><span class="dot in-progress"></span> In progress</span>
+  <span class="item"><span class="dot blocked"></span> Blocked</span>
+  <span class="item"><span class="dot not-started"></span> Not started</span>
+  <span class="item"><span class="dot deferred"></span> Deferred</span>
+  <span class="item" style="margin-left:auto;color:var(--text-tertiary);">Rebuild: <code>python scripts/build-dashboard.py</code></span>
+</div>
+
+</div>
+</body>
+</html>
