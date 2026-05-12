@@ -165,15 +165,17 @@ MyMoneyWent/
 ├── telegram_api.py             # ⚠️ LEGACY — replaced by core/messenger/
 ├── handlers/                   # ⚠️ LEGACY — all move to core/handlers/ Phase 2
 │
-├── .autopilot/                 # Automation tooling + execution prompts
-│   ├── prompts/                #   Autopilot execution prompts
-│   └── state/                  #   Orchestrator state
+├── .autopilot/                 # ⚙️ Runtime state only (gitignored)
+│   └── state/                  #   Orchestrator checkpoints
 │
 └── docs/
     ├── START_HERE.md            # ⭐ Entry point — current tasks + source of truth
     ├── mymoneywent-roadmap.md   # Phase timeline + overall progress
     ├── implementation-tracker.md # PR-level status board
     ├── implementation-plans/    # Per-phase PR detail (source of truth for tasks)
+    ├── autopilot/               # Automation tooling + execution prompts (tracked)
+    │   ├── prompts/             #   Autopilot execution prompts
+    │   └── probes/              #   CLI probes + experiments
     ├── brd-vi.md, brd-en.md     # Business requirements (VN + Global)
     ├── prd-vi.md, prd-en.md     # Product requirements
     ├── tdd-vi.md, tdd-en.md     # Technical design
