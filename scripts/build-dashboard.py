@@ -68,14 +68,14 @@ class PR:
     # Populated by enrich_with_git_state — None means git couldn't determine.
     local_slug: str | None = None
     remote_slug: str | None = None
-    unpushed: int = 0   # commits on local branch not on origin/<branch>
-    unpulled: int = 0   # commits on origin/<branch> not in local branch
+    unpushed: int = 0  # commits on local branch not on origin/<branch>
+    unpulled: int = 0  # commits on origin/<branch> not in local branch
 
 
 @dataclass
 class PhaseStats:
-    key: str       # "Phase 1"
-    label: str     # raw label from table
+    key: str  # "Phase 1"
+    label: str  # raw label from table
     total: int
     merged: int
     in_progress: int
@@ -85,6 +85,7 @@ class PhaseStats:
 
 
 # ---------- parsing ----------
+
 
 def parse_prs(text: str) -> list[PR]:
     out: list[PR] = []
@@ -143,7 +144,7 @@ def _strip_id_prefix(feature: str, pr_id: str) -> str:
     for sep in (" — ", " - ", "—", "-"):
         candidate = f"{pr_id}{sep}"
         if feature.startswith(candidate):
-            return feature[len(candidate):].strip()
+            return feature[len(candidate) :].strip()
     return feature
 
 
@@ -152,7 +153,7 @@ def parse_summary(text: str) -> list[PhaseStats]:
     m = re.search(r"^##\s+5\.\s*Progress summary", text, re.MULTILINE)
     if not m:
         return out
-    rest = text[m.end():]
+    rest = text[m.end() :]
     end = re.search(r"^##\s+", rest, re.MULTILINE)
     block = rest[: end.start()] if end else rest
     for line in block.splitlines():
@@ -551,7 +552,7 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
 
 def render_html(prs, stats, mvp, active, in_flight, upcoming, branch) -> str:
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    branch_tag = f' · <code>{html.escape(branch)}</code>' if branch else ""
+    branch_tag = f" · <code>{html.escape(branch)}</code>" if branch else ""
 
     phase1 = next((s for s in stats if s.label.startswith("1")), None)
     p1_pct = phase1.percent if phase1 else 0
@@ -559,7 +560,6 @@ def render_html(prs, stats, mvp, active, in_flight, upcoming, branch) -> str:
     mvp_merged = mvp["merged"] if mvp else 0
     mvp_total = mvp["total"] if mvp else 0
     blocked_count = sum(1 for p in prs if p.status_slug == "blocked")
-    deferred_count = sum(1 for p in prs if p.status_slug == "deferred")
     unpushed_prs = sum(1 for p in prs if p.unpushed > 0)
     unpulled_prs = sum(1 for p in prs if p.unpulled > 0)
     total_unpushed = sum(p.unpushed for p in prs)
@@ -607,11 +607,13 @@ def render_html(prs, stats, mvp, active, in_flight, upcoming, branch) -> str:
         feat = _strip_id_prefix(pr.feature, pr.pr_id)
         # truncate name to ~40 chars
         feat_short = feat if len(feat) <= 40 else feat[:38] + "…"
-        chips.append(f"""<span class="next-chip">
+        chips.append(
+            f"""<span class="next-chip">
   <span class="dot not-started"></span>
   <span class="pr-id">{html.escape(pr.pr_id)}</span>
   {html.escape(feat_short)}
-</span>""")
+</span>"""
+        )
     next_strip = f"""<div class="next-strip">
   <span class="next-label">Next</span>
   {''.join(chips) if chips else '<span style="font-size:12px;color:var(--text-tertiary);">Hết PR not-started.</span>'}
@@ -623,8 +625,15 @@ def render_html(prs, stats, mvp, active, in_flight, upcoming, branch) -> str:
         by_phase.setdefault(p.phase, []).append(p)
 
     # Sort PRs within each phase: active first, then not-started, then deferred, then merged
-    sort_order = {"in-review": 0, "in-progress": 1, "ready": 2, "blocked": 3,
-                  "not-started": 4, "deferred": 5, "merged": 6}
+    sort_order = {
+        "in-review": 0,
+        "in-progress": 1,
+        "ready": 2,
+        "blocked": 3,
+        "not-started": 4,
+        "deferred": 5,
+        "merged": 6,
+    }
 
     phase_cards = []
     for s in stats:
@@ -658,21 +667,29 @@ def render_html(prs, stats, mvp, active, in_flight, upcoming, branch) -> str:
                 tooltip_parts.append(f"remote: {pr.remote_slug}")
             tooltip = " · ".join(tooltip_parts)
 
-            pr_rows.append(f"""<div class="{row_cls}" title="{html.escape(tooltip)}">
+            pr_rows.append(
+                f"""<div class="{row_cls}" title="{html.escape(tooltip)}">
   <span class="dot {pr.status_slug}"></span>
   <span class="pr-id">{html.escape(pr.pr_id)}</span>
   <span class="pr-name"><span class="pr-name-text">{html.escape(feat)}</span>{sync_badges}</span>
-</div>""")
-        rows_html = "".join(pr_rows) if pr_rows else '<div style="font-size:11px;color:var(--text-tertiary);padding:4px 6px;">(no PRs)</div>'
+</div>"""
+            )
+        rows_html = (
+            "".join(pr_rows)
+            if pr_rows
+            else '<div style="font-size:11px;color:var(--text-tertiary);padding:4px 6px;">(no PRs)</div>'
+        )
 
-        phase_cards.append(f"""<div class="phase-card{active_cls}">
+        phase_cards.append(
+            f"""<div class="phase-card{active_cls}">
   <div class="phase-card-head">
     <p class="phase-card-name">{html.escape(s.key)}</p>
     <span class="phase-card-meta">{s.merged}/{s.total} · {s.percent}%</span>
   </div>
   <div class="phase-card-bar"><div class="{zero_class}" style="width:{width};"></div></div>
   <div class="phase-prs">{rows_html}</div>
-</div>""")
+</div>"""
+        )
 
     board_html = f'<div class="board">\n{"".join(phase_cards)}\n</div>'
 
@@ -726,6 +743,7 @@ def render_html(prs, stats, mvp, active, in_flight, upcoming, branch) -> str:
 
 # ---------- rendering: Markdown ----------
 
+
 def render_md(prs, stats, mvp, active, in_flight, upcoming, branch) -> str:
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     lines: list[str] = [
@@ -746,7 +764,7 @@ def render_md(prs, stats, mvp, active, in_flight, upcoming, branch) -> str:
         lines += [
             f"- **MVP progress:** **{mvp['percent']}%** ({mvp['merged']}/{mvp['total']} PR merged)",
             f"- **In flight:** {len(in_flight)} PR · **Blocked:** {mvp['blocked']} · **Deferred:** {mvp['deferred']}",
-            f"- **Target launch:** Tháng 9/2026 (~16 weeks runway)",
+            "- **Target launch:** Tháng 9/2026 (~16 weeks runway)",
             "",
         ]
 
@@ -863,6 +881,7 @@ def render_md(prs, stats, mvp, active, in_flight, upcoming, branch) -> str:
 
 # ---------- main ----------
 
+
 def main() -> None:
     if not TRACKER.exists():
         raise SystemExit(f"Tracker not found: {TRACKER}")
@@ -874,7 +893,9 @@ def main() -> None:
     branch = current_branch()
 
     if not prs:
-        raise SystemExit("No PRs parsed — check tracker structure (### Phase N: headings + status emoji).")
+        raise SystemExit(
+            "No PRs parsed — check tracker structure (### Phase N: headings + status emoji)."
+        )
     if not stats:
         print("Warning: no phase summary stats parsed (§5 table missing or shape changed).")
 
@@ -897,7 +918,9 @@ def main() -> None:
     print(f"✓ {HTML_OUT.relative_to(ROOT)}  ({len(prs)} PRs, {len(stats)} phases)")
     print(f"✓ {MD_OUT.relative_to(ROOT)}")
     if mvp:
-        print(f"  MVP: {mvp['percent']}% ({mvp['merged']}/{mvp['total']})  ·  In flight: {len(in_flight)}  ·  Active: {len(active)}")
+        print(
+            f"  MVP: {mvp['percent']}% ({mvp['merged']}/{mvp['total']})  ·  In flight: {len(in_flight)}  ·  Active: {len(active)}"
+        )
     if drift:
         print(f"\n  Git drift detected ({len(drift)} row{'s' if len(drift) != 1 else ''}):")
         for pr_id, old, new, reason in drift:

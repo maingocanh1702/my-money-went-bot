@@ -18,7 +18,6 @@ Usage:
 from __future__ import annotations
 
 import json
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -40,10 +39,15 @@ def fetch_merged_prs() -> list[dict]:
     try:
         out = subprocess.check_output(
             [
-                "gh", "pr", "list",
-                "--state", "merged",
-                "--limit", "200",
-                "--json", "number,headRefName,mergedAt,title",
+                "gh",
+                "pr",
+                "list",
+                "--state",
+                "merged",
+                "--limit",
+                "200",
+                "--json",
+                "number,headRefName,mergedAt,title",
             ],
             text=True,
             cwd=ROOT,
@@ -52,7 +56,12 @@ def fetch_merged_prs() -> list[dict]:
         )
         data = json.loads(out) if out.strip() else []
         return data if isinstance(data, list) else []
-    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError):
+    except (
+        subprocess.CalledProcessError,
+        FileNotFoundError,
+        subprocess.TimeoutExpired,
+        json.JSONDecodeError,
+    ):
         return []
 
 
