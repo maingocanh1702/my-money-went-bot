@@ -14,11 +14,15 @@ Phases (write checkpoint after each transition):
 
 from __future__ import annotations
 
+import dataclasses
 import json
+import logging
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from .config import Config
+
+log = logging.getLogger(__name__)
 
 PHASE_ORDER = ("INIT", "CODEGEN", "VERIFIED", "REVIEWING", "READY", "MERGED", "HALTED")
 
@@ -73,10 +77,29 @@ def save(cfg: Config, state: FeatureState) -> Path:
 
 
 def load(cfg: Config, feature_id: str) -> FeatureState | None:
+    """Read state.json and instantiate FeatureState.
+
+    v0.2.2: schema tolerance. Filter unknown fields (with a warning) so
+    state files written by a newer orchestrator schema can be loaded by
+    older code during partial deploys, and so a stale field added by an
+    abandoned branch doesn't permanently brick resume. Previously
+    ``FeatureState(**raw)`` raised ``TypeError`` on the first unknown
+    key, halting F07 resume after v0.2.1 added ``last_active_phase``.
+    """
     path = state_path(cfg, feature_id)
     if not path.exists():
         return None
     raw = json.loads(path.read_text(encoding="utf-8"))
+    known_fields = {f.name for f in dataclasses.fields(FeatureState)}
+    unknown = set(raw.keys()) - known_fields
+    if unknown:
+        log.warning(
+            "state.load: ignoring unknown fields in %s: %s "
+            "(orchestrator version may be older than state file schema)",
+            path,
+            sorted(unknown),
+        )
+        raw = {k: v for k, v in raw.items() if k in known_fields}
     return FeatureState(**raw)
 
 

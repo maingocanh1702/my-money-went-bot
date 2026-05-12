@@ -13,7 +13,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tools.autopilot.codex import parse_findings
+import pytest
+
+from tools.autopilot.codex import ReviewResult, parse_findings
+from tools.autopilot.config import Config
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "codex"
 
@@ -228,3 +231,103 @@ def test_keyword_matchers() -> None:
     # Neither should match arch keywords.
     assert findings[0].matches_keywords(ARCH_KEYWORDS) is False
     assert findings[1].matches_keywords(SECURITY_KEYWORDS) is False
+
+
+# --- save_review_artifact non-clobber (v0.2.2 fix #6) ----------------------
+
+
+def _stub_review_result(text: str) -> ReviewResult:
+    return ReviewResult(clean=True, findings=[], raw_output=text, base="main", duration_seconds=0.1)
+
+
+def test_save_review_artifact_first_write_uses_canonical_name(tmp_path: Path) -> None:
+    """First save lands at round-NN.txt."""
+    from tools.autopilot.codex import save_review_artifact
+
+    cfg = _codex_cfg(tmp_path)
+    result = _stub_review_result("first-run output")
+    out = save_review_artifact(cfg, result, "F99", 1)
+    assert out.name == "round-01.txt"
+    assert out.read_text(encoding="utf-8") == "first-run output"
+
+
+def test_save_review_artifact_second_write_does_not_clobber(tmp_path: Path) -> None:
+    """Second save of the same round lands at round-NN-resume1.txt.
+
+    Resume cycles per v0.2.1 reset Phase C round counter back to 1; this
+    test pins the non-clobber behavior so resume forensics persist.
+    """
+    from tools.autopilot.codex import save_review_artifact
+
+    cfg = _codex_cfg(tmp_path)
+    first = _stub_review_result("first-run output")
+    p1 = save_review_artifact(cfg, first, "F99", 1)
+    assert p1.name == "round-01.txt"
+    second = _stub_review_result("resumed-run output")
+    p2 = save_review_artifact(cfg, second, "F99", 1)
+    assert p2.name == "round-01-resume1.txt"
+    # Both files coexist, contents preserved.
+    assert p1.exists()
+    assert p1.read_text(encoding="utf-8") == "first-run output"
+    assert p2.read_text(encoding="utf-8") == "resumed-run output"
+
+    # Third save → -resume2 suffix.
+    third = _stub_review_result("third pass")
+    p3 = save_review_artifact(cfg, third, "F99", 1)
+    assert p3.name == "round-01-resume2.txt"
+
+
+# --- stale-blob detection (v0.2.2 workaround #7) ---------------------------
+
+
+def _codex_cfg(tmp_path: Path) -> Config:
+    return Config(
+        repo_root=tmp_path,
+        codex_bin="codex",
+        claude_bin="claude",
+        state_dir=tmp_path / ".autopilot" / "state",
+    )
+
+
+def test_warn_if_stale_blob_no_warning_when_head_matches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Codex output mentioning current HEAD prefix → no warning."""
+    from tools.autopilot import codex as codex_mod
+
+    cfg = _codex_cfg(tmp_path)
+    monkeypatch.setattr(
+        "tools.autopilot.codex.git_ops.head_sha",
+        lambda _c: "abc1234deadbeef",  # pragma: allowlist secret
+    )
+    with caplog.at_level("WARNING", logger="tools.autopilot.codex"):
+        codex_mod._warn_if_stale_blob(cfg, "review references abc1234 (good)")
+    assert "stale-blob" not in caplog.text.lower()
+
+
+def test_warn_if_stale_blob_warns_on_mismatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Codex output mentioning a SHA prefix unrelated to HEAD → warning."""
+    from tools.autopilot import codex as codex_mod
+
+    cfg = _codex_cfg(tmp_path)
+    monkeypatch.setattr("tools.autopilot.codex.git_ops.head_sha", lambda _c: "def5678" + "0" * 33)
+    with caplog.at_level("WARNING", logger="tools.autopilot.codex"):
+        codex_mod._warn_if_stale_blob(cfg, "review base sha was abc1234, reviewed blob aaaaaaa")
+    body = caplog.text.lower()
+    assert "stale-blob" in body
+    assert "def5678" in body
+
+
+def test_warn_if_stale_blob_silent_when_no_sha_in_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """No SHA-looking tokens → nothing to compare → no warning."""
+    from tools.autopilot import codex as codex_mod
+
+    cfg = _codex_cfg(tmp_path)
+    monkeypatch.setattr("tools.autopilot.codex.git_ops.head_sha", lambda _c: "deadbeef")
+    with caplog.at_level("WARNING", logger="tools.autopilot.codex"):
+        codex_mod._warn_if_stale_blob(cfg, "plain prose without any sha tokens")
+    assert "stale-blob" not in caplog.text.lower()

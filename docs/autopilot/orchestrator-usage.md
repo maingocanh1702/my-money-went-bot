@@ -28,6 +28,36 @@ If circuit breaker trips → read `.autopilot/state/F-i18n/halt-report.md`, fix 
 python -m tools.autopilot resume F-i18n
 ```
 
+## Concurrency
+
+The orchestrator is **NOT** safe to run alongside another git-writing agent on the same repository. Specifically:
+
+- Running 2+ Claude Code sessions (or any Mode 3/4 autopilot) that share the same `.git/` directory CAN trample each other's branch refs. Observed 2026-05-13 during v0.2.2 work itself: a parallel session checked out `feat/F07-settings`, then back to `main`, in between this session's branch creation and first commit — the commit landed on `main` instead of `chore/autopilot-v0.2.2`. Recovery required `git reflog` + `git update-ref` to relocate the commit.
+- The orchestrator does NOT acquire a file lock. There is currently no mechanism preventing concurrent writes; that's a v0.2.3+ feature.
+
+**Operational policy (until lock mechanism lands):**
+
+1. Run **at most one** Claude Code (or other git-writing automation) session at a time per repository.
+2. Before starting any autopilot session, verify no `.git/*.lock` files exist in the target repo:
+   ```bash
+   ls .git/*.lock 2>/dev/null
+   ```
+   Empty output = safe.
+3. After every commit in an autopilot session, run `git branch --show-current` + `git log --oneline -1` to confirm HEAD landed on the intended branch. If not, recover via `git update-ref` (no `reset --hard` needed):
+   ```bash
+   git update-ref refs/heads/<intended-branch> <commit-sha>
+   git symbolic-ref HEAD refs/heads/<intended-branch>
+   git update-ref refs/heads/main <correct-main-sha>
+   ```
+4. If two features must be worked in parallel, use `git worktree` so each session has its own checkout (refs still shared via the central `.git/`; this reduces but does not eliminate the risk):
+   ```bash
+   git worktree add ../MyMoneyWent-F07 feat/F07-settings
+   git worktree add ../MyMoneyWent-dashboard feat/dashboard-realtime
+   ```
+   Run each session in its dedicated worktree dir.
+
+A future v0.2.3 will introduce a `.autopilot/locks/<repo-hash>.lock` advisory lock acquired at preflight and released at terminal phase / halt, blocking concurrent autopilot invocations.
+
 ## Mental model
 
 The orchestrator is a Python harness around 3 external CLIs:

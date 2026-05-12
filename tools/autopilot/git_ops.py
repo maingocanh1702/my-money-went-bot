@@ -55,6 +55,19 @@ def head_sha(cfg: Config) -> str:
     return _run(cfg, "rev-parse", "HEAD").stdout.strip()
 
 
+def current_branch(cfg: Config) -> str | None:
+    """Name of the currently checked-out branch, or ``None`` if detached HEAD.
+
+    ``git rev-parse --abbrev-ref HEAD`` returns the literal string ``"HEAD"``
+    when in detached-HEAD state. Returning that to ``loop._sync_branch_to_state``
+    would silently no-op (string ``"HEAD"`` matches no real branch) and let
+    Codex review run on whatever tree is at the detached SHA — the same
+    wrong-diff bug v0.2.2 Fix #3 was supposed to prevent. Codex v0.2.2 R6 P1.
+    """
+    out = _run(cfg, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+    return None if out == "HEAD" else out
+
+
 def working_tree_dirty(cfg: Config) -> bool:
     """True if there are modified, staged, or untracked files."""
     porcelain = _run(cfg, "status", "--porcelain").stdout

@@ -180,6 +180,9 @@ def test_loop_run_auto_merge_false_writes_ready_report_and_skips_merge(
         lambda _c, _b, _br: ["abc seed"],
     )
     monkeypatch.setattr("tools.autopilot.loop.git_ops.diff_stat", lambda _c, _b, _br: "")
+    monkeypatch.setattr("tools.autopilot.loop.git_ops.current_branch", lambda _c: "feat/F99-x")
+    monkeypatch.setattr("tools.autopilot.loop.git_ops.branch_exists", lambda _c, _b: True)
+    monkeypatch.setattr("tools.autopilot.loop.git_ops.checkout", lambda _c, _b: None)
 
     outcome = loop_mod.run(cfg, "F99", resume=True, auto_merge=False)
 
@@ -219,6 +222,9 @@ def test_loop_run_auto_merge_true_calls_merge(
 
     monkeypatch.setattr("tools.autopilot.loop.merge.attempt_merge", fake_merge)
     monkeypatch.setattr("tools.autopilot.loop.tracker.update_status", lambda *_a, **_kw: None)
+    monkeypatch.setattr("tools.autopilot.loop.git_ops.current_branch", lambda _c: "feat/F99-x")
+    monkeypatch.setattr("tools.autopilot.loop.git_ops.branch_exists", lambda _c, _b: True)
+    monkeypatch.setattr("tools.autopilot.loop.git_ops.checkout", lambda _c, _b: None)
 
     outcome = loop_mod.run(cfg, "F99", resume=True, auto_merge=True)
 

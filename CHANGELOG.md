@@ -14,6 +14,82 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed — Autopilot orchestrator v0.2.2 (tooling hardening)
+
+- **`max_review_rounds` default raised 3 → 5; new
+  `confirmation_rounds_after_last_fix=2` knob.** F07 + v0.2.1 pilots
+  showed the math `max=3 + clean=2 consecutive` cannot ship when
+  adjacent micro-findings cascade (each fix grows the diff, Codex's
+  next pass surfaces a new nit in the new code). New logic requires N
+  clean rounds AFTER the last fix commit, decoupled from total budget.
+  If no fix is ever applied, the legacy `required_clean_rounds_before_merge`
+  gate still applies.
+- **`SECURITY_FINDING` keyword tiering.** Severe keywords (`auth bypass`,
+  `injection`, `csrf`, `xss`, `ssrf`, `rce`, `timing attack`,
+  `constant-time`, `*-leak`) auto-HALT regardless of severity. Soft
+  keywords (`token`, `secret`, `hmac`, `auth`, `password`, `credential`,
+  `security`) now require P0/P1 severity to escalate. Stops benign
+  Markdown-rendering findings that mention "token" from auto-tripping
+  the security circuit breaker (F07 v0.2.1 R1 regression).
+- **Resume syncs git checkout to `feature_state.branch`.** `loop.run(resume=True)`
+  now verifies HEAD matches the recorded branch before re-entering Phase
+  C, and `git checkout`s if not. Previously, a founder running `autopilot
+  resume F07` from `main` would have Codex review an empty `main..main`
+  diff. Missing branch → HALT `BRANCH_MISSING` instead of silent failure.
+- **`tracker.update_status` no-op on feature branches.** Orchestrator no
+  longer mutates `docs/implementation-tracker.md` while a feature branch
+  is checked out, eliminating noise commits during Phase C fix flow.
+  Tracker updates are now the founder's post-squash responsibility (or
+  v0.2.3 may centralize via a sidecar `sync-tracker` CLI).
+- **`state.load` tolerates unknown fields.** JSON state files with extra
+  keys load cleanly with a warning, instead of raising `TypeError`.
+  Supports cross-version safety when orchestrator code lags the
+  state-file schema — the v0.2.1 → v0.2.2 transition with
+  `last_active_phase` being the trigger.
+- **Codex artifact non-clobber on resume.** `save_review_artifact` writes
+  to `round-NN-resume{1,2,…}.txt` instead of overwriting `round-NN.txt`.
+  Resume cycles preserve forensics from earlier attempts.
+
+### Added — Autopilot diagnostic + policy
+
+- **Codex stale-blob detection.** `run_review()` logs a warning when
+  Codex output references a SHA that doesn't share the current HEAD's
+  7-char prefix. Operator verifies findings against current state. True
+  fix (Codex CLI integration audit, pin explicit blob) deferred to
+  v0.2.3 backlog.
+- **Concurrency policy doc.** `docs/autopilot/orchestrator-usage.md`
+  now documents the one-session-per-repo rule, the
+  `.git/*.lock` pre-check, the `git update-ref` recovery procedure
+  (validated during v0.2.2 work itself when a parallel session
+  hijacked HEAD mid-commit), and the `git worktree` workaround.
+
+### Notes — v0.2.3 backlog
+
+- Codex CLI stale-blob true fix (pin explicit SHA in `codex review`
+  invocation; verify resolved blob matches input before parsing).
+- Tracker-update sidecar / explicit `python -m tools.autopilot
+  sync-tracker` command (replaces the no-op-on-feature-branch workaround).
+- `.autopilot/locks/<repo-hash>.lock` advisory file lock for
+  concurrent-session safety (orchestrator acquires at preflight, releases
+  at terminal phase). Three concurrency incidents observed during v0.2.2
+  work confirmed the hazard the policy doc describes.
+
+### Known issues — deferred to v0.2.3
+
+- `loop.py` MAX_ROUNDS halt message always cites
+  `confirmation_rounds_after_last_fix` even when the legacy
+  `required_clean_rounds_before_merge` gate was the one that fired.
+  Diagnostic-only (no functional impact); misleads recovery under
+  custom thresholds. Codex v0.2.2 R6 P2.
+- Budget semantics: current logic conflates "max review rounds total"
+  with "max fix rounds + post-fix-confirm rounds". Should be split into
+  explicit `max_fix_rounds` + `confirmation_rounds_after_last_fix`
+  knobs rather than reusing `max_review_rounds`. Surfaced repeatedly
+  across R1-R6 review cascade.
+- Halt-report directory writes are clobber-on-rerun. Each new session
+  overwrites the prior `halt-report.md`, losing cross-session forensic
+  context. Mirror the Codex artifact `-resume{1,2,…}` suffix scheme.
+
 ### Fixed — Autopilot orchestrator v0.2.1 (Codex parser + halt forensics)
 
 - **Codex parser early-return.** `codex.parse_findings` no longer requires

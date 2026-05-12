@@ -63,15 +63,34 @@ def attempt_merge(
             report.gate_failures.append(f"verify step {step.name}")
         return report
 
-    # Gate 2: consecutive clean Codex rounds.
-    if state.consecutive_clean_rounds >= cfg.required_clean_rounds_before_merge:
+    # Gate 2: clean Codex rounds. v0.2.2 keeps this aligned with Phase C's
+    # completion gate (loop.py) so a READY feature isn't immediately
+    # rejected here under custom thresholds:
+    # - If any fix was applied during review, require
+    #   ``confirmation_rounds_after_last_fix`` clean rounds after the
+    #   last fix (``consecutive_clean_rounds`` tracks that tail).
+    # - Otherwise fall back to the legacy
+    #   ``required_clean_rounds_before_merge`` gate.
+    any_fixes_applied = bool(state.fixed_finding_hashes)
+    effective_gate = (
+        cfg.confirmation_rounds_after_last_fix
+        if any_fixes_applied
+        else cfg.required_clean_rounds_before_merge
+    )
+    gate_label = (
+        "confirmation_rounds_after_last_fix"
+        if any_fixes_applied
+        else "required_clean_rounds_before_merge"
+    )
+    if state.consecutive_clean_rounds >= effective_gate:
         report.gates_passed.append(
-            f"{state.consecutive_clean_rounds} consecutive clean Codex rounds",
+            f"{state.consecutive_clean_rounds} consecutive clean Codex rounds "
+            f"(gate: {gate_label}={effective_gate})",
         )
     else:
         report.ok = False
         report.gate_failures.append(
-            f"need {cfg.required_clean_rounds_before_merge} consecutive clean rounds; "
+            f"need {effective_gate} clean rounds ({gate_label}); "
             f"have {state.consecutive_clean_rounds}",
         )
         return report

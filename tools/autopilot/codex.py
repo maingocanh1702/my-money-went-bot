@@ -13,12 +13,20 @@ Critical quirks documented in source:
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import git_ops
 from .config import Config
+
+log = logging.getLogger(__name__)
+
+# Match a 7-40 char hex token surrounded by word boundaries; used by the
+# stale-blob detector to compare Codex's output SHA(s) against current HEAD.
+_SHA_PATTERN = re.compile(r"\b([0-9a-f]{7,40})\b")
 
 CLEAN_PHRASES = (
     "did not identify any discrete",
@@ -54,7 +62,52 @@ ARCH_KEYWORDS = (
     "interface change",
     "breaking change",
 )
-SECURITY_KEYWORDS = (
+# v0.2.2: split SECURITY_KEYWORDS into severe + soft tiers.
+#
+# Severe — auto-HALT regardless of severity rating (P0..P3). These phrases
+# indicate a concrete security vulnerability category.
+SECURITY_KEYWORDS_SEVERE = (
+    "auth bypass",
+    "token leak",
+    "credential leak",
+    "secret leak",
+    "password leak",
+    "timing attack",
+    "constant-time",
+    "injection",
+    "csrf",
+    "xss",
+    "ssrf",
+    "rce",
+    "remote code execution",
+)
+# Severe keywords matched with word boundaries (re.search r"\b<kw>\b"),
+# unlike soft/arch/concurrency keywords which use plain substring `in`.
+# Word boundaries prevent false positives on short tokens — e.g. plain
+# substring "rce" matches "source", "xss" could match unrelated tokens.
+# Longer ARCH keywords like "refactor" intentionally still match
+# "refactoring" via substring; those keywords don't share the false-
+# positive risk.
+
+
+def has_severe_security_match(finding: Finding) -> bool:
+    """Word-boundary check against SECURITY_KEYWORDS_SEVERE.
+
+    See module-level note on why severe keywords use a stricter matcher.
+    """
+    haystack = (finding.summary + " " + finding.detail_text).lower()
+    for kw in SECURITY_KEYWORDS_SEVERE:
+        if re.search(r"\b" + re.escape(kw) + r"\b", haystack):
+            return True
+    return False
+
+
+# Soft — bare mentions of security-adjacent vocabulary that don't
+# necessarily indicate risk. F07 R1 in v0.2.1 was a markdown-rendering
+# bug auto-halted only because the finding mentioned "token". Soft
+# keywords now require P0/P1 severity to escalate to HALT — P2/P3
+# soft-keyword findings fall through to normal fix flow.
+SECURITY_KEYWORDS_SOFT = (
     "security",
     "auth",
     "credential",
@@ -62,12 +115,11 @@ SECURITY_KEYWORDS = (
     "password",
     "secret",
     "hmac",
-    "constant-time",
-    "timing attack",
-    "injection",
-    "csrf",
-    "xss",
 )
+# Back-compat alias for any external callers. The combined tuple keeps
+# the original public name working; the circuit breaker uses the tier
+# constants directly.
+SECURITY_KEYWORDS = SECURITY_KEYWORDS_SEVERE + SECURITY_KEYWORDS_SOFT
 CONCURRENCY_KEYWORDS = (
     "race",
     "concurrent",
@@ -157,12 +209,42 @@ def run_review(
             f"codex review produced no stdout. stderr:\n{completed.stderr}",
         )
     findings, clean = parse_findings(output)
+    _warn_if_stale_blob(cfg, output)
     return ReviewResult(
         clean=clean,
         findings=findings,
         raw_output=output,
         base=base,
         duration_seconds=duration,
+    )
+
+
+def _warn_if_stale_blob(cfg: Config, output: str) -> None:
+    """Log a warning if Codex output mentions a SHA that doesn't match HEAD.
+
+    v0.2.2 workaround for issue #7 (codex stale-blob): Codex CLI has
+    been observed reviewing a stale git blob SHA instead of HEAD (F07
+    i18n fix session 4). True fix needs Codex CLI integration audit
+    (v0.2.3 backlog). For now we surface the discrepancy so the operator
+    can manually verify findings against the current state.
+    """
+    try:
+        head = git_ops.head_sha(cfg)
+    except Exception as exc:  # noqa: BLE001 — best-effort diagnostic
+        log.debug("stale-blob check skipped: head_sha failed (%s)", exc)
+        return
+    matches = {s.lower() for s in _SHA_PATTERN.findall(output)}
+    if not matches:
+        return
+    head_prefix = head[:7].lower()
+    if any(m.startswith(head_prefix) or head_prefix.startswith(m) for m in matches):
+        return
+    log.warning(
+        "codex review: output references SHA(s) %s but current HEAD is %s. "
+        "Possible stale-blob issue — verify findings against current state "
+        "before acting on them (v0.2.3 backlog: pin explicit SHA).",
+        sorted(matches)[:3],
+        head_prefix,
     )
 
 
@@ -247,9 +329,29 @@ def save_review_artifact(
     feature_id: str,
     round_num: int,
 ) -> Path:
-    """Persist raw Codex output for forensic / circuit-breaker reports."""
+    """Persist raw Codex output for forensic / circuit-breaker reports.
+
+    v0.2.2 fix #6: on resume, the loop replays Phase C from round 1 (per
+    v0.2.1 round-counter reset). Writing to ``round-NN.txt`` would clobber
+    the prior-run artifact, losing forensics that explain why the earlier
+    attempt halted. Detect a collision and suffix ``-resumeN`` instead.
+    """
     artifacts_dir = cfg.state_dir / feature_id / "codex"
     artifacts_dir.mkdir(parents=True, exist_ok=True)
-    out_path = artifacts_dir / f"round-{round_num:02d}.txt"
+    base_name = f"round-{round_num:02d}"
+    out_path = artifacts_dir / f"{base_name}.txt"
+    if out_path.exists():
+        n = 1
+        while True:
+            candidate = artifacts_dir / f"{base_name}-resume{n}.txt"
+            if not candidate.exists():
+                out_path = candidate
+                break
+            n += 1
+            if n > 99:
+                raise RuntimeError(
+                    f"Too many resume artifacts for {feature_id} round "
+                    f"{round_num} — manual cleanup needed in {artifacts_dir}.",
+                )
     out_path.write_text(result.raw_output, encoding="utf-8")
     return out_path

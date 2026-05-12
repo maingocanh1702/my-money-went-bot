@@ -58,9 +58,22 @@ class Config:
     claude_bin: str
     state_dir: Path
     base_branch: str = "main"
-    max_review_rounds: int = 3
+    # v0.2.2: raised 3 → 5. Empirical pattern from F07 + v0.2.1 pilots:
+    # each fix commit grows the diff and Codex's next review may surface an
+    # adjacent micro-finding in the newly added code. With max=3 + clean=2
+    # consecutive, shipping is impossible when rounds 1+2 both find. New
+    # defaults (max=5 + confirmation_rounds_after_last_fix=2) allow up to
+    # 3 fix rounds with a 2-round confirmation tail. If still doesn't
+    # converge, the issue is real not stochastic.
+    max_review_rounds: int = 5
     max_local_verify_retries: int = 2
+    # Legacy name kept for back-compat with older state files; semantics
+    # unchanged (used in the no-fixes-yet code path).
     required_clean_rounds_before_merge: int = 2
+    # v0.2.2: minimum clean rounds AFTER the last fix commit before
+    # declaring READY. Decouples "consecutive cleans needed" from "max
+    # total rounds allowed", which was the v0.2.1 / F07 meta-bug.
+    confirmation_rounds_after_last_fix: int = 2
     context_budget_warn_pct: int = 70
     # Severity classification used by circuit breaker / auto-fix routing.
     blocking_severities: tuple[str, ...] = ("P0", "P1", "CRITICAL", "HIGH")
