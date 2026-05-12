@@ -1,0 +1,71 @@
+name: Rebuild dashboard
+
+# Auto-rebuild docs/dashboard.{html,md} so it reflects actual project progress.
+# Triggers (3 layers of coverage):
+#   1. Push to main           — direct edits to tracker or anything else on main
+#   2. Push to feature branch — WIP commits show up as in-progress without merge
+#   3. Hourly cron + manual   — safety net for missed triggers (web UI edits etc.)
+#
+# Always checks out + commits to `main` regardless of trigger branch. The script
+# does `git fetch --all` so it can see origin/* refs for every feature branch
+# and compute realistic local/remote/sync state.
+
+on:
+  push:
+    branches:
+      - main
+      - 'feat/**'
+      - 'infra/**'
+      - 'chore/**'
+      - 'fix/**'
+  schedule:
+    - cron: '0 * * * *'  # Hourly
+  workflow_dispatch:      # Manual trigger from Actions tab
+
+permissions:
+  contents: write
+
+# Cancel in-flight rebuilds when a newer push lands — saves CI minutes.
+concurrency:
+  group: dashboard-rebuild
+  cancel-in-progress: true
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    # Anti-loop: skip if the triggering commit IS itself an auto-rebuild commit.
+    # Cron + workflow_dispatch have no head_commit, so the condition is false → still runs.
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, 'auto-rebuild') }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main              # Always rebuild against main, regardless of trigger branch
+          fetch-depth: 0          # Full history so git-state detection works
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch all branches + tags
+        run: git fetch --all --prune --tags
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Build dashboard
+        run: python scripts/build-dashboard.py
+
+      - name: Commit if outputs changed
+        run: |
+          if [[ -n "$(git status --porcelain docs/dashboard.html docs/dashboard.md)" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add docs/dashboard.html docs/dashboard.md
+            trigger="${GITHUB_EVENT_NAME}"
+            if [[ "$trigger" == "push" ]]; then
+              trigger="${trigger} from ${GITHUB_REF_NAME} (${GITHUB_SHA:0:7})"
+            fi
+            git commit -m "chore(dashboard): auto-rebuild — ${trigger}"
+            git push origin main
+            echo "Pushed dashboard rebuild commit."
+          else
+            echo "Dashboard outputs already in sync — no commit needed."
+          fi
