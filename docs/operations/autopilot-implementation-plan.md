@@ -1,8 +1,8 @@
 # Autopilot Orchestrator — Implementation Plan & Status
 
-> **Version:** v0.1.6 (current; see changelog for revision history)
+> **Version:** v0.2.0 (current; see changelog for revision history)
 > **Ngày tạo:** 2026-05-12
-> **Trạng thái:** Active — pre-pilot blockers being resolved
+> **Trạng thái:** Active — pre-pilot blockers resolved (squash `5a35dcb`); W0.8 migration in flight before F07 pilot
 > **Owner:** Founder (dev)
 > **Mục đích:** Single-page tracker cho hành trình orchestrator từ scaffold (DONE) → first end-to-end auto flow (BLOCKED) → multi-feature production use (FUTURE).
 > **Tham chiếu:**
@@ -491,3 +491,4 @@ This plan is the **single source of truth for orchestrator status** going forwar
 | v0.1.4 | 2026-05-12 | Round 4 consistency tightening: (1) §7 watch list "Phase E: squash-merge succeeds?" → "READY: orchestrator stops before merge?" (Phase E does not run in pilot). (2) §7 step 5 "for now manual confirmation" → "orchestrator MUST stop at READY; if Phase E attempted → ABORT, Blocker #5 wrong" (no more "for now" since Blocker #5 now P0). (3) **Inverted CLI flag default** — was `--no-auto-merge` opt-out with `auto_merge=True` default, now `--auto-merge` opt-in with `auto_merge=False` default (safer for unproven tool). Decision #1 + Blocker #5 + TL;DR + §7 example all aligned. CLI prints warning + refuses if `--auto-merge` passed for P0/P1 risk_tier feature. |
 | v0.1.5 | 2026-05-12 | Round 5 terminology cleanup after safe-default merge inversion: current sections now consistently describe `--auto-merge` as opt-in, default no-merge behavior for pilots, Blockers #1–#5 as pre-pilot requirements, and Phase A→D + READY as the pilot validation target. Historical changelog rows retain prior `--no-auto-merge` wording only as history. |
 | v0.1.6 | 2026-05-12 | Consistency cleanup: header version bumped from v0.1.0 to v0.1.6 current marker; §1.1 Codex parser wording aligned with §1.2 synthetic-fixture-only validation; TL;DR ETA updated to half-day/full-day after Blockers #1–#5; NTH-2 folded into Blocker #1; §1.3 resume wording clarified (happy-path INIT→READY first, HALTED resume still untested). |
+| v0.2.0 | 2026-05-12 | Pre-pilot Blockers #1-#5 resolved via Mode 3 batch autopilot run (squash commit `5a35dcb` on main). 4 rounds of Codex cross-model P1 fixes integrated as regression tests (r1: returncode-guard fallback commit, r2: `--no-verify` so pre-commit-blocked fallback succeeds, r3: exit code 5 for declined `--auto-merge` confirm, r4: P2-only allow-list — malformed/missing risk_tier fails closed). G3 closed to option (b): `display_suffix VARCHAR(8)` column ships in separate `feat/webhook-display-suffix-migration` PR (W0.8) before F07 pilot. 215 tests pass; all hooks green. F07 pilot unblocked once W0.8 migration lands. |
