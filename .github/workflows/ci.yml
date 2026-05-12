@@ -24,9 +24,13 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Install dev dependencies
+      - name: Install runtime + dev dependencies
         run: |
           python -m pip install --upgrade pip
+          # Runtime deps (structlog, httpx, fastapi, sentry-sdk, ...) live in
+          # requirements.txt for Railway nixpacks compatibility (see pyproject.toml comment).
+          # CI must install BOTH requirements.txt + [dev] extras so pytest can import core/markets.
+          pip install -r requirements.txt
           pip install -e ".[dev]"
 
       - name: Pre-commit hooks (ruff, black, mypy, detect-secrets)
