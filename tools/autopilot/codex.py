@@ -23,6 +23,7 @@ from .config import Config
 CLEAN_PHRASES = (
     "did not identify any discrete",
     "did not identify any actionable",
+    "did not identify any introduced defects",
     "did not find any",
     "no actionable regressions",
     "no actionable defects",
@@ -168,20 +169,30 @@ def run_review(
 def parse_findings(output: str) -> tuple[list[Finding], bool]:
     """Parse Codex review stdout into structured Finding list + clean flag.
 
-    Algorithm (verified against Wave 0 captured outputs):
-    1. Locate ``codex`` marker line (start of review section).
+    Algorithm (verified against Wave 0 + F07/W0.8 pilot outputs):
+    1. If ``codex`` marker line present, slice review section starting there
+       (skips preamble + diff dump). Otherwise treat entire output as the
+       review section — Codex CLI v0.130 in subprocess context sometimes
+       emits only the verdict (~900 bytes, no marker, no preamble).
     2. Detect clean by phrase match in review section.
     3. Extract severity-bullet lines + indented detail lines.
     4. Dedupe by (severity, file, line_start, summary[:80]).
+
+    Returns ``(findings, clean)``:
+    - findings non-empty → fix-loop with those findings.
+    - clean True (empty findings) → clean round.
+    - Both empty (findings=[] AND clean=False) → uncertain; caller should
+      halt via PARSER_UNCERTAIN breaker rather than fix-loop blindly.
     """
     lines = output.splitlines()
     codex_markers = [i for i, line in enumerate(lines) if line.strip() == "codex"]
-    if not codex_markers:
-        # No review section detected — defensive: treat as no findings,
-        # but signal abnormal via empty list + clean=False (caller decides).
-        return [], False
+    if codex_markers:
+        review_lines = lines[codex_markers[0] :]
+    else:
+        # Marker absent — Codex CLI v0.130 sometimes emits just the verdict
+        # text without preamble or marker. Fall back to whole-output parsing.
+        review_lines = lines
 
-    review_lines = lines[codex_markers[0] :]
     review_text = "\n".join(review_lines).lower()
 
     if any(phrase in review_text for phrase in CLEAN_PHRASES):
@@ -224,7 +235,10 @@ def parse_findings(output: str) -> tuple[list[Finding], bool]:
         if key not in seen:
             seen.add(key)
             unique.append(f)
-    return unique, len(unique) == 0
+    # If we extracted findings, clean=False. If we extracted nothing AND
+    # no CLEAN_PHRASE matched (checked above), output is uncertain — caller
+    # should halt via PARSER_UNCERTAIN rather than fix-loop blindly.
+    return unique, False
 
 
 def save_review_artifact(

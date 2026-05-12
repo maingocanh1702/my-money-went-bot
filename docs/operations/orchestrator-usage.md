@@ -131,6 +131,32 @@ python -m tools.autopilot resume F-i18n     # continues from saved phase
 
 `resume` reads `state.json`, skips already-completed phases, and re-enters the loop at the next pending phase. Branch state must be intact.
 
+### Resume from HALTED (v0.2.1+)
+
+Since v0.2.1, `state.transition` records `last_active_phase` when going to `HALTED`. On resume the loop re-enters at that phase, clears `halt_reason` / `halt_artifact_path`, and (for Phase C re-entry) resets `current_round` and `consecutive_clean_rounds` so the now-fixed parser gets a clean review cycle.
+
+```bash
+python -m tools.autopilot resume <feature_id>
+```
+
+Pre-v0.2.1 the same call returned a silent no-op when `phase=HALTED` because none of the phase branches matched — the founder had to edit `state.json` by hand.
+
+#### Legacy state.json (predates v0.2.1)
+
+If `state.phase=HALTED` but `last_active_phase` is null (file written by an old orchestrator build), resume halts with `RESUME_AMBIGUOUS`. Edit `state.json` manually:
+
+```json
+{
+  "phase": "VERIFIED",
+  "current_round": 0,
+  "consecutive_clean_rounds": 0,
+  "halt_reason": null,
+  "halt_artifact_path": null
+}
+```
+
+Use the phase the loop was in when it halted (Phase C halts → `VERIFIED`; Phase A/B halts → `INIT`/`CODEGEN` etc.). Then re-run `resume`.
+
 ## Pre-merge gate detail (Phase D)
 
 Auto-merge will NOT proceed unless ALL of these hold:

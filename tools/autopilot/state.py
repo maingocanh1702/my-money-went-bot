@@ -39,6 +39,10 @@ class FeatureState:
     started_at: str = ""
     last_updated_at: str = ""
     initial_head_sha: str = ""
+    # Phase the loop was in when transitioning to HALTED, so ``resume`` can
+    # re-enter at the same phase rather than returning a silent no-op.
+    # Set by ``transition`` when new_phase == "HALTED".
+    last_active_phase: str | None = None
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2, sort_keys=True)
@@ -79,4 +83,8 @@ def load(cfg: Config, feature_id: str) -> FeatureState | None:
 def transition(state: FeatureState, new_phase: str) -> None:
     if new_phase not in PHASE_ORDER:
         raise ValueError(f"unknown phase {new_phase!r}")
+    # Capture the phase we're leaving when going to HALTED so resume can
+    # re-enter at the right place. Don't overwrite when already HALTED.
+    if new_phase == "HALTED" and state.phase != "HALTED":
+        state.last_active_phase = state.phase
     state.phase = new_phase

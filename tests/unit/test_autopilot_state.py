@@ -98,3 +98,69 @@ def test_save_failure_leaves_previous_state_intact(
     assert path.read_text(encoding="utf-8") == original_text
     tmp = path.with_suffix(".json.tmp")
     assert not tmp.exists(), "failed save must clean up its tmp file"
+
+
+# --- last_active_phase / resume-from-HALTED (v0.2.1) ---------------------
+
+
+def test_transition_to_halted_records_last_active_phase() -> None:
+    """Going to HALTED captures the phase we left so resume can re-enter."""
+    s = _seed_state("F99")
+    s.phase = "REVIEWING"
+    state_mod.transition(s, "HALTED")
+    assert s.phase == "HALTED"
+    assert s.last_active_phase == "REVIEWING"
+
+
+def test_transition_non_halted_leaves_last_active_phase_alone() -> None:
+    """Normal forward transitions don't touch last_active_phase."""
+    s = _seed_state("F99")
+    s.phase = "INIT"
+    assert s.last_active_phase is None
+    state_mod.transition(s, "CODEGEN")
+    assert s.phase == "CODEGEN"
+    assert s.last_active_phase is None
+
+
+def test_transition_halted_twice_preserves_first_active_phase() -> None:
+    """Repeated HALTED transitions must not overwrite the originally
+    captured phase (which would lose the resume target)."""
+    s = _seed_state("F99")
+    s.phase = "VERIFIED"
+    state_mod.transition(s, "HALTED")
+    assert s.last_active_phase == "VERIFIED"
+    state_mod.transition(s, "HALTED")  # idempotent
+    assert s.last_active_phase == "VERIFIED"
+
+
+def test_load_state_predating_v0_2_1_defaults_last_active_phase_to_none(
+    tmp_path: Path,
+) -> None:
+    """State files written before v0.2.1 lack last_active_phase. Load must
+    succeed and default the field to None.
+    """
+    cfg = _cfg(tmp_path)
+    path = state_mod.state_path(cfg, "F99")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # Hand-written legacy state.json shape (no last_active_phase key).
+    legacy = """{
+        "feature_id": "F99",
+        "branch": "feat/F99-x",
+        "base_branch": "main",
+        "fe_spec": "docs/features/x.md",
+        "be_spec": "docs/features/BE/x-tech.md",
+        "phase": "HALTED",
+        "current_round": 1,
+        "consecutive_clean_rounds": 0,
+        "fixed_finding_hashes": [],
+        "halt_reason": "FIX_FAILED: ...",
+        "halt_artifact_path": null,
+        "started_at": "2026-05-12T00:00:00+00:00",
+        "last_updated_at": "2026-05-12T00:10:00+00:00",
+        "initial_head_sha": "abc"
+    }"""
+    path.write_text(legacy, encoding="utf-8")
+    loaded = state_mod.load(cfg, "F99")
+    assert loaded is not None
+    assert loaded.phase == "HALTED"
+    assert loaded.last_active_phase is None

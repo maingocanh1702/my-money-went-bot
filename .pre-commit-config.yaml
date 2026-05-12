@@ -62,7 +62,8 @@ repos:
             .*\.lock|
             docs/.*|
             __pycache__/.*|
-            \.secrets\.baseline
+            \.secrets\.baseline|
+            tests/fixtures/codex/.*
           )$
 
   # ── import-linter (enforce ADR-0001 boundary: core ↛ markets) ──
