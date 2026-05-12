@@ -18,6 +18,54 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Pending. Per [BRD-VI v3.1.0](docs/brd-vi.md) Phase 1.
 
+### Added — F-i18n (Wave 1, phase A foundation)
+
+- `i18n/` top-level package per `docs/features/feature-i18n.md` §4 / BE tech §3.1:
+  - `i18n/__init__.py` — `t(locale, key, **kwargs)` helper with fallback chain
+    (target locale → DEFAULT_LOCALE → `[MISSING: key]`) and KeyError-safe
+    `str.format` (missing arg returns raw template, never raises).
+  - `i18n/vi.py` + `i18n/en.py` — seed packs covering all 10 prefixes
+    (`onboard.*`, `cat.*`, `manage.*`, `report.*`, `settings.*`, `upgrade.*`,
+    `payment.*`, `job.*`, `error.*`, `btn.*`) plus `fmt.*` and `lang.*`.
+    Key parity + placeholder parity enforced by tests.
+- `core/locale_svc.py` — channel-agnostic locale auto-detection:
+  - `detect_locale_from_telegram` / `_discord` / `_messenger` (BE tech §3.2).
+  - `CATEGORIES_BY_LOCALE` + `default_categories_for(locale)` — bilingual seed
+    catalog used by onboarding (3 categories × 2 locales).
+  - `fmt_currency(amount, locale)` — VND with `đ` (vi) / `VND` (en) suffix.
+- `.importlinter` — new contract `i18n-is-pure`: top-level `i18n` MUST NOT
+  import from `core` / `markets` / `handlers` (language packs stay data-only).
+- `pyproject.toml` — added `i18n` to `setuptools.packages.find.include` and to
+  `mypy.files` so the new module ships in the wheel + is type-checked strict.
+
+### Changed — F-i18n
+
+- `core/messenger/i18n.py` reduced to a thin compat shim that delegates the
+  legacy `t(key, locale, **params)` signature to the top-level `i18n.t`.
+  Existing call sites (TelegramSender, etc.) keep working unchanged.
+- `tests/unit/test_messenger_i18n.py` + `test_messenger_telegram_mock.py`
+  migrated to the spec's namespaced keys (`onboard.welcome`, `btn.confirm`,
+  `fmt.spent`, …) — old flat keys (`greeting`, `tx_recorded`, `btn_confirm`)
+  retired with the seed pack rewrite.
+
+### Tests — F-i18n
+
+5-category coverage per `docs/operations/wave0-retrospective.md` §4:
+- Happy: vi/en lookups, format args, currency formatting, default categories.
+- Retry/idempotency: detect functions verified idempotent (pure).
+- Missing optional: NULL / empty / whitespace `language_code` → default `vi`;
+  missing format kwargs → raw template; missing key in EN → falls back to VI.
+- Pathological: unknown locale → fallback; unknown key → loud marker;
+  cross-locale placeholder drift detector; non-vi tags (pt/ja/ko/zh/fr/de).
+- Concurrent: N/A — module-level dicts read-only after import; pure stateless
+  functions (documented in test docstrings).
+- Tenant isolation: N/A — phase A introduces zero DB code paths. Will land
+  with F02 cutover when handlers wire `user.locale` through `t()`.
+
+Phase A scope deliberately excludes legacy handler wiring (`handlers/*.py`
+still hardcoded Vietnamese) — that integration lands with F02 per Wave 0
+retro's strangler-fig decision (W0.6 deferred cutover).
+
 ---
 
 ## 2026-05-11 — F01 W0.6: Plugin parsers + SePay webhook + Sheets-migration scaffold (Wave 0)

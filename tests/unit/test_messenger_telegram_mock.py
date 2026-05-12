@@ -38,7 +38,7 @@ async def test_send_calls_telegram_api_with_text_key_and_locale() -> None:
     sender = TelegramSender(bot_token="TEST_TOKEN", http_client=client)
 
     payload: SendPayload = {
-        "text_key": "greeting",
+        "text_key": "onboard.welcome",
         "text_params": {"name": "Alice"},
         "locale": "vi",
     }
@@ -51,7 +51,7 @@ async def test_send_calls_telegram_api_with_text_key_and_locale() -> None:
     body = call_args.kwargs["json"]
     assert url.endswith("/botTEST_TOKEN/sendMessage")
     assert body["chat_id"] == 1042
-    assert body["text"] == "Xin chào, Alice!"
+    assert body["text"] == "Xin chào Alice! 👋 Mình là bot quản lý chi tiêu cá nhân."
     # No parse_mode default
     assert "parse_mode" not in body
 
@@ -66,14 +66,14 @@ async def test_send_renders_abstract_markup_to_inline_keyboard() -> None:
     markup = Markup(
         rows=[
             [
-                Button(label_key="btn_confirm", callback_data="confirm:1"),
-                Button(label_key="btn_cancel", callback_data="cancel:1"),
+                Button(label_key="btn.confirm", callback_data="confirm:1"),
+                Button(label_key="btn.cancel", callback_data="cancel:1"),
             ],
             [Button(label="Help", url="https://example.com/help")],
         ]
     )
     payload: SendPayload = {
-        "text_key": "tx_recorded",
+        "text_key": "fmt.spent",
         "text_params": {"amount": "50,000"},
         "locale": "en",
         "markup": markup,
@@ -88,7 +88,7 @@ async def test_send_renders_abstract_markup_to_inline_keyboard() -> None:
     assert kbd[0][0] == {"text": "✅ Confirm", "callback_data": "confirm:1"}
     assert kbd[0][1] == {"text": "❌ Cancel", "callback_data": "cancel:1"}
     assert kbd[1][0] == {"text": "Help", "url": "https://example.com/help"}
-    assert body["text"] == "Transaction recorded: 50,000."
+    assert body["text"] == "Spent: 50,000"
 
 
 @pytest.mark.usefixtures("chat_id_resolver")
