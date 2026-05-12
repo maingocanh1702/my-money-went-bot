@@ -14,6 +14,52 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed — Autopilot orchestrator v0.2.1 (Codex parser + halt forensics)
+
+- **Codex parser early-return.** `codex.parse_findings` no longer requires
+  a `^codex$` marker line. Codex CLI v0.130 in subprocess context sometimes
+  emits only the verdict (~900 bytes, no preamble, no marker); parser now
+  falls back to whole-output parsing. Caught by F07 pilot 2026-05-12 —
+  round 1 verdict carried a real P2 finding that the old parser missed
+  entirely, sending the loop into an empty-fix → `FIX_FAILED` halt.
+- **Halt-report writer.** `loop._halt` now always writes
+  `.autopilot/state/<feature>/halt-report.md` with state snapshot, recent
+  commits, diffstat, and (when available) Codex review + trigger context.
+  Previously only the Codex circuit-breaker path wrote a forensic file;
+  `CODEGEN_FAILED`, `VERIFY_FAIL`, `FIX_FAILED`, `VERIFY_REGRESSION`,
+  `MAX_ROUNDS`, `MERGE_GATE_FAIL` halts all left `halt_artifact_path` null.
+- **Resume from HALTED.** `state.transition` records `last_active_phase`
+  before going `HALTED`. `loop.run(..., resume=True)` re-enters at that
+  phase, clears `halt_reason` / `halt_artifact_path`, and resets Phase-C
+  round counters. Previously resume on `HALTED` state returned a silent
+  no-op ("Already at HALTED — nothing to do"). Legacy state files without
+  `last_active_phase` halt with `RESUME_AMBIGUOUS` so the founder is
+  prompted to edit `state.json` once.
+
+### Added — Autopilot v0.2.1
+
+- `tests/fixtures/codex/` — 4 real Codex CLI outputs captured from F07
+  (Settings) and W0.8 (webhook display_suffix) pilot runs. Cover both
+  observed CLI shapes: with `codex` marker + preamble + diff dump, and
+  without marker (just the verdict). All future parser tests build on
+  this gold-standard set rather than synthetic fixtures.
+- `CLEAN_PHRASES` expanded with one new phrase observed in real outputs:
+  `"did not identify any introduced defects"`. (An earlier draft also
+  added `"appear internally consistent"` — removed during Codex review
+  round 02 as a P1 false-positive risk: a negated form like "do NOT
+  appear internally consistent" would still substring-match.)
+- `PARSER_UNCERTAIN` circuit-breaker code. Fires when `parse_findings`
+  returns `findings=[], clean=False` (no clean phrase matched AND no
+  findings extracted). Defensive net — primary parser fix should make
+  this rarely fire, but if Codex output format drifts again, the loop
+  halts with a meaningful reason instead of empty-fix → `FIX_FAILED`.
+
+### Removed — Autopilot v0.2.1
+
+- `circuit_breaker.write_halt_report` — folded into `loop._halt` /
+  `loop._write_halt_report` so every halt path produces the same forensic
+  artifact (the previous split caused bug #2 above).
+
 ### Added — Autopilot orchestrator v0.2.0 (pre-pilot blockers)
 
 - `--auto-merge` opt-in flag on `python -m tools.autopilot run`/`resume`

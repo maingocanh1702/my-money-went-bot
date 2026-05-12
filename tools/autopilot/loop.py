@@ -76,7 +76,44 @@ def run(
     existing = state.load(cfg, feature_id)
     if resume and existing is not None:
         feature_state = existing
-        print(f"Resuming {feature_id} from phase {feature_state.phase}")
+        if feature_state.phase == "HALTED":
+            if feature_state.last_active_phase is None:
+                # State predates v0.2.1 — no record of which phase was
+                # interrupted. Founder must edit state.json manually.
+                return _halt(
+                    cfg,
+                    feature_state,
+                    "RESUME_AMBIGUOUS",
+                    "state.phase=HALTED but last_active_phase is unset "
+                    "(state file predates v0.2.1). Edit state.json: set "
+                    "phase to the re-entry phase (VERIFIED for Phase C), "
+                    "current_round=0, consecutive_clean_rounds=0, "
+                    "halt_reason=null, halt_artifact_path=null, then "
+                    "re-run resume.",
+                )
+            print(
+                f"Resuming {feature_id} from HALTED — re-entering at "
+                f"{feature_state.last_active_phase}",
+            )
+            feature_state.phase = feature_state.last_active_phase
+            feature_state.halt_reason = None
+            feature_state.halt_artifact_path = None
+            # Re-entering Phase C: reset round counters so the (now-fixed)
+            # parser gets a clean cycle rather than skipping based on stale
+            # round count.
+            if feature_state.phase in ("VERIFIED", "REVIEWING"):
+                feature_state.current_round = 0
+                feature_state.consecutive_clean_rounds = 0
+            state.save(cfg, feature_state)
+            # Codex v0.2.1 r4 P2: _halt set tracker to HALTED on the way
+            # down; restoration must propagate to tracker too. Without this,
+            # any operational dashboard or follow-up automation keying off
+            # tracker state stays stale at HALTED. Most visible when
+            # last_active_phase=READY — Phase D branch never calls
+            # tracker.update_status itself before returning.
+            tracker.update_status(cfg, feature_id, feature_state.phase)
+        else:
+            print(f"Resuming {feature_id} from phase {feature_state.phase}")
     else:
         if existing is not None and existing.phase not in ("MERGED",):
             print(
@@ -154,6 +191,25 @@ def run(
             print(f"  raw output: {artifact}")
             print(f"  findings: {len(review.findings)} (clean={review.clean})")
 
+            # Defensive: parser returned uncertain state (no clean phrase
+            # AND no findings extracted). Halt with explicit reason rather
+            # than entering fix-loop with empty findings (which would
+            # 0-commit and trip FIX_FAILED with misleading wording).
+            if not review.clean and not review.findings:
+                return _halt(
+                    cfg,
+                    feature_state,
+                    "PARSER_UNCERTAIN",
+                    (
+                        f"Codex output round {feature_state.current_round} "
+                        f"was not recognized as clean and no findings were "
+                        f"extracted. Inspect {artifact} and either expand "
+                        f"CLEAN_PHRASES / SEVERITY_RE in codex.py or fix "
+                        f"Codex output manually."
+                    ),
+                    extra_context={"review": review, "artifact": str(artifact)},
+                )
+
             if review.clean:
                 feature_state.consecutive_clean_rounds += 1
                 state.save(cfg, feature_state)
@@ -166,14 +222,13 @@ def run(
 
             trigger = circuit_breaker.evaluate(review, feature_state, cfg)
             if trigger is not None:
-                halt_path = circuit_breaker.write_halt_report(
+                return _halt(
                     cfg,
                     feature_state,
-                    trigger,
-                    review,
+                    trigger.code,
+                    trigger.description,
+                    extra_context={"review": review, "trigger": trigger},
                 )
-                feature_state.halt_artifact_path = str(halt_path)
-                return _halt(cfg, feature_state, trigger.code, trigger.description)
 
             state.transition(feature_state, "REVIEWING")
             state.save(cfg, feature_state)
@@ -269,9 +324,21 @@ def _halt(
     feature_state: FeatureState,
     code: str,
     detail: str,
+    *,
+    extra_context: dict | None = None,
 ) -> RunOutcome:
+    """Transition state to HALTED, write forensic report, return RunOutcome.
+
+    Always writes ``.autopilot/state/<feature>/halt-report.md`` with state
+    snapshot + recent commits + diffstat. ``extra_context`` may include:
+    - ``review``: ``ReviewResult`` for Phase-C halts (findings + raw artifact)
+    - ``trigger``: ``BreakerTrigger`` when a circuit breaker fired
+    - ``artifact``: path string to raw Codex output (PARSER_UNCERTAIN)
+    """
     feature_state.halt_reason = f"{code}: {detail}"
     state.transition(feature_state, "HALTED")
+    halt_path = _write_halt_report(cfg, feature_state, code, detail, extra_context)
+    feature_state.halt_artifact_path = str(halt_path)
     state.save(cfg, feature_state)
     tracker.update_status(cfg, feature_state.feature_id, "HALTED")
     return RunOutcome(
@@ -281,8 +348,125 @@ def _halt(
         halt_reason=feature_state.halt_reason,
         rounds=feature_state.current_round,
         merge_sha=None,
-        summary=f"HALTED at phase before halt; reason: {feature_state.halt_reason}",
+        summary=(
+            f"HALTED at phase {feature_state.last_active_phase or '<unknown>'}; "
+            f"reason: {feature_state.halt_reason}; report: {halt_path}"
+        ),
     )
+
+
+def _write_halt_report(
+    cfg: Config,
+    feature_state: FeatureState,
+    code: str,
+    detail: str,
+    extra_context: dict | None,
+) -> object:
+    """Build forensic halt-report.md regardless of halt reason."""
+    from pathlib import Path as _Path
+
+    out_dir = cfg.state_dir / feature_state.feature_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / "halt-report.md"
+
+    # Best-effort git context — some halts happen before branch exists.
+    # Use the per-feature base recorded in state, not cfg.base_branch — a
+    # run may have been started against a non-default base, and forensic
+    # output against the wrong target branch misleads resume/debug.
+    base = feature_state.base_branch or cfg.base_branch
+    try:
+        commits = git_ops.commit_log(cfg, base, feature_state.branch)
+    except Exception as e:  # noqa: BLE001 — forensic best-effort
+        commits = [f"(commit_log failed: {e})"]
+    try:
+        diffstat = git_ops.diff_stat(cfg, base, feature_state.branch)
+    except Exception as e:  # noqa: BLE001
+        diffstat = f"(diff_stat failed: {e})"
+
+    # Snapshot from the in-memory state (already mutated: phase=HALTED,
+    # halt_reason set, last_active_phase recorded). Reading state.json from
+    # disk here would embed the stale pre-halt phase since the save happens
+    # AFTER this report is written (so we have a path for halt_artifact_path).
+    state_json_body = feature_state.to_json()
+
+    lines = [
+        f"# HALT — {feature_state.feature_id}",
+        "",
+        f"- Trigger: **{code}**",
+        f"- Detail: {detail}",
+        f"- Phase at halt (last_active_phase): {feature_state.last_active_phase or '<unset>'}",
+        f"- Branch: `{feature_state.branch}`",
+        f"- Base: `{feature_state.base_branch}`",
+        f"- Initial HEAD: `{feature_state.initial_head_sha}`",
+        f"- Halt time: {feature_state.last_updated_at or '<pre-save>'}",
+        "",
+        "## State snapshot",
+        "",
+        "```json",
+        state_json_body.rstrip(),
+        "```",
+        "",
+        "## Recent commits on branch",
+        "",
+        "```",
+        *(commits or ["(no commits)"]),
+        "```",
+        "",
+        "## Diffstat vs base",
+        "",
+        "```",
+        diffstat.rstrip() or "(empty)",
+        "```",
+        "",
+    ]
+
+    review = (extra_context or {}).get("review")
+    trigger = (extra_context or {}).get("trigger")
+    artifact = (extra_context or {}).get("artifact")
+    if review is not None or trigger is not None or artifact is not None:
+        lines += ["## Review context", ""]
+        if trigger is not None:
+            lines += [
+                f"- Trigger code: `{trigger.code}` — {trigger.description}",
+                "",
+                "Trigger detail:",
+                "",
+                "```",
+                (trigger.detail or "(no detail)").rstrip(),
+                "```",
+                "",
+            ]
+        if review is not None:
+            lines += [
+                f"- Findings: {len(review.findings)}",
+                f"- Duration: {review.duration_seconds:.1f}s",
+                f"- Codex base: `{review.base}`",
+                "",
+                "Findings this round:",
+                "",
+            ]
+            for f in review.findings:
+                lines.append(f"- [{f.severity}] {f.summary} (hash {f.hash})")
+                if f.file:
+                    lines.append(f"  Location: {f.file}:{f.line_start}")
+            lines.append("")
+        if artifact:
+            lines += [f"Raw Codex output: `{artifact}`", ""]
+
+    lines += [
+        "## Next steps",
+        "",
+        "1. Inspect this report + state.json + raw artifacts above.",
+        "2. Fix root cause (code, spec, or orchestrator itself).",
+        "3. To resume: see `docs/operations/orchestrator-usage.md` " "§ Resume from HALTED.",
+        f"   Quick path: `python -m tools.autopilot resume {feature_state.feature_id}`",
+        f"   (re-enters at `{feature_state.last_active_phase or '<unset>'}` "
+        f"with Phase-C counters reset).",
+    ]
+
+    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    # _Path return for caller; type kept as `object` to avoid import noise.
+    return _Path(out_path)
 
 
 def _derive_branch(feature_id: str, fe_path) -> str:

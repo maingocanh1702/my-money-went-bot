@@ -1,14 +1,14 @@
 """Circuit breaker conditions — 10 halt triggers per Level 3 template.
 
-When a breaker fires, the loop writes a forensic report at
-``.autopilot/state/<feature>/halt-report.md`` and stops. Founder reads,
-decides path forward, runs ``autopilot resume <feature>`` after fixing.
+When a breaker fires, the loop calls ``loop._halt`` which writes a forensic
+report at ``.autopilot/state/<feature>/halt-report.md`` and stops. Founder
+reads, decides path forward, runs ``autopilot resume <feature>`` after
+fixing. See docs/operations/orchestrator-usage.md § Resume from HALTED.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 
 from .codex import (
     ARCH_KEYWORDS,
@@ -89,65 +89,6 @@ def evaluate(
             )
 
     return None
-
-
-def write_halt_report(
-    cfg: Config,
-    state: FeatureState,
-    trigger: BreakerTrigger,
-    review: ReviewResult | None = None,
-) -> Path:
-    artifacts_dir = cfg.state_dir / state.feature_id
-    artifacts_dir.mkdir(parents=True, exist_ok=True)
-    report_path = artifacts_dir / "halt-report.md"
-
-    lines = [
-        f"# HALT — Level 3 autopilot circuit broken: {trigger.code}",
-        "",
-        f"**Feature:** {state.feature_id}",
-        f"**Branch:** {state.branch}",
-        f"**Phase:** {state.phase}",
-        f"**Round:** {state.current_round} / {cfg.max_review_rounds}",
-        f"**Trigger:** {trigger.code} — {trigger.description}",
-        "",
-        "## Trigger detail",
-        "",
-        trigger.detail or "(no detail)",
-        "",
-    ]
-    if review is not None:
-        lines += [
-            "## Codex round summary",
-            "",
-            f"- Findings: {len(review.findings)}",
-            f"- Duration: {review.duration_seconds:.1f}s",
-            f"- Raw output: {cfg.state_dir / state.feature_id / 'codex' / f'round-{state.current_round:02d}.txt'}",
-            "",
-            "## All findings this round",
-            "",
-        ]
-        for f in review.findings:
-            lines.append(f"- [{f.severity}] {f.summary} (hash {f.hash})")
-            if f.file:
-                lines.append(f"  Location: {f.file}:{f.line_start}")
-    lines += [
-        "",
-        "## Resume instructions",
-        "",
-        "1. Read this report + Codex raw output.",
-        "2. Make founder decision (accept finding's recommendation, override, defer).",
-        "3. Apply fixes manually if needed; commit.",
-        "4. Run `python -m tools.autopilot resume {feature}` to continue from current phase.",
-        f"   (Replace {{feature}} with `{state.feature_id}`.)",
-        "",
-        "## State preserved",
-        "",
-        f"- Branch HEAD: see `git log -1 {state.branch}`",
-        f"- State JSON: {cfg.state_dir / state.feature_id / 'state.json'}",
-        f"- Fixed finding hashes so far: {state.fixed_finding_hashes}",
-    ]
-    report_path.write_text("\n".join(lines), encoding="utf-8")
-    return report_path
 
 
 def _format_finding(f: Finding) -> str:

@@ -1,0 +1,383 @@
+OpenAI Codex v0.130.0
+--------
+workdir: /Users/maingocanh/Projects/MyMoneyWent
+model: gpt-5.3-codex
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: medium
+reasoning summaries: none
+session id: 019e1cfd-f110-76a0-ac3d-7e810fe07880
+--------
+user
+changes against 'main'
+exec
+/bin/zsh -lc 'git diff dae083ccf3c83b84cd47de27d326c119b9673e12' in /Users/maingocanh/Projects/MyMoneyWent
+ succeeded in 0ms:
+diff --git a/.secrets.baseline b/.secrets.baseline
+index f888511..6797810 100644
+--- a/.secrets.baseline
++++ b/.secrets.baseline
+@@ -127,7 +127,7 @@
+         "filename": "CHANGELOG.md",
+         "hashed_secret": "9d4e1e23bd5b727046a9e3b4b7db57bd8d6ee684",
+         "is_verified": false,
+-        "line_number": 356
++        "line_number": 371
+       }
+     ],
+     "google_apps_script.js": [
+@@ -159,5 +159,5 @@
+       }
+     ]
+   },
+-  "generated_at": "2026-05-12T14:59:30Z"
++  "generated_at": "2026-05-12T16:19:39Z"
+ }
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index dd8d765..552c44c 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -118,6 +118,21 @@ Phase A scope deliberately excludes legacy handler wiring (`handlers/*.py`
+ still hardcoded Vietnamese) — that integration lands with F02 per Wave 0
+ retro's strangler-fig decision (W0.6 deferred cutover).
+ 
++### Added — Webhook `display_suffix` (W0.8)
++
++- `webhook_tokens.display_suffix VARCHAR(8)` column (migration 0002).
++  Populated by `mint_token` from `raw_token[-6:]`. Auth path
++  (`resolve_token`) unchanged — suffix is cosmetic-only. Unblocks F07
++  webhook URL display rule (G3 closed, option b).
++- `get_display_suffix(user_id, kind)` read helper in
++  `markets/vn/capture/webhook_tokens.py` for F07 to consume.
++
++### Notes
++
++- Legacy rows (predating migration 0002) have `display_suffix = NULL`;
++  F07 displays without suffix for those — accepted UX trade-off.
++- VARCHAR(8) over CHAR(6) for future-proofing; only 6 chars used today.
++
+ ---
+ 
+ ## 2026-05-11 — F01 W0.6: Plugin parsers + SePay webhook + Sheets-migration scaffold (Wave 0)
+diff --git a/markets/vn/capture/webhook_tokens.py b/markets/vn/capture/webhook_tokens.py
+index 4434807..a62a5c0 100644
+--- a/markets/vn/capture/webhook_tokens.py
++++ b/markets/vn/capture/webhook_tokens.py
+@@ -11,6 +11,9 @@ Public surface:
+     responsible for displaying it; we never reconstruct it).
+   - `resolve_token(raw, kind)` — return owning user_id if the token
+     hash exists and is not revoked; None otherwise.
++  - `get_display_suffix(user_id, kind)` — return the cosmetic tail of
++    the active token (W0.8 / G3 option b) for UI display. May be None
++    for legacy rows minted before migration 0002.
+ """
+ 
+ from __future__ import annotations
+@@ -32,6 +35,23 @@ def hash_token(raw: str) -> str:
+     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+ 
+ 
++def _display_suffix(raw: str) -> str:
++    """Tail 6 chars of the raw token — shown in UI, NEVER used for auth.
++
++    Auth still goes through token_hash. The suffix is purely cosmetic —
++    helps users visually confirm the URL they pasted matches the one
++    rendered in /settings. Length 6 is short enough to display in a
++    bot reply without wrapping; entropy loss is irrelevant (we leak 6/32
++    chars of a random URL-safe string only to the user who owns the token).
++    """
++    if len(raw) < 6:
++        # Defensive: secrets.token_urlsafe(24) always returns >>6 chars,
++        # but if a caller ever shortens the generator, fall back to the
++        # full string rather than raise — column tolerates any <= 8 chars.
++        return raw
++    return raw[-6:]
++
++
+ async def mint_token(user_id: int, kind: TokenKind) -> str:
+     """Mint a fresh token for (user_id, kind); persist its hash; return raw.
+ 
+@@ -42,20 +62,23 @@ async def mint_token(user_id: int, kind: TokenKind) -> str:
+     """
+     raw = secrets.token_urlsafe(24)  # ~32 chars URL-safe
+     token_hash = hash_token(raw)
++    display_suffix = _display_suffix(raw)
+     pool = db.get_pool()
+     async with pool.acquire() as conn:
+         await conn.execute(
+             """
+-            INSERT INTO webhook_tokens (user_id, kind, token_hash)
+-            VALUES ($1, $2, $3)
++            INSERT INTO webhook_tokens (user_id, kind, token_hash, display_suffix)
++            VALUES ($1, $2, $3, $4)
+             ON CONFLICT (user_id, kind) DO UPDATE
+                 SET token_hash = EXCLUDED.token_hash,
++                    display_suffix = EXCLUDED.display_suffix,
+                     revoked_at = NULL,
+                     created_at = NOW();
+             """,
+             user_id,
+             kind,
+             token_hash,
++            display_suffix,
+         )
+     return raw
+ 
+@@ -89,3 +112,22 @@ async def resolve_token(raw: str, kind: TokenKind) -> int | None:
+     if not hmac.compare_digest(row["token_hash"], candidate):
+         return None
+     return cast(int, row["user_id"])
++
++
++async def get_display_suffix(user_id: int, kind: TokenKind) -> str | None:
++    """Return the active token's display_suffix for (user_id, kind), or
++    None if no active row exists (or row predates this migration → NULL)."""
++    pool = db.get_pool()
++    async with pool.acquire() as conn:
++        row = await conn.fetchrow(
++            """
++            SELECT display_suffix
++            FROM webhook_tokens
++            WHERE user_id = $1 AND kind = $2 AND revoked_at IS NULL;
++            """,
++            user_id,
++            kind,
++        )
++    if row is None:
++        return None
++    return cast(str | None, row["display_suffix"])
+diff --git a/migrations/versions/0002_webhook_display_suffix.py b/migrations/versions/0002_webhook_display_suffix.py
+new file mode 100644
+index 0000000..63e8cb2
+--- /dev/null
++++ b/migrations/versions/0002_webhook_display_suffix.py
+@@ -0,0 +1,36 @@
++"""Add `display_suffix` column to `webhook_tokens`.
++
++Gap 3 follow-up — supports F07 UI display rule (W0.8).
++
++Strictly additive: nullable VARCHAR(8) column on `webhook_tokens`. No
++backfill of historical rows — founder accepts that pre-migration tokens
++render in F07 settings UI without a suffix (Auth path is unaffected;
++`resolve_token` still goes through `token_hash`).
++
++VARCHAR(8) (not CHAR(6)) for future-proofing: only 6 chars used today
++(`raw_token[-6:]`), but column tolerates 7–8 if a future kind ever
++wants a longer tail.
++
++Revision ID: 0002
++Revises: 0001
++Create Date: 2026-05-12 00:00:00
++"""
++
++from __future__ import annotations
++
++from collections.abc import Sequence
++
++from alembic import op
++
++revision: str = "0002"
++down_revision: str | None = "0001"
++branch_labels: str | Sequence[str] | None = None
++depends_on: str | Sequence[str] | None = None
++
++
++def upgrade() -> None:
++    op.execute("ALTER TABLE webhook_tokens ADD COLUMN display_suffix VARCHAR(8);")
++
++
++def downgrade() -> None:
++    op.execute("ALTER TABLE webhook_tokens DROP COLUMN display_suffix;")
+diff --git a/tests/integration/test_webhook_display_suffix.py b/tests/integration/test_webhook_display_suffix.py
+new file mode 100644
+index 0000000..af05650
+--- /dev/null
++++ b/tests/integration/test_webhook_display_suffix.py
+@@ -0,0 +1,182 @@
++"""W0.8 — `display_suffix` column on `webhook_tokens` (G3 option b).
++
++5-category coverage matrix:
++
++  1. Happy path        — test_mint_token_populates_display_suffix
++  2. Happy path (idem) — test_regenerate_updates_display_suffix
++  3. Missing-optional  — test_legacy_row_with_null_display_suffix
++  4. Pathological      — test_short_raw_token_does_not_overflow_column
++
++# Category 4 (retry/idempotency): N/A — mint_token's idempotency is
++# already covered by test_regenerate_updates_display_suffix (Category 2);
++# there is no retry surface that the suffix changes.
++
++# Category 5 (concurrent): N/A — UNIQUE(user_id, kind) constraint makes
++# concurrent mint a serialization concern owned by the existing
++# webhook_tokens table tests in test_migrations.py, not specific to the
++# display_suffix column.
++"""
++
++from __future__ import annotations
++
++from collections.abc import AsyncIterator
++
++import asyncpg
++import pytest
++
++from core import db
++from markets.vn.capture.webhook_tokens import (
++    get_display_suffix,
++    hash_token,
++    mint_token,
++    resolve_token,
++)
++
++
++@pytest.fixture
++async def pool(pg_url_async: str, migrated_db: str) -> AsyncIterator[asyncpg.Pool]:
++    _ = migrated_db
++    await db.close_pool()
++    pool = await db.create_pool(pg_url_async, min_size=1, max_size=3)
++    yield pool
++    await db.close_pool()
++
++
++async def _seed_user(pool: asyncpg.Pool, channel_user_id: str) -> int:
++    async with pool.acquire() as conn:
++        return int(
++            await conn.fetchval(
++                """
++                INSERT INTO users (channel_type, channel_user_id, display_name)
++                VALUES ('telegram', $1, 'T') RETURNING id;
++                """,
++                channel_user_id,
++            )
++        )
++
++
++async def _clean(pool: asyncpg.Pool) -> None:
++    async with pool.acquire() as conn:
++        await conn.execute("TRUNCATE users RESTART IDENTITY CASCADE;")
++        await conn.execute("TRUNCATE webhook_tokens RESTART IDENTITY CASCADE;")
++
++
++# ── Category 1: Happy path ────────────────────────────────────────────
++
++
++async def test_mint_token_populates_display_suffix(pool: asyncpg.Pool) -> None:
++    """Happy path: mint_token writes raw[-6:] to display_suffix; reader returns it."""
++    await _clean(pool)
++    uid = await _seed_user(pool, "u-suffix-1")
++
++    raw = await mint_token(uid, kind="sepay")
++
++    async with pool.acquire() as conn:
++        row = await conn.fetchrow(
++            "SELECT display_suffix FROM webhook_tokens WHERE user_id = $1 AND kind = 'sepay';",
++            uid,
++        )
++    assert row is not None
++    assert row["display_suffix"] == raw[-6:]
++
++    assert await get_display_suffix(uid, kind="sepay") == raw[-6:]
++
++
++# ── Category 2: Happy path — regenerate (idempotency / ON CONFLICT) ──
++
++
++async def test_regenerate_updates_display_suffix(pool: asyncpg.Pool) -> None:
++    """Re-minting (user, kind) overwrites display_suffix and keeps single row."""
++    await _clean(pool)
++    uid = await _seed_user(pool, "u-suffix-2")
++
++    raw1 = await mint_token(uid, kind="sepay")
++    suffix1 = raw1[-6:]
++    assert await get_display_suffix(uid, kind="sepay") == suffix1
++
++    raw2 = await mint_token(uid, kind="sepay")
++    suffix2 = raw2[-6:]
++
++    async with pool.acquire() as conn:
++        rows = await conn.fetch(
++            "SELECT display_suffix FROM webhook_tokens WHERE user_id = $1 AND kind = 'sepay';",
++            uid,
++        )
++    assert len(rows) == 1, "ON CONFLICT must keep exactly one row per (user, kind)"
++    assert rows[0]["display_suffix"] == suffix2
++    # token_urlsafe(24) collisions on tail-6 are astronomically unlikely.
++    assert suffix1 != suffix2
++
++    # Old raw token must no longer auth; new one must.
++    assert await resolve_token(raw1, kind="sepay") is None
++    assert await resolve_token(raw2, kind="sepay") == uid
++
++
++# ── Category 3: Missing-optional — legacy NULL row ────────────────────
++
++
++async def test_legacy_row_with_null_display_suffix(pool: asyncpg.Pool) -> None:
++    """Pre-migration rows have display_suffix NULL; auth works, reader returns None."""
++    await _clean(pool)
++    uid = await _seed_user(pool, "u-suffix-3")
++
++    # Simulate a pre-migration row: token_hash present, display_suffix NULL.
++    raw = "legacy-token-pre-migration-0002-xyz"
++    token_hash = hash_token(raw)
++    async with pool.acquire() as conn:
++        await conn.execute(
++            """
++            INSERT INTO webhook_tokens (user_id, kind, token_hash, display_suffix)
++            VALUES ($1, 'sepay', $2, NULL);
++            """,
++            uid,
++            token_hash,
++        )
++
++    # Auth path is unaffected.
++    assert await resolve_token(raw, kind="sepay") == uid
++    # F07 reader must tolerate NULL and return None.
++    assert await get_display_suffix(uid, kind="sepay") is None
++
++
++# ── Pathological — short raw token does not overflow VARCHAR(8) ──────
++
++
++async def test_short_raw_token_does_not_overflow_column(
++    pool: asyncpg.Pool,
++    monkeypatch: pytest.MonkeyPatch,
++) -> None:
++    """If a future caller shortens the generator, _display_suffix falls back
++    to the full raw; VARCHAR(8) tolerates it; mint succeeds."""
++    await _clean(pool)
++    uid = await _seed_user(pool, "u-suffix-4")
++
++    # Force the raw token to be shorter than 6 chars.
++    short_raw = "abcd"  # 4 chars
++    monkeypatch.setattr(
++        "markets.vn.capture.webhook_tokens.secrets.token_urlsafe",
++        lambda _n: short_raw,
++    )
++
++    raw = await mint_token(uid, kind="sepay")
++    assert raw == short_raw
++
++    async with pool.acquire() as conn:
++        row = await conn.fetchrow(
++            "SELECT display_suffix FROM webhook_tokens WHERE user_id = $1 AND kind = 'sepay';",
++            uid,
++        )
++    assert row is not None
++    # Fallback: full raw string when len < 6 (defensive branch in _display_suffix).
++    assert row["display_suffix"] == short_raw
++
++    # Second mint in rapid succession (ON CONFLICT path) — still safe.
++    raw2 = await mint_token(uid, kind="sepay")
++    assert raw2 == short_raw
++    async with pool.acquire() as conn:
++        rows = await conn.fetch(
++            "SELECT display_suffix FROM webhook_tokens WHERE user_id = $1 AND kind = 'sepay';",
++            uid,
++        )
++    assert len(rows) == 1
++    assert rows[0]["display_suffix"] == short_raw
+
+codex
+The changes are additive and internally consistent: the new nullable `display_suffix` column is migrated, populated during token minting, and read through a helper without altering authentication behavior. I did not identify any introduced defects that would likely break existing functionality.
+The changes are additive and internally consistent: the new nullable `display_suffix` column is migrated, populated during token minting, and read through a helper without altering authentication behavior. I did not identify any introduced defects that would likely break existing functionality.

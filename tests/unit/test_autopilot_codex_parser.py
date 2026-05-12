@@ -2,11 +2,25 @@
 
 Fixtures based on real Wave 0 W0.1/W0.6 review output shapes documented in
 docs/prompts/level3-autopilot-template.md (parser pseudocode).
+
+Real-CLI fixtures live in ``tests/fixtures/codex/`` — captured from F07
+(Settings) and W0.8 (webhook display_suffix) pilot runs against Codex CLI
+v0.130. These cover both observed output shapes (with and without
+``codex`` marker line).
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from tools.autopilot.codex import parse_findings
+
+FIXTURES = Path(__file__).parent.parent / "fixtures" / "codex"
+
+
+def _read_fixture(name: str) -> str:
+    return (FIXTURES / name).read_text(encoding="utf-8")
+
 
 CLEAN_OUTPUT = """\
 preamble line
@@ -123,11 +137,80 @@ def test_duplicate_blocks_deduped() -> None:
     assert findings[0].severity == "P1"
 
 
-def test_no_codex_marker_returns_empty_not_clean() -> None:
-    # If output doesn't have a 'codex' marker, treat as abnormal -> not clean.
-    findings, clean = parse_findings("just preamble\nno marker here")
+def test_truly_malformed_returns_uncertain() -> None:
+    """Defensive: garbage input → findings=[], clean=False (uncertain).
+
+    Loop halts via PARSER_UNCERTAIN breaker rather than entering fix-loop
+    with empty findings. Pre-v0.2.1 the parser used the same return value
+    for both "no marker present" and "truly garbage" — now only the latter
+    yields this state.
+    """
+    findings, clean = parse_findings("this is not a codex review at all")
     assert findings == []
     assert clean is False
+
+
+# --- Real-CLI fixture tests (v0.2.1 parser fixes) -------------------------
+
+
+def test_parse_findings_no_marker_extracts_p2_finding() -> None:
+    """F07 round 1: real Codex output, no ``codex`` marker, P2 finding.
+
+    Pre-v0.2.1 the parser early-returned ([], False) and the loop tried
+    to fix-loop with empty findings → 0 commits → FIX_FAILED breaker.
+    Now the parser falls back to whole-output parsing.
+    """
+    findings, clean = parse_findings(
+        _read_fixture("f07-round-01-p2-no-marker.txt"),
+    )
+    assert clean is False
+    assert len(findings) == 1
+    f = findings[0]
+    assert f.severity == "P2"
+    assert "analytics insert" in f.summary.lower()
+    assert f.file is not None and f.file.endswith("settings_svc.py")
+    assert f.line_start == 270
+    assert f.line_end == 279
+
+
+def test_parse_findings_no_marker_detects_clean() -> None:
+    """F07 round 2: real Codex output, no marker, clean verdict.
+
+    Phrase "did not find any concrete, actionable regressions" matches
+    CLEAN_PHRASES even without the marker.
+    """
+    findings, clean = parse_findings(
+        _read_fixture("f07-round-02-clean-no-marker.txt"),
+    )
+    assert clean is True
+    assert findings == []
+
+
+def test_parse_findings_with_marker_still_clean_round_01() -> None:
+    """W0.8 round 1: real Codex output WITH preamble + marker, clean.
+
+    Regression guard — fixing the no-marker bug must not break the
+    existing marker path. Phrase "did not identify any actionable bugs"
+    matches CLEAN_PHRASES.
+    """
+    findings, clean = parse_findings(
+        _read_fixture("w08-round-01-clean-with-marker.txt"),
+    )
+    assert clean is True
+    assert findings == []
+
+
+def test_parse_findings_with_marker_clean_round_02() -> None:
+    """W0.8 round 2: marker + alternative clean phrasing.
+
+    Phrase "did not identify any introduced defects" — newly added to
+    CLEAN_PHRASES in v0.2.1.
+    """
+    findings, clean = parse_findings(
+        _read_fixture("w08-round-02-clean-with-marker.txt"),
+    )
+    assert clean is True
+    assert findings == []
 
 
 def test_finding_hash_is_stable_and_short() -> None:
