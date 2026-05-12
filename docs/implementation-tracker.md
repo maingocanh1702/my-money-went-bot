@@ -66,7 +66,7 @@
 | F05 | Wave 4 | F05 — Reports `/status`, `/today`, `/weekly` | ⬜ | `feat/F05-reports` | 🔒T 🔒X | Pure read; no writes |
 | F07 | Wave 1 | F07 — Settings `/settings` | ⬜ | `feat/F07-settings` | 🔒T 🔒X | Locale + TZ + daily recap toggle |
 | F11a | Wave 1 | F11 — Admin auth framework only (commands defer Phase 6) | ⬜ | `feat/F11a-admin-auth` | 🔒T 🔒X | `ADMIN_IDS` env + decorator; actual `/admin_*` commands ship Phase 6 |
-| F-i18n | Wave 1 | F-i18n — VI/EN locale switcher | ⬜ | `feat/F-i18n` | 🔒X | Stub đã land W0.4; expand to all user-facing strings |
+| F-i18n | Wave 1 | F-i18n — VI/EN locale switcher | ❌ | `feat/F-i18n` | 🔒X | Stub đã land W0.4; expand to all user-facing strings |
 
 **Phase 2 parallel rule:** Max 2 branch active. Recommend pair: `F01+F07` (independent), then `F08+F-i18n`, then `F04→F03` (sequential), then `F05+F11a`.
 
