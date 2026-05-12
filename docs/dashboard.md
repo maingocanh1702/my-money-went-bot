@@ -2,7 +2,7 @@
 
 > **Auto-generated** từ [`implementation-tracker.md`](implementation-tracker.md) bằng `scripts/build-dashboard.py`.
 > KHÔNG edit trực tiếp — sửa tracker rồi rebuild.
-> **Cập nhật:** 2026-05-12 20:51 · **Branch hiện tại:** `main`
+> **Cập nhật:** 2026-05-12 21:07 · **Branch hiện tại:** `main`
 
 Để xem dashboard HTML đẹp hơn: mở [`dashboard.html`](dashboard.html) bằng browser.
 
@@ -11,7 +11,7 @@
 ## Tổng quan
 
 - **MVP progress:** **6%** (2/33 PR merged)
-- **In flight:** 0 PR · **Blocked:** 0 · **Deferred:** 0
+- **In flight:** 1 PR · **Blocked:** 0 · **Deferred:** 0
 - **Target launch:** Tháng 9/2026 (~16 weeks runway)
 
 ## Phase progress
@@ -47,7 +47,7 @@
 | `F04` | Category management (`/manage`) | ⬜ Not started | `feat/F04-category-mgmt` |
 | `F03` | Categorization auto-rules + manual | ⬜ Not started | `feat/F03-categorization` |
 | `F05` | Reports `/status`, `/today`, `/weekly` | ⬜ Not started | `feat/F05-reports` |
-| `F07` | Settings `/settings` | ⬜ Not started | `feat/F07-settings` |
+| `F07` | Settings `/settings` | ⬜ In review | `feat/F07-settings` |
 | `F11a` | F11 — Admin auth framework only (commands defer Phase 6) | ⬜ Not started | `feat/F11a-admin-auth` |
 | `F-i18n` | VI/EN locale switcher | ❌ Blocked | `feat/F-i18n` |
 
@@ -115,6 +115,15 @@ gantt
 ```
 
 ## Đang làm
+
+### F07 — Settings `/settings`
+
+- **Status:** ⬜ In review
+- **Branch:** `feat/F07-settings`
+- **Wave:** Wave 1
+- **Gates:** 🔒T 🔒X
+- **Phase:** Phase 2
+- **Notes:** Locale + TZ + daily recap toggle. W0.8 merged → unblocked.
 
 ### F-i18n — VI/EN locale switcher
 
