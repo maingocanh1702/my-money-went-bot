@@ -6,8 +6,8 @@
 > **Scope:** Reflections after shipping Wave 0 (W0.1 → W0.6 multi-tenant foundation refactor) in ~1 day via Mode 3 autopilot + batch Codex review.
 > **Cross-refs:**
 > - [development-workflow.md](./development-workflow.md) — living workflow doc, updated 4× during Wave 0
-> - [execution-prompt-wave0-autopilot.md](./execution-prompt-wave0-autopilot.md) — autopilot prompt used
-> - [wave0-batch-review.md](../prompts/wave0-batch-review.md) — batch review playbook
+> - [execution-prompt-wave0-autopilot.md](../autopilot/prompts/execution-prompt-wave0-autopilot.md) — autopilot prompt used
+> - [wave0-batch-review.md](../autopilot/prompts/wave0-batch-review.md) — batch review playbook
 
 ---
 
