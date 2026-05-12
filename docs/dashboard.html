@@ -141,24 +141,24 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
 
 <div class="page-head">
   <h1>MyMoneyWent — progress dashboard</h1>
-  <p class="meta">Updated 2026-05-12 19:51 · <code>feat/F07-settings</code></p>
+  <p class="meta">Updated 2026-05-13 03:44 · <code>feat/dashboard-realtime</code></p>
 </div>
 
 <div class="hero">
-<div class="hero-current empty">
-  <span class="dot not-started"></span>
+<div class="hero-current">
+  <span class="dot ready"></span>
   <div class="hero-text">
     <p class="hero-label">Đang làm</p>
-    <p class="hero-title">Không có PR active</p>
-    <p class="hero-sub">Pick task từ Next strip phía dưới</p>
+    <p class="hero-title">W0.7 · Public `request_id` helpers + F02 xfail contract pin</p>
+    <p class="hero-sub">Ready to merge · chore/W0.7-tenant-context-public-api</p>
   </div>
 </div>
 <div class="hero-kpis">
-  <div class="kpi"><p class="kpi-val">6%</p><p class="kpi-lbl">MVP</p><p class="kpi-sub">2/33</p></div>
-  <div class="kpi"><p class="kpi-val">40%</p><p class="kpi-lbl">Phase 1</p><p class="kpi-sub">2/5</p></div>
-  <div class="kpi"><p class="kpi-val">0</p><p class="kpi-lbl">In flight</p></div>
-  <div class="kpi alert"><p class="kpi-val">2</p><p class="kpi-lbl">Blocked</p></div>
-  <div class="kpi alert"><p class="kpi-val">↑19</p><p class="kpi-lbl">Unpushed</p><p class="kpi-sub">1 PR</p></div>
+  <div class="kpi"><p class="kpi-val">0%</p><p class="kpi-lbl">MVP</p><p class="kpi-sub">0/33</p></div>
+  <div class="kpi"><p class="kpi-val">0%</p><p class="kpi-lbl">Phase 1</p><p class="kpi-sub">0/5</p></div>
+  <div class="kpi"><p class="kpi-val">2</p><p class="kpi-lbl">In flight</p></div>
+  <div class="kpi alert"><p class="kpi-val">1</p><p class="kpi-lbl">Blocked</p></div>
+  <div class="kpi alert"><p class="kpi-val">↑23</p><p class="kpi-lbl">Unpushed</p><p class="kpi-sub">1 PR</p></div>
   <div class="kpi"><p class="kpi-val">↓0</p><p class="kpi-lbl">Unpulled</p><p class="kpi-sub">0 PR</p></div>
 </div>
 </div>
@@ -166,6 +166,10 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
 <div class="next-strip">
   <span class="next-label">Next</span>
   <span class="next-chip">
+  <span class="dot not-started"></span>
+  <span class="pr-id">W0.8</span>
+  Webhook `display_suffix VARCHAR(8)` mi…
+</span><span class="next-chip">
   <span class="dot not-started"></span>
   <span class="pr-id">W1.1</span>
   Docker Compose dev + prod
@@ -177,21 +181,25 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <span class="dot not-started"></span>
   <span class="pr-id">W1.3</span>
   Phase 1 integration smoke
-</span><span class="next-chip">
-  <span class="dot not-started"></span>
-  <span class="pr-id">F-onboarding</span>
-  F01 — `/start` + user create + trial a…
 </span>
 </div>
 
 <div class="board">
-<div class="phase-card">
+<div class="phase-card active">
   <div class="phase-card-head">
     <p class="phase-card-name">Phase 1</p>
-    <span class="phase-card-meta">2/5 · 40%</span>
+    <span class="phase-card-meta">0/5 · 0%</span>
   </div>
-  <div class="phase-card-bar"><div class="" style="width:40%;"></div></div>
-  <div class="phase-prs"><div class="pr-row not-started" title="Not started · infra/W1.1-docker-compose">
+  <div class="phase-card-bar"><div class="zero" style="width:0%;"></div></div>
+  <div class="phase-prs"><div class="pr-row ready" title="Ready to merge · chore/W0.7-tenant-context-public-api">
+  <span class="dot ready"></span>
+  <span class="pr-id">W0.7</span>
+  <span class="pr-name"><span class="pr-name-text">Public `request_id` helpers + F02 xfail contract pin</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/webhook-display-suffix-migration">
+  <span class="dot not-started"></span>
+  <span class="pr-id">W0.8</span>
+  <span class="pr-name"><span class="pr-name-text">Webhook `display_suffix VARCHAR(8)` migration (G3 option b)</span></span>
+</div><div class="pr-row not-started" title="Not started · infra/W1.1-docker-compose">
   <span class="dot not-started"></span>
   <span class="pr-id">W1.1</span>
   <span class="pr-name"><span class="pr-name-text">Docker Compose dev + prod</span></span>
@@ -203,14 +211,6 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <span class="dot not-started"></span>
   <span class="pr-id">W1.3</span>
   <span class="pr-name"><span class="pr-name-text">Phase 1 integration smoke</span></span>
-</div><div class="pr-row merged" title="Merged · chore/W0.7-tenant-context-public-api">
-  <span class="dot merged"></span>
-  <span class="pr-id">W0.7</span>
-  <span class="pr-name"><span class="pr-name-text">Public `request_id` helpers + F02 xfail contract pin</span></span>
-</div><div class="pr-row merged" title="Merged · feat/webhook-display-suffix-migration">
-  <span class="dot merged"></span>
-  <span class="pr-id">W0.8</span>
-  <span class="pr-name"><span class="pr-name-text">Webhook `display_suffix VARCHAR(8)` migration (G3 option b)</span></span>
 </div></div>
 </div><div class="phase-card active">
   <div class="phase-card-head">
@@ -218,14 +218,14 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
     <span class="phase-card-meta">0/9 · 0%</span>
   </div>
   <div class="phase-card-bar"><div class="zero" style="width:0%;"></div></div>
-  <div class="phase-prs"><div class="pr-row blocked" title="Blocked · feat/F-i18n">
+  <div class="phase-prs"><div class="pr-row in-review" title="In review · feat/F07-settings · local: in-review">
+  <span class="dot in-review"></span>
+  <span class="pr-id">F07</span>
+  <span class="pr-name"><span class="pr-name-text">Settings `/settings`</span><span class="sync-badge unpushed" title="23 commits chưa push lên origin">↑23</span></span>
+</div><div class="pr-row blocked" title="Blocked · feat/F-i18n">
   <span class="dot blocked"></span>
   <span class="pr-id">F-i18n</span>
   <span class="pr-name"><span class="pr-name-text">VI/EN locale switcher</span></span>
-</div><div class="pr-row blocked current" title="Blocked · feat/F07-settings · local: in-review">
-  <span class="dot blocked"></span>
-  <span class="pr-id">F07</span>
-  <span class="pr-name"><span class="pr-name-text">Settings `/settings`</span><span class="sync-badge unpushed" title="19 commits chưa push lên origin">↑19</span></span>
 </div><div class="pr-row not-started" title="Not started · feat/F01-onboarding-start">
   <span class="dot not-started"></span>
   <span class="pr-id">F-onboarding</span>
