@@ -59,13 +59,26 @@ spec → [LINT] → [PREFLIGHT] → [A: codegen] → [B: verify] → [C: review/
 ```bash
 python -m tools.autopilot lint <feature_id>
 python -m tools.autopilot preflight
-python -m tools.autopilot run <feature_id>
-python -m tools.autopilot resume <feature_id>
+python -m tools.autopilot run <feature_id> [--auto-merge]
+python -m tools.autopilot resume <feature_id> [--auto-merge]
 python -m tools.autopilot status <feature_id>
 python -m tools.autopilot abort <feature_id>
 ```
 
-Exit codes: `0` success, `1` lint/verify fail, `2` preflight fail, `3` circuit broken, `4` bad args.
+Exit codes: `0` success, `1` verify fail, `2` preflight fail, `3` circuit broken, `4` bad args (or `--auto-merge` mechanically refused for P0/P1 spec), `5` user declined `--auto-merge` confirmation prompt.
+
+### `--auto-merge` flag (Blocker #5, plan v0.1.6 §2)
+
+**Default behavior (NO `--auto-merge` flag) is safe-by-default.** The orchestrator stops at the `READY` phase, writes `.autopilot/state/<feature>/ready-report.md`, and exits 0. Founder reviews the diff and squash-merges manually per the report's "Suggested merge" block. Phase E is never invoked.
+
+Pass `--auto-merge` to enable Phase E auto squash-merge. The CLI:
+
+1. Looks up the feature's `risk_tier` in its `<!-- autopilot:meta -->` block.
+2. If `risk_tier ∈ {P0, P1}` (or meta block missing — treated as P1) → prints an error and exits with code 4. Plan §6.5 forbids auto-merge for P0/P1 regardless of pilot maturity.
+3. If `risk_tier == P2` → prints a warning and prompts for `y/N` confirmation on stdin. Aborts on anything other than `y`/`yes`.
+4. Only after that gate does the loop reach `merge.attempt_merge`.
+
+**For the first 3 pilots (F07 included): NEVER pass `--auto-merge`.** The READY behavior is the validated pilot path.
 
 ## Spec requirements (what `lint` checks)
 

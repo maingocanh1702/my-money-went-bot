@@ -42,11 +42,22 @@ class RunOutcome:
     summary: str
 
 
-def run(cfg: Config, feature_id: str, *, resume: bool = False) -> RunOutcome:
-    """Execute the full A→E pipeline for one feature.
+def run(
+    cfg: Config,
+    feature_id: str,
+    *,
+    resume: bool = False,
+    auto_merge: bool = False,
+) -> RunOutcome:
+    """Execute the A→E pipeline for one feature.
 
     If ``resume=True`` and a state file exists, continue from the recorded phase.
     Otherwise start fresh from preflight.
+
+    ``auto_merge`` (default False per Blocker #5 / plan v0.1.6): when False the
+    loop stops at READY and writes a manual-merge report; Phase E is never
+    invoked. When True (CLI opt-in via ``--auto-merge``) the loop proceeds to
+    Phase E and calls ``merge.attempt_merge``.
     """
     # Lint spec FIRST — fail loud before any code is touched.
     lint = spec_lint.lint(cfg, feature_id)
@@ -206,8 +217,19 @@ def run(cfg: Config, feature_id: str, *, resume: bool = False) -> RunOutcome:
         state.save(cfg, feature_state)
         tracker.update_status(cfg, feature_id, "READY")
 
-    # --- Phase D + E: MERGE ---
+    # --- Phase D + E: MERGE (only when --auto-merge passed) ---
     if feature_state.phase in ("READY",):
+        if not auto_merge:
+            report_path = _write_ready_report(cfg, feature_state)
+            return RunOutcome(
+                feature_id=feature_id,
+                final_phase="READY",
+                halted=False,
+                halt_reason=None,
+                rounds=feature_state.current_round,
+                merge_sha=None,
+                summary=_ready_summary(feature_state, report_path),
+            )
         title = _extract_feature_title(feature_state.fe_spec)
         merge_report = merge.attempt_merge(cfg, feature_state, title)
         print(merge_report.render())
@@ -285,6 +307,80 @@ def _path(maybe_str: str):
     from pathlib import Path as _Path
 
     return _Path(maybe_str)
+
+
+def _write_ready_report(cfg: Config, state_obj: FeatureState) -> object:
+    """Write .autopilot/state/<feature>/ready-report.md for manual-merge pilot.
+
+    Contains: branch name, commits ahead of base, diffstat, dry-run merge
+    outcome, suggested squash command, post-merge smoke checklist. Founder
+    reviews this + diff before manually squash-merging.
+    """
+    from pathlib import Path as _Path
+
+    out_dir = cfg.state_dir / state_obj.feature_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / "ready-report.md"
+
+    commits = git_ops.commit_log(cfg, cfg.base_branch, state_obj.branch)
+    diffstat = git_ops.diff_stat(cfg, cfg.base_branch, state_obj.branch)
+    title = _extract_feature_title(state_obj.fe_spec)
+    fe_short = _Path(state_obj.fe_spec).stem
+
+    body = [
+        f"# Ready for manual merge — {state_obj.feature_id}",
+        "",
+        f"- Branch: `{state_obj.branch}`",
+        f"- Base: `{cfg.base_branch}`",
+        f"- Commits ahead: {len(commits)}",
+        f"- Codex rounds: {state_obj.current_round}",
+        f"- Started: {state_obj.started_at}",
+        f"- Spec: `{fe_short}.md`",
+        "",
+        "## Commits",
+        "",
+        "```",
+        *commits,
+        "```",
+        "",
+        "## Diffstat",
+        "",
+        "```",
+        diffstat.rstrip(),
+        "```",
+        "",
+        "## Suggested merge",
+        "",
+        "```bash",
+        f"git checkout {cfg.base_branch}",
+        f"git merge --squash {state_obj.branch}",
+        f'git commit -m "{state_obj.feature_id}: {title}"',
+        f"git branch -D {state_obj.branch}",
+        "```",
+        "",
+        "## Post-merge smoke checklist (mandatory for first 3 pilots)",
+        "",
+        "- [ ] App boots with new schema (alembic upgrade head locally)",
+        "- [ ] Feature-specific manual smoke (see FE spec acceptance criteria)",
+        "- [ ] No regression on adjacent commands",
+        "- [ ] Sentry clean for 1h IF deployed; otherwise N/A",
+        "",
+        "Per plan v0.1.6 §7.0 FULL tier ends with founder manual squash —",
+        "this is by design (Decision #1 + Blocker #5), not a partial pilot.",
+    ]
+    out_path.write_text("\n".join(body) + "\n", encoding="utf-8")
+    return out_path
+
+
+def _ready_summary(state_obj: FeatureState, report_path: object) -> str:
+    return (
+        f"FEATURE READY FOR MANUAL MERGE: {state_obj.feature_id}\n"
+        f"  Branch: {state_obj.branch}\n"
+        f"  Codex rounds: {state_obj.current_round}\n"
+        f"  Report: {report_path}\n"
+        f"  Next: review diff, then squash-merge per ready-report.md.\n"
+        f"  (Auto-merge is OFF — pass --auto-merge to enable, P2 only.)\n"
+    )
 
 
 def _final_report(state_obj: FeatureState, merge_report) -> str:
