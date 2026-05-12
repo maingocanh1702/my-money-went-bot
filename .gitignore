@@ -33,3 +33,6 @@ Thumbs.db
 *.log
 HOW_IT_WORKS.md
 docs/tasks/
+
+# Autopilot orchestrator state (per-feature checkpoints + Codex artifacts)
+.autopilot/

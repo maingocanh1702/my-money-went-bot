@@ -13,6 +13,7 @@ root_packages =
     core
     markets
     handlers
+    i18n
 
 [importlinter:contract:core-must-not-import-markets]
 name = core MUST NOT import from markets (ADR-0001)
@@ -50,3 +51,15 @@ source_modules =
 forbidden_modules =
     core.db
     core.messenger
+
+# i18n language packs are pure data — must not pull in app deps.
+# Keeps imports fast and the module safe to load at any startup point.
+[importlinter:contract:i18n-is-pure]
+name = i18n MUST NOT import core / markets / handlers
+type = forbidden
+source_modules =
+    i18n
+forbidden_modules =
+    core
+    markets
+    handlers
