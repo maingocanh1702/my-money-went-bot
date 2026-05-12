@@ -2,7 +2,7 @@
 
 > **Auto-generated** từ [`implementation-tracker.md`](implementation-tracker.md) bằng `scripts/build-dashboard.py`.
 > KHÔNG edit trực tiếp — sửa tracker rồi rebuild.
-> **Cập nhật:** 2026-05-13 03:44 · **Branch hiện tại:** `feat/dashboard-realtime`
+> **Cập nhật:** 2026-05-12 20:51 · **Branch hiện tại:** `main`
 
 Để xem dashboard HTML đẹp hơn: mở [`dashboard.html`](dashboard.html) bằng browser.
 
@@ -10,15 +10,15 @@
 
 ## Tổng quan
 
-- **MVP progress:** **0%** (0/33 PR merged)
-- **In flight:** 2 PR · **Blocked:** 2 · **Deferred:** 0
+- **MVP progress:** **6%** (2/33 PR merged)
+- **In flight:** 0 PR · **Blocked:** 0 · **Deferred:** 0
 - **Target launch:** Tháng 9/2026 (~16 weeks runway)
 
 ## Phase progress
 
 | Phase | Merged / Total | % | Progress |
 |-------|:--------------:|:-:|:---------|
-| Phase 1 | 0 / 5 | 0% | `░░░░░░░░░░` |
+| Phase 1 | 2 / 5 | 40% | `████░░░░░░` |
 | Phase 2 | 0 / 9 | 0% | `░░░░░░░░░░` |
 | Phase 3 | 0 / 1 | 0% | `░░░░░░░░░░` |
 | Phase 4 | 0 / 2 | 0% | `░░░░░░░░░░` |
@@ -27,12 +27,12 @@
 
 ## Phase breakdown — features & tasks
 
-### Phase 1 — 0/5 · 0% `░░░░░░░░░░`
+### Phase 1 — 2/5 · 40% `████░░░░░░`
 
 | PR | Feature | Status | Branch |
 |----|---------|:------:|--------|
-| `W0.7` | Public `request_id` helpers + F02 xfail contract pin | 🟢 Ready to merge | `chore/W0.7-tenant-context-public-api` |
-| `W0.8` | Webhook `display_suffix VARCHAR(8)` migration (G3 option b) | ⬜ Not started | `feat/webhook-display-suffix-migration` |
+| `W0.7` | Public `request_id` helpers + F02 xfail contract pin | ✅ Merged | `chore/W0.7-tenant-context-public-api` |
+| `W0.8` | Webhook `display_suffix VARCHAR(8)` migration (G3 option b) | ✅ Merged | `feat/webhook-display-suffix-migration` |
 | `W1.1` | Docker Compose dev + prod | ⬜ Not started | `infra/W1.1-docker-compose` |
 | `W1.2` | Discord adapter (`core/messenger/discord.py`) | ⬜ Not started | `feat/W1.2-discord-adapter` |
 | `W1.3` | Phase 1 integration smoke | ⬜ Not started | `chore/W1.3-phase1-smoke` |
@@ -47,7 +47,7 @@
 | `F04` | Category management (`/manage`) | ⬜ Not started | `feat/F04-category-mgmt` |
 | `F03` | Categorization auto-rules + manual | ⬜ Not started | `feat/F03-categorization` |
 | `F05` | Reports `/status`, `/today`, `/weekly` | ⬜ Not started | `feat/F05-reports` |
-| `F07` | Settings `/settings` | ⬜ In review | `feat/F07-settings` |
+| `F07` | Settings `/settings` | ⬜ Not started | `feat/F07-settings` |
 | `F11a` | F11 — Admin auth framework only (commands defer Phase 6) | ⬜ Not started | `feat/F11a-admin-auth` |
 | `F-i18n` | VI/EN locale switcher | ❌ Blocked | `feat/F-i18n` |
 
@@ -101,7 +101,7 @@ gantt
     dateFormat YYYY-MM-DD
     axisFormat %b
     section Phase 1
-    P1 (0%) : active, 2026-05-05, 2026-05-22
+    P1 (40%) : active, 2026-05-05, 2026-05-22
     section Phase 2
     P2 (0%) : active, 2026-05-22, 2026-06-15
     section Phase 3
@@ -116,24 +116,6 @@ gantt
 
 ## Đang làm
 
-### W0.7 — Public `request_id` helpers + F02 xfail contract pin
-
-- **Status:** 🟢 Ready to merge
-- **Branch:** `chore/W0.7-tenant-context-public-api`
-- **Wave:** Wave 0 follow-up
-- **Gates:** 🔒T 🔒X
-- **Phase:** Phase 1
-- **Notes:** Code done 2026-05-12 (uncommitted in working tree). `core/tenant_context.set_request_id/reset_request_id` + middleware refactor + xfail strict pin on `funding_source_id` contract. Branch + commit per `wave0-retrospective.md` post-W0 section.
-
-### F07 — Settings `/settings`
-
-- **Status:** ⬜ In review
-- **Branch:** `feat/F07-settings`
-- **Wave:** Wave 1
-- **Gates:** 🔒T 🔒X
-- **Phase:** Phase 2
-- **Notes:** Locale + TZ + daily recap toggle. **Blocked on W0.8** (`display_suffix` migration) — G3 closed to option (b), suffix display rule depends on column landing first.
-
 ### F-i18n — VI/EN locale switcher
 
 - **Status:** ❌ Blocked
@@ -147,11 +129,11 @@ gantt
 
 | PR | Feature | Phase | Status |
 |----|---------|-------|--------|
-| `W0.8` | Webhook `display_suffix VARCHAR(8)` migration (G3 option b) | Phase 1 | ⬜ Not started |
 | `W1.1` | Docker Compose dev + prod | Phase 1 | ⬜ Not started |
 | `W1.2` | Discord adapter (`core/messenger/discord.py`) | Phase 1 | ⬜ Not started |
 | `W1.3` | Phase 1 integration smoke | Phase 1 | ⬜ Not started |
 | `F-onboarding` | F01 — `/start` + user create + trial assign | Phase 2 | ⬜ Not started |
+| `F08` | F08 — Funding sources resolver + handlers | Phase 2 | ⬜ Not started |
 
 ---
 
