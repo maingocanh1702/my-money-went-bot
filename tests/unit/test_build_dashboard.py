@@ -315,3 +315,77 @@ def test_enrich_populates_split_slugs_when_local_and_remote_diverge(bd: Any) -> 
     assert pr.remote_slug == "in-progress"
     assert pr.status_slug == "in-review"  # higher rank wins for primary
     assert pr.unpushed == 3
+
+
+# ─── Phase 3: live-poll JS injection ─────────────────────────────────────────
+
+
+def test_detect_repo_slug_https(bd: Any) -> None:
+    """HTTPS origin URL parses to `owner/repo` slug."""
+    with patch.object(
+        bd, "_git", return_value=(0, "https://github.com/maingocanh1702/MyMoneyWent.git")
+    ):
+        assert bd._detect_repo_slug() == "maingocanh1702/MyMoneyWent"
+
+
+def test_detect_repo_slug_ssh(bd: Any) -> None:
+    """SSH origin URL parses to `owner/repo` slug."""
+    with patch.object(
+        bd, "_git", return_value=(0, "git@github.com:maingocanh1702/MyMoneyWent.git")
+    ):
+        assert bd._detect_repo_slug() == "maingocanh1702/MyMoneyWent"
+
+
+def test_detect_repo_slug_no_origin(bd: Any) -> None:
+    """No origin → None (caller falls back to default)."""
+    with patch.object(bd, "_git", return_value=(1, "")):
+        assert bd._detect_repo_slug() is None
+
+
+def test_detect_repo_slug_non_github(bd: Any) -> None:
+    """Non-GitHub URL (gitlab, bitbucket, self-hosted) → None."""
+    with patch.object(bd, "_git", return_value=(0, "https://gitlab.com/foo/bar.git")):
+        assert bd._detect_repo_slug() is None
+
+
+def test_render_html_contains_live_indicator(bd: Any) -> None:
+    """Rendered HTML must contain the live-indicator element + initial state."""
+    html_out = bd.render_html(
+        prs=[], stats=[], mvp=None, active=[], in_flight=[], upcoming=[], branch=None
+    )
+    assert 'id="live-indicator"' in html_out
+    assert 'class="live-indicator init"' in html_out
+
+
+def test_render_html_contains_live_js(bd: Any) -> None:
+    """Rendered HTML must contain the live-poll script with REPO bound + GitHub API URL."""
+    html_out = bd.render_html(
+        prs=[], stats=[], mvp=None, active=[], in_flight=[], upcoming=[], branch=None
+    )
+    # Script tag present
+    assert "<script>" in html_out and "</script>" in html_out
+    # GitHub API endpoint hard-coded for SHA polling
+    assert "api.github.com/repos/" in html_out
+    # Raw content URL for dashboard refresh
+    assert "raw.githubusercontent.com" in html_out
+    # REPO placeholder substituted (not literal __REPO__)
+    assert "__REPO__" not in html_out
+
+
+def test_render_html_live_js_uses_detected_slug(bd: Any) -> None:
+    """If git origin is detected, the slug is injected into the JS."""
+    with patch.object(bd, "_detect_repo_slug", return_value="acme/widget"):
+        html_out = bd.render_html(
+            prs=[], stats=[], mvp=None, active=[], in_flight=[], upcoming=[], branch=None
+        )
+    assert "acme/widget" in html_out
+
+
+def test_render_html_live_js_falls_back_to_default(bd: Any) -> None:
+    """If detection returns None, fallback to default slug (no broken JS)."""
+    with patch.object(bd, "_detect_repo_slug", return_value=None):
+        html_out = bd.render_html(
+            prs=[], stats=[], mvp=None, active=[], in_flight=[], upcoming=[], branch=None
+        )
+    # Default fallback slug used
+    assert "maingocanh1702/MyMoneyWent" in html_out
