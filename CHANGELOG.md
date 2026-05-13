@@ -14,6 +14,53 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed — Autopilot orchestrator v0.2.3 (keyword word-boundary)
+
+- **`CONCURRENCY_KEYWORDS`, `ARCH_KEYWORDS`, `SECURITY_KEYWORDS_SOFT`
+  now use compiled regex with `\b` word boundaries** — mirrors the
+  `SECURITY_KEYWORDS_SEVERE` pattern v0.2.2 R4 already established.
+  Closes the gap that caused F07 phase B halt 2026-05-13: Codex
+  finding "Move serialization inside the guarded block" had `"lock"`
+  substring inside `"block"`, tripping `CONCURRENCY_FINDING` circuit
+  breaker. Same root-cause class as v0.2.2 R2's "rce" in "force"
+  false positive.
+- **`"lock"` keyword uses compound regex
+  `\b(?:dead|live)?lock(?:s|ing|ed)?\b`** — matches
+  `lock`/`locks`/`locking`/`locked`/`deadlock`/`livelock` variants
+  WITHOUT false-matching `block`/`blocker`/`blocking`/`padlock`/
+  `lockstep`/`wedlock`. The `"lock"` substring is unusually
+  false-positive-prone because so many unrelated English compounds
+  contain it.
+- **`Finding.matches_keywords` signature changed.** New type:
+  `tuple[re.Pattern[str], ...]` (compiled regex). Existing call sites
+  (`circuit_breaker.evaluate`) pass the module-level keyword tuples
+  directly — no callsite changes needed. The public
+  `SECURITY_KEYWORDS = SECURITY_KEYWORDS_SEVERE + SECURITY_KEYWORDS_SOFT`
+  alias remains a tuple, now of compiled patterns.
+- **Morphology-friendly ARCH keywords:** `refactor` and `redesign` use
+  a non-capturing suffix group so `"refactoring"` / `"redesigned"` /
+  etc. still match (preserves substring-era behaviour those words
+  relied on; their false-positive risk is negligible compared to
+  short tokens like `"lock"`).
+
+### Notes — v0.2.4 backlog (cumulative deferrals)
+
+- R6 P2 halt-message label diagnostic (cosmetic — `MAX_ROUNDS` halt
+  message always cites `confirmation_rounds_after_last_fix` even when
+  the legacy gate fired).
+- Budget-semantics knob split: explicit `max_fix_rounds` +
+  `confirmation_rounds_after_last_fix` (currently overloaded onto
+  `max_review_rounds`).
+- Halt-report directory writes clobber on rerun — mirror codex
+  artifact `-resume{N}` naming.
+- Codex CLI stale-blob true fix (pin explicit SHA in `codex review`
+  invocation, verify resolved blob).
+- `.autopilot/locks/<repo-hash>.lock` advisory file lock for
+  concurrent-session safety (currently doc-only policy).
+- Dashboard auto-rebuild scheduler races with founder pushes —
+  observed during v0.2.2 and v0.2.3 ship cycles (push rejected;
+  founder rebases manually).
+
 ### Fixed — Autopilot orchestrator v0.2.2 (tooling hardening)
 
 - **`max_review_rounds` default raised 3 → 5; new

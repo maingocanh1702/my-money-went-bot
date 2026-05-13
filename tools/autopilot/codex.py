@@ -51,55 +51,59 @@ SEVERITY_NORMALIZE = {
 SEVERITY_RANK = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
 
 # Keywords used by circuit_breaker.py to flag arch / security findings.
-ARCH_KEYWORDS = (
-    "schema",
-    "design",
-    "scope",
-    "architecture",
-    "refactor",
-    "redesign",
-    "contract",
-    "interface change",
-    "breaking change",
-)
-# v0.2.2: split SECURITY_KEYWORDS into severe + soft tiers.
 #
-# Severe — auto-HALT regardless of severity rating (P0..P3). These phrases
-# indicate a concrete security vulnerability category.
-SECURITY_KEYWORDS_SEVERE = (
-    "auth bypass",
-    "token leak",
-    "credential leak",
-    "secret leak",
-    "password leak",
-    "timing attack",
-    "constant-time",
-    "injection",
-    "csrf",
-    "xss",
-    "ssrf",
-    "rce",
-    "remote code execution",
+# v0.2.3: ALL keyword categories now use compiled regex with `\b` word
+# boundaries, mirroring the v0.2.2 R4 SECURITY_KEYWORDS_SEVERE pattern
+# (which previously did `re.search(r"\b" + re.escape(kw) + r"\b", …)` at
+# match time). Substring matching in the legacy tuple-of-strings layout
+# caused F07 phase B halt 2026-05-13: the substring "lock" matched
+# inside "block" / "guarded block", tripping CONCURRENCY_FINDING on a
+# P2 finding that should have routed through normal fix flow.
+#
+# The "lock" keyword is a known compound: catch lock/locks/locking/
+# locked/deadlock/livelock variants WITHOUT false-matching
+# block/padlock/lockstep/wedlock. Morphology-friendly ARCH keywords
+# (refactor, redesign) use a non-capturing suffix group so "refactoring"
+# / "redesigned" / etc. still match (preserves the substring-era
+# behaviour those words relied on; the false-positive risk for these
+# is negligible compared to short tokens like "lock" or "rce").
+ARCH_KEYWORDS = (
+    re.compile(r"\bschema\b", re.IGNORECASE),
+    re.compile(r"\bdesign\b", re.IGNORECASE),
+    re.compile(r"\bscope\b", re.IGNORECASE),
+    re.compile(r"\barchitecture\b", re.IGNORECASE),
+    re.compile(r"\brefactor(?:s|ing|ed|ation)?\b", re.IGNORECASE),
+    re.compile(r"\bredesign(?:s|ing|ed)?\b", re.IGNORECASE),
+    re.compile(r"\bcontract\b", re.IGNORECASE),
+    # Codex v0.2.3 R2 P2: phrase keywords need plural suffix — legacy
+    # substring matcher caught "interface changes" / "breaking changes";
+    # bare `\bphrase\b` regex did not.
+    re.compile(r"\binterface change(?:s)?\b", re.IGNORECASE),
+    re.compile(r"\bbreaking change(?:s)?\b", re.IGNORECASE),
 )
-# Severe keywords matched with word boundaries (re.search r"\b<kw>\b"),
-# unlike soft/arch/concurrency keywords which use plain substring `in`.
-# Word boundaries prevent false positives on short tokens — e.g. plain
-# substring "rce" matches "source", "xss" could match unrelated tokens.
-# Longer ARCH keywords like "refactor" intentionally still match
-# "refactoring" via substring; those keywords don't share the false-
-# positive risk.
+# Severe — auto-HALT regardless of severity rating (P0..P3). These phrases
+# name concrete security vulnerability categories.
+SECURITY_KEYWORDS_SEVERE = (
+    re.compile(r"\bauth bypass\b", re.IGNORECASE),
+    re.compile(r"\btoken leak\b", re.IGNORECASE),
+    re.compile(r"\bcredential leak\b", re.IGNORECASE),
+    re.compile(r"\bsecret leak\b", re.IGNORECASE),
+    re.compile(r"\bpassword leak\b", re.IGNORECASE),
+    re.compile(r"\btiming attack\b", re.IGNORECASE),
+    re.compile(r"\bconstant-time\b", re.IGNORECASE),
+    re.compile(r"\binjection\b", re.IGNORECASE),
+    re.compile(r"\bcsrf\b", re.IGNORECASE),
+    re.compile(r"\bxss\b", re.IGNORECASE),
+    re.compile(r"\bssrf\b", re.IGNORECASE),
+    re.compile(r"\brce\b", re.IGNORECASE),
+    re.compile(r"\bremote code execution\b", re.IGNORECASE),
+)
 
 
 def has_severe_security_match(finding: Finding) -> bool:
-    """Word-boundary check against SECURITY_KEYWORDS_SEVERE.
-
-    See module-level note on why severe keywords use a stricter matcher.
-    """
-    haystack = (finding.summary + " " + finding.detail_text).lower()
-    for kw in SECURITY_KEYWORDS_SEVERE:
-        if re.search(r"\b" + re.escape(kw) + r"\b", haystack):
-            return True
-    return False
+    """Word-boundary check against SECURITY_KEYWORDS_SEVERE."""
+    haystack = finding.summary + " " + finding.detail_text
+    return any(pat.search(haystack) for pat in SECURITY_KEYWORDS_SEVERE)
 
 
 # Soft — bare mentions of security-adjacent vocabulary that don't
@@ -108,25 +112,41 @@ def has_severe_security_match(finding: Finding) -> bool:
 # keywords now require P0/P1 severity to escalate to HALT — P2/P3
 # soft-keyword findings fall through to normal fix flow.
 SECURITY_KEYWORDS_SOFT = (
-    "security",
-    "auth",
-    "credential",
-    "token",
-    "password",
-    "secret",
-    "hmac",
+    re.compile(r"\bsecurity\b", re.IGNORECASE),
+    # `auth` and `hmac` kept singular per founder Q1 — `hmac` is an
+    # acronym (no plural form), `auth` is a verb-like prefix that
+    # rarely takes `-s` in finding prose.
+    re.compile(r"\bauth\b", re.IGNORECASE),
+    # Countables — add optional `(?:s)?` to match plural forms.
+    # Codex v0.2.3 R2 P1: legacy substring matcher caught `tokens` /
+    # `credentials` / `passwords` / `secrets` (e.g. "credentials
+    # exposed"); the bare `\bword\b` regex did not. Closes the
+    # SOFT+P0/P1 escalation gap.
+    re.compile(r"\bcredential(?:s)?\b", re.IGNORECASE),
+    re.compile(r"\btoken(?:s)?\b", re.IGNORECASE),
+    re.compile(r"\bpassword(?:s)?\b", re.IGNORECASE),
+    re.compile(r"\bsecret(?:s)?\b", re.IGNORECASE),
+    re.compile(r"\bhmac\b", re.IGNORECASE),
 )
 # Back-compat alias for any external callers. The combined tuple keeps
 # the original public name working; the circuit breaker uses the tier
 # constants directly.
 SECURITY_KEYWORDS = SECURITY_KEYWORDS_SEVERE + SECURITY_KEYWORDS_SOFT
 CONCURRENCY_KEYWORDS = (
-    "race",
-    "concurrent",
-    "deadlock",
-    "lock",
-    "atomic",
-    "transaction",
+    re.compile(r"\brace\b", re.IGNORECASE),
+    # Matches "concurrent" / "concurrently" / "concurrency" — the legacy
+    # substring matcher caught all three. Codex v0.2.3 R1 P2 regression
+    # guard: `\bconcurrent\b` alone misses "concurrency" (word boundary
+    # between `t` and `y` does not fire — both are word chars).
+    re.compile(r"\bconcurren(?:t(?:ly)?|cy)\b", re.IGNORECASE),
+    # Compound `lock`: catches lock / locks / locking / locked /
+    # deadlock / livelock variants but NOT block / padlock / lockstep /
+    # wedlock. Closes F07 phase B halt (Codex finding "Move
+    # serialization inside the guarded block" had "lock" substring
+    # inside "block", tripping CONCURRENCY_FINDING).
+    re.compile(r"\b(?:dead|live)?lock(?:s|ing|ed)?\b", re.IGNORECASE),
+    re.compile(r"\batomic\b", re.IGNORECASE),
+    re.compile(r"\btransaction\b", re.IGNORECASE),
 )
 
 
@@ -152,9 +172,18 @@ class Finding:
     def detail_text(self) -> str:
         return "\n".join(self.detail)
 
-    def matches_keywords(self, keywords: tuple[str, ...]) -> bool:
-        haystack = (self.summary + " " + self.detail_text).lower()
-        return any(kw in haystack for kw in keywords)
+    def matches_keywords(self, keywords: tuple[re.Pattern[str], ...]) -> bool:
+        """True if any compiled keyword pattern matches summary + detail.
+
+        v0.2.3: keyword categories now ship as compiled regex with `\b`
+        word boundaries (mirrors v0.2.2 R4 SECURITY_KEYWORDS_SEVERE
+        pattern). Stops short-token substring false positives — the
+        F07 phase B halt where "lock" inside "block" tripped
+        CONCURRENCY_FINDING. Each pattern carries its own
+        re.IGNORECASE flag.
+        """
+        haystack = self.summary + " " + self.detail_text
+        return any(pat.search(haystack) for pat in keywords)
 
 
 @dataclass
