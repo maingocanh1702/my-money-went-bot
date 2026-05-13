@@ -192,23 +192,23 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <h1>MyMoneyWent — progress dashboard</h1>
   <div class="head-meta">
     <span id="live-indicator" class="live-indicator init">⚪ initializing…</span>
-    <p class="meta">Updated 2026-05-13 11:53 · <code>main</code> · auto-refresh 60s</p>
+    <p class="meta">Updated 2026-05-13 18:59 · auto-refresh 60s</p>
   </div>
 </div>
 
 <div class="hero">
-<div class="hero-current">
-  <span class="dot in-progress"></span>
+<div class="hero-current empty">
+  <span class="dot not-started"></span>
   <div class="hero-text">
     <p class="hero-label">Đang làm</p>
-    <p class="hero-title">W0.10 · Dashboard v3 rich UI + FastAPI serve</p>
-    <p class="hero-sub">In progress · feat/dashboard-v3-rich</p>
+    <p class="hero-title">Không có PR active</p>
+    <p class="hero-sub">Pick task từ Next strip phía dưới</p>
   </div>
 </div>
 <div class="hero-kpis">
-  <div class="kpi"><p class="kpi-val">14%</p><p class="kpi-lbl">MVP</p><p class="kpi-sub">5/35</p></div>
-  <div class="kpi"><p class="kpi-val">43%</p><p class="kpi-lbl">Phase 1</p><p class="kpi-sub">3/7</p></div>
-  <div class="kpi"><p class="kpi-val">1</p><p class="kpi-lbl">In flight</p></div>
+  <div class="kpi"><p class="kpi-val">17%</p><p class="kpi-lbl">MVP</p><p class="kpi-sub">6/35</p></div>
+  <div class="kpi"><p class="kpi-val">57%</p><p class="kpi-lbl">Phase 1</p><p class="kpi-sub">4/7</p></div>
+  <div class="kpi"><p class="kpi-val">0</p><p class="kpi-lbl">In flight</p></div>
   <div class="kpi"><p class="kpi-val">0</p><p class="kpi-lbl">Blocked</p></div>
   <div class="kpi"><p class="kpi-val">↑0</p><p class="kpi-lbl">Unpushed</p><p class="kpi-sub">0 PR</p></div>
   <div class="kpi"><p class="kpi-val">↓23</p><p class="kpi-lbl">Unpulled</p><p class="kpi-sub">1 PR</p></div>
@@ -251,17 +251,13 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
 </div>
 
 <div class="board">
-<div class="phase-card active">
+<div class="phase-card">
   <div class="phase-card-head">
     <p class="phase-card-name">Phase 1</p>
-    <span class="phase-card-meta">3/7 · 43%</span>
+    <span class="phase-card-meta">4/7 · 57%</span>
   </div>
-  <div class="phase-card-bar"><div class="" style="width:43%;"></div></div>
-  <div class="phase-prs"><div class="pr-row in-progress" title="In progress · feat/dashboard-v3-rich">
-  <span class="dot in-progress"></span>
-  <span class="pr-id">W0.10</span>
-  <span class="pr-name"><span class="pr-name-text">Dashboard v3 rich UI + FastAPI serve</span></span>
-</div><div class="pr-row not-started" title="Not started · infra/W1.1-docker-compose">
+  <div class="phase-card-bar"><div class="" style="width:57%;"></div></div>
+  <div class="phase-prs"><div class="pr-row not-started" title="Not started · infra/W1.1-docker-compose">
   <span class="dot not-started"></span>
   <span class="pr-id">W1.1</span>
   <span class="pr-name"><span class="pr-name-text">Docker Compose dev + prod</span></span>
@@ -273,6 +269,10 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <span class="dot not-started"></span>
   <span class="pr-id">W1.3</span>
   <span class="pr-name"><span class="pr-name-text">Phase 1 integration smoke</span></span>
+</div><div class="pr-row merged" title="Merged · feat/dashboard-v3-rich-v2">
+  <span class="dot merged"></span>
+  <span class="pr-id">W0.10</span>
+  <span class="pr-name"><span class="pr-name-text">Dashboard v3 rich UI + click-through + Chart.js</span></span>
 </div><div class="pr-row merged" title="Merged · chore/W0.7-tenant-context-public-api">
   <span class="dot merged"></span>
   <span class="pr-id">W0.7</span>
@@ -281,7 +281,7 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <span class="dot merged"></span>
   <span class="pr-id">W0.8</span>
   <span class="pr-name"><span class="pr-name-text">Webhook `display_suffix VARCHAR(8)` migration (G3 option b)</span></span>
-</div><div class="pr-row merged" title="Merged · feat/dashboard-realtime">
+</div><div class="pr-row merged" title="Merged · feat/dashboard-realtime · remote: not-started">
   <span class="dot merged"></span>
   <span class="pr-id">W0.9</span>
   <span class="pr-name"><span class="pr-name-text">Dashboard realtime — auto-rebuild + git-state detect + reconcile</span></span>
@@ -312,7 +312,7 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <span class="dot not-started"></span>
   <span class="pr-id">F05</span>
   <span class="pr-name"><span class="pr-name-text">Reports `/status`, `/today`, `/weekly`</span></span>
-</div><div class="pr-row not-started" title="Not started · feat/F08-funding-sources">
+</div><div class="pr-row not-started" title="Not started · feat/F08-funding-sources · local: not-started">
   <span class="dot not-started"></span>
   <span class="pr-id">F08</span>
   <span class="pr-name"><span class="pr-name-text">Funding sources resolver + handlers</span></span>
@@ -646,7 +646,7 @@ if (ctx && window.Chart) {
       datasets: [
         {
           label: "Actual",
-          data: [0, 14, null],
+          data: [0, 17, null],
           borderColor: "#185fa5",
           backgroundColor: "rgba(24,95,165,0.1)",
           tension: 0.3,

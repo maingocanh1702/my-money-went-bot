@@ -2,7 +2,7 @@
 
 > **Auto-generated** từ [`implementation-tracker.md`](implementation-tracker.md) bằng `scripts/build-dashboard.py`.
 > KHÔNG edit trực tiếp — sửa tracker rồi rebuild.
-> **Cập nhật:** 2026-05-13 11:53 · **Branch hiện tại:** `main`
+> **Cập nhật:** 2026-05-13 18:59
 
 Để xem dashboard HTML đẹp hơn: mở [`dashboard.html`](dashboard.html) bằng browser.
 
@@ -10,15 +10,15 @@
 
 ## Tổng quan
 
-- **MVP progress:** **14%** (5/35 PR merged)
-- **In flight:** 1 PR · **Blocked:** 0 · **Deferred:** 0
+- **MVP progress:** **17%** (6/35 PR merged)
+- **In flight:** 0 PR · **Blocked:** 0 · **Deferred:** 0
 - **Target launch:** Tháng 9/2026 (~16 weeks runway)
 
 ## Phase progress
 
 | Phase | Merged / Total | % | Progress |
 |-------|:--------------:|:-:|:---------|
-| Phase 1 | 3 / 7 | 43% | `████░░░░░░` |
+| Phase 1 | 4 / 7 | 57% | `█████░░░░░` |
 | Phase 2 | 2 / 9 | 22% | `██░░░░░░░░` |
 | Phase 3 | 0 / 1 | 0% | `░░░░░░░░░░` |
 | Phase 4 | 0 / 2 | 0% | `░░░░░░░░░░` |
@@ -27,14 +27,14 @@
 
 ## Phase breakdown — features & tasks
 
-### Phase 1 — 3/7 · 43% `████░░░░░░`
+### Phase 1 — 4/7 · 57% `█████░░░░░`
 
 | PR | Feature | Status | Branch |
 |----|---------|:------:|--------|
 | `W0.7` | Public `request_id` helpers + F02 xfail contract pin | ✅ Merged | `chore/W0.7-tenant-context-public-api` |
 | `W0.8` | Webhook `display_suffix VARCHAR(8)` migration (G3 option b) | ✅ Merged | `feat/webhook-display-suffix-migration` |
 | `W0.9` | Dashboard realtime — auto-rebuild + git-state detect + reconcile | ✅ Merged | `feat/dashboard-realtime` |
-| `W0.10` | Dashboard v3 rich UI + FastAPI serve | 🟡 In progress | `feat/dashboard-v3-rich` |
+| `W0.10` | Dashboard v3 rich UI + click-through + Chart.js | ✅ Merged | `feat/dashboard-v3-rich-v2` |
 | `W1.1` | Docker Compose dev + prod | ⬜ Not started | `infra/W1.1-docker-compose` |
 | `W1.2` | Discord adapter (`core/messenger/discord.py`) | ⬜ Not started | `feat/W1.2-discord-adapter` |
 | `W1.3` | Phase 1 integration smoke | ⬜ Not started | `chore/W1.3-phase1-smoke` |
@@ -104,7 +104,7 @@ gantt
     dateFormat YYYY-MM-DD
     axisFormat %b
     section Phase 1
-    P1 (43%) : active, 2026-05-05, 2026-05-22
+    P1 (57%) : active, 2026-05-05, 2026-05-22
     section Phase 2
     P2 (22%) : active, 2026-05-22, 2026-06-15
     section Phase 3
@@ -119,14 +119,7 @@ gantt
 
 ## Đang làm
 
-### W0.10 — Dashboard v3 rich UI + FastAPI serve
-
-- **Status:** 🟡 In progress
-- **Branch:** `feat/dashboard-v3-rich`
-- **Wave:** Wave 0 follow-up
-- **Gates:** 🔒X
-- **Phase:** Phase 1
-- **Notes:** **STALE — base = `1ec2f4f` (trước F07 merge)**. 2 dashboard commits trên top of autopilot v0.2.2 stack (16 total commits ahead): `4e59b64` (Chart.js MVP trajectory, filter buttons, search, click-through, animations) + `c5721be` (FastAPI `/dashboard` + `/dashboard.md` cho Railway, 30s cache). Dashboard portion chưa Codex-reviewed (14 fix() commits dưới là từ autopilot v0.2.2 internal rounds, đã shipped riêng → reconcile_status heuristic false-positive thành 🟠 trong dashboard view). `git diff main..feat/dashboard-v3-rich` show ~6000 lines deletion vì branch chưa rebase qua F07 → **merge thẳng = mất F07 + autopilot v0.2.2/v0.2.3**. Next move: cherry-pick 2 commits sang branch mới từ main, resolve conflict ở `scripts/build-dashboard.py` (overlap với W0.9 detect_git_state), verify, Codex 1× → ready merge.
+_Không có PR active._
 
 ## Up next
 
