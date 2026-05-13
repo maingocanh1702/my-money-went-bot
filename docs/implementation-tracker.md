@@ -49,6 +49,8 @@
 |----|------|---------|:------:|--------|:-----:|-------|
 | W0.7 | Wave 0 follow-up | Public `request_id` helpers + F02 xfail contract pin | ✅ | `chore/W0.7-tenant-context-public-api` | 🔒T 🔒X | Merged. `core/tenant_context.set_request_id/reset_request_id` + middleware refactor + xfail strict pin on `funding_source_id` contract. |
 | W0.8 | Wave 0 follow-up | Webhook `display_suffix VARCHAR(8)` migration (G3 option b) | ✅ | `feat/webhook-display-suffix-migration` | 🔒T 🔒X | Merged (7105e86). Schema P1 — additive nullable column on `webhook_tokens`. Migration 0002 + `mint_token` populates `raw[-6:]` + `get_display_suffix` read helper. F07 unblocked. See `docs/autopilot/prompts/webhook-display-suffix-migration-autopilot.md`. |
+| W0.9 | Wave 0 follow-up | Dashboard realtime — auto-rebuild + git-state detect + reconcile | ✅ | `feat/dashboard-realtime` | 🔒X | Merged via 4 commits on main (`9e561d3` feat, `a5ea4c4` CI, `3f3cdf8` pre-commit, `1edc7a5` ruff/mypy fix). `scripts/build-dashboard.py` gained `detect_git_state` + `reconcile_status` + drift report. Pre-commit hook auto-rebuilds dashboard.{html,md} khi tracker.md or build-dashboard.py staged. GH Action `.github/workflows/dashboard.yml` rebuilds + commits back on push to main/feat/**/infra/**/chore/**/fix/** + hourly schedule + workflow_dispatch. 21 unit tests pass (3× scope của prompt gốc — `tests/unit/test_build_dashboard.py`). Remote branch `origin/feat/dashboard-realtime` còn dấu vết (0 commits ahead) — có thể prune. Prompt: `docs/autopilot/prompts/dashboard-realtime-autopilot.md`. |
+| W0.10 | Wave 0 follow-up | Dashboard v3 rich UI + FastAPI serve | 🟡 | `feat/dashboard-v3-rich` | 🔒X | **STALE — base = `1ec2f4f` (trước F07 merge)**. 2 dashboard commits trên top of autopilot v0.2.2 stack (16 total commits ahead): `4e59b64` (Chart.js MVP trajectory, filter buttons, search, click-through, animations) + `c5721be` (FastAPI `/dashboard` + `/dashboard.md` cho Railway, 30s cache). Dashboard portion chưa Codex-reviewed (14 fix() commits dưới là từ autopilot v0.2.2 internal rounds, đã shipped riêng → reconcile_status heuristic false-positive thành 🟠 trong dashboard view). `git diff main..feat/dashboard-v3-rich` show ~6000 lines deletion vì branch chưa rebase qua F07 → **merge thẳng = mất F07 + autopilot v0.2.2/v0.2.3**. Next move: cherry-pick 2 commits sang branch mới từ main, resolve conflict ở `scripts/build-dashboard.py` (overlap với W0.9 detect_git_state), verify, Codex 1× → ready merge. |
 | W1.1 | Wave 0 extras | Docker Compose dev + prod | ⬜ | `infra/W1.1-docker-compose` | 🔒X | Postgres + bot service compose, env wiring |
 | W1.2 | Wave 6 (early) | Discord adapter (`core/messenger/discord.py`) | ⬜ | `feat/W1.2-discord-adapter` | 🔒I 🔒X | Contract test reuse từ W0.4; impl `BaseSender` ABC |
 | W1.3 | n/a | Phase 1 integration smoke | ⬜ | `chore/W1.3-phase1-smoke` | 🔒T 🔒X | E2E test: 2 channels (TG+Discord) → 2 users → tenant isolated |
@@ -127,6 +129,21 @@
 
 **Phase 6 exit criteria:** Production deployed at tienvenoidau.com, 7 alerts wired, backup tested restore, all admin commands work, payment auto-detect demo with founder's TCB account.
 
+### Phase W: Web Dashboard (deferred — trigger-based post-launch)
+
+> **Status:** ⏸️ Deferred. Trigger criteria and scope: [webapp-resource-assessment.md](research/webapp-resource-assessment.md)
+>
+> Implementation planning starts only when trigger criteria met (≥30% user request, ≥10 Pro ask, support burden, conversion signal). When triggered:
+> - Promote/update `features/feature-web-dashboard.md` to implementation-ready spec
+> - Create `features/BE/feature-web-dashboard-tech.md` (BE spec)
+> - Create `implementation-plans/phase-w-web-dashboard.md`
+
+| PR | Wave | Feature | Status | Branch | Gates | Notes |
+|----|------|---------|:------:|--------|:-----:|-------|
+| (to be created when Phase W enters implementation planning) | — | — | ⏸️ | — | — | Estimate: 19–29 days |
+
+**Architecture prep (do during Phase 2):** Ensure `transactions_query.py` + `reports_query.py` are reusable service layers — bot formats text, future API returns JSON.
+
 ---
 
 ## 2. Cross-phase invariants (always-on gates)
@@ -179,16 +196,16 @@ Nếu 1 trong 5 fail → KHÔNG generate autopilot prompt. Manual mode (founder 
 
 | Phase | Total PRs | Merged | In progress | Blocked | Deferred | % |
 |-------|:---------:|:------:|:-----------:|:-------:|:--------:|:-:|
-| 1 | 5 | 2 (W0.7, W0.8) | 0 | 0 | 0 | 40% |
+| 1 | 7 | 3 (W0.7, W0.8, W0.9) | 1 (W0.10) | 0 | 0 | 43% |
 | 2 | 9 | 1 (F07) | 0 | 0 | 0 | 11% |
 | 3 | 1 | 0 | 0 | 0 | 0 | 0% |
 | 4 | 2 | 0 | 0 | 0 | 0 | 0% |
 | 5 (MVP) | 6 | 0 | 0 | 0 | 0 | 0% |
 | 5b (post-launch) | — | — | — | — | 3 (P-ACB, P-STB, P-BIDV) | n/a |
 | 6 | 10 | 0 | 0 | 0 | 0 | 0% |
-| **MVP total** | **33** | **3** | **0** | **0** | **0** | **9%** |
+| **MVP total** | **35** | **4** | **1** | **0** | **0** | **11%** |
 
-(Wave 0 = 6 PRs đã merged, không count vào MVP remaining. W0.7 merged 2026-05-12. W0.8 merged 2026-05-12 (7105e86). F07 merged 2026-05-13 (f232b63) — 6-session pilot validated v0.2.0→v0.2.3 orchestrator. Phase 5b = 3 parsers deferred, unlock per demand signal.)
+(Wave 0 = 6 PRs đã merged, không count vào MVP remaining. W0.7 merged 2026-05-12. W0.8 merged 2026-05-12 (7105e86). W0.9 dashboard-realtime merged 2026-05-13 via 4 commits on main. F07 merged 2026-05-13 (f232b63) — 6-session pilot validated v0.2.0→v0.2.3 orchestrator. W0.10 dashboard-v3-rich stale, base trước F07 — needs rebase. Phase 5b = 3 parsers deferred, unlock per demand signal.)
 
 ---
 
@@ -202,3 +219,4 @@ Nếu 1 trong 5 fail → KHÔNG generate autopilot prompt. Manual mode (founder 
 | v1.1.0 | 2026-05-13 | W0.7 + W0.8 → ✅ merged. F07 unblocked (❌→⬜). Phase 1: 40% (2/5 merged). MVP: 6% (2/33). All `.autopilot/` refs → `docs/autopilot/` (tracked). |
 | v1.1.1 | 2026-05-13 | Autopilot v0.2.2 (tooling hardening) shipped to main (`533e9fd`). F07 Phase B resume attempted on `feat/F07-settings`@`17f039b` post-merge; halted Codex R2 [P2] CONCURRENCY_FINDING false-positive (substring "lock" in "block"). F07 row ⬜→❌ pending founder Path A/B/C. v0.2.3 backlog: word-boundary match for non-SEVERE keyword categories. |
 | v1.2.0 | 2026-05-13 | **F07 ✅ merged (`f232b63`).** 6-session pilot complete. Autopilot v0.2.3 (`9a00be6`) shipped to unblock F07 (keyword word-boundary fix mirrored from v0.2.2 R4 to CONCURRENCY/ARCH/SOFT). F07 row ❌→✅. Phase 2: 11% (1/9). MVP: 9% (3/33). F02 unblocked next. Pilot saga lessons in memory `project_f07_pilot_saga.md`. |
+| v1.2.1 | 2026-05-13 | **Dashboard tooling backfill.** Added W0.9 (dashboard-realtime ✅ merged via 4 commits — `9e561d3` feat, `a5ea4c4` CI, `3f3cdf8` pre-commit, `1edc7a5` ruff/mypy) + W0.10 (dashboard-v3-rich 🟡 stale, 2 unmerged commits trên base trước F07 → cần rebase). Phase 1: 5→7 PRs, 43% (3/7). MVP: 33→35, 11% (4/35). Tracker rows backfill, không có code change. |
