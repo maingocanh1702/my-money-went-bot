@@ -183,6 +183,53 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500;
 }
 .chart-section canvas { max-height: 140px; }
+
+
+.tab-bar { display: flex; gap: 4px; border-bottom: 1px solid #e0e0e0; margin: 16px 0 12px; flex-wrap: wrap; }
+.tab-btn { background: none; border: none; padding: 8px 14px; cursor: pointer; font-size: 14px; color: #555; border-bottom: 2px solid transparent; }
+.tab-btn.active { color: #1976d2; border-bottom-color: #1976d2; font-weight: 600; }
+.tab-btn:hover { background: #f5f5f5; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+.overview-summary { display: flex; gap: 24px; padding: 12px 0; }
+.kpi { display: flex; flex-direction: column; }
+.kpi-label { font-size: 12px; color: #777; }
+.kpi-value { font-size: 28px; font-weight: 700; color: #1976d2; }
+.phase-bars { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; }
+.phase-row { display: grid; grid-template-columns: 200px 1fr 50px; gap: 8px; align-items: center; }
+.phase-label { font-size: 13px; }
+.phase-track { height: 12px; background: #f3f3f3; border-radius: 3px; overflow: hidden; }
+.phase-fill { height: 100%; border-radius: 3px; transition: width 200ms; }
+.phase-fill.phase-done { background: #4caf50; }
+.phase-fill.phase-partial { background: #2196f3; }
+.phase-fill.phase-not_started { background: #bdbdbd; }
+.phase-fill.phase-blocked { background: #f44336; }
+.phase-fill.phase-deferred { background: #ffc107; }
+.phase-pct { text-align: right; font-size: 12px; color: #555; }
+.features-matrix, .risks-table, .docs-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
+.features-matrix th, .risks-table th, .docs-table th { text-align: left; padding: 6px 8px; background: #fafafa; border-bottom: 1px solid #e0e0e0; }
+.features-matrix td, .risks-table td, .docs-table td { padding: 6px 8px; border-bottom: 1px solid #f0f0f0; }
+.status-cell { text-align: center; font-weight: 500; }
+.status-done { color: #2e7d32; }
+.status-partial { color: #1976d2; }
+.status-not_started { color: #9e9e9e; }
+.status-blocked { color: #c62828; }
+.status-deferred { color: #f57c00; }
+.risk-low { color: #2e7d32; font-weight: 500; }
+.risk-medium { color: #f57c00; font-weight: 500; }
+.risk-high { color: #c62828; font-weight: 600; }
+.stale-yellow { background: #fff8e1; }
+.stale-red { background: #ffebee; }
+.prs-controls { display: flex; gap: 8px; padding: 8px 0; align-items: center; flex-wrap: wrap; }
+.filter-btn { background: #fff; border: 1px solid #e0e0e0; padding: 4px 10px; cursor: pointer; border-radius: 4px; font-size: 12px; }
+.filter-btn.active { background: #1976d2; color: #fff; border-color: #1976d2; }
+.pr-search { flex: 1; min-width: 160px; padding: 4px 8px; border: 1px solid #e0e0e0; border-radius: 4px; }
+@media (max-width: 640px) {
+  .tab-bar { overflow-x: auto; flex-wrap: nowrap; }
+  .phase-row { grid-template-columns: 110px 1fr 40px; }
+  .overview-summary { gap: 12px; }
+  .features-matrix, .risks-table, .docs-table { font-size: 11px; }
+}
 </style>
 </head>
 <body>
@@ -192,11 +239,13 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <h1>MyMoneyWent — progress dashboard</h1>
   <div class="head-meta">
     <span id="live-indicator" class="live-indicator init">⚪ initializing…</span>
-    <p class="meta">Updated 2026-05-13 19:45 · <code>main</code> · auto-refresh 60s</p>
+    <p class="meta">Updated 2026-05-14 02:55 · <code>main</code> · auto-refresh 60s</p>
   </div>
 </div>
 
-<div class="hero">
+<nav class="tab-bar" role="tablist"><button type="button" class="tab-btn" data-tab="overview">Overview</button><button type="button" class="tab-btn" data-tab="features">Features</button><button type="button" class="tab-btn" data-tab="prs">PRs</button><button type="button" class="tab-btn" data-tab="risks">Risks</button><button type="button" class="tab-btn" data-tab="docs">Docs</button></nav>
+
+<section id="tab-overview" class="tab-panel" role="tabpanel"><div class="overview-summary"><div class="kpi"><div class="kpi-label">Overall</div><div class="kpi-value">30%</div></div><div class="kpi"><div class="kpi-label">MVP</div><div class="kpi-value">17%</div></div></div><div class="phase-bars"><div class="phase-row" data-status="done"><div class="phase-label">Phase 0: Docs &amp; Specs</div><div class="phase-track"><div class="phase-fill phase-done" style="width:100%"></div></div><div class="phase-pct">100%</div></div><div class="phase-row" data-status="partial"><div class="phase-label">Phase 1: Foundation</div><div class="phase-track"><div class="phase-fill phase-partial" style="width:75%"></div></div><div class="phase-pct">75%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 2: Handlers Refactor</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 3: Pricing Logic</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 4: SePay Onboarding</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 5: Email Parsing</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 6: Polish + Deploy</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 7: Closed Beta</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 8: Public Soft Launch</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 9-10: Growth + Business Tier</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 11: Family Plan</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div></div><div class="hero">
 <div class="hero-current empty">
   <span class="dot not-started"></span>
   <div class="hero-text">
@@ -214,12 +263,10 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <div class="kpi"><p class="kpi-val">↓23</p><p class="kpi-lbl">Unpulled</p><p class="kpi-sub">1 PR</p></div>
 </div>
 </div>
-
 <div class="chart-section">
-  <p class="chart-title">MVP progress vs target (8/133 days elapsed · launch T9/2026)</p>
+  <p class="chart-title">MVP progress vs target (9/133 days elapsed · launch T9/2026)</p>
   <canvas id="burndown" role="img" aria-label="Line chart comparing actual MVP completion to target trajectory"></canvas>
 </div>
-
 <div class="next-strip">
   <span class="next-label">Next</span>
   <span class="next-chip">
@@ -239,9 +286,9 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <span class="pr-id">F08</span>
   Funding sources resolver + handlers
 </span>
-</div>
-
-<div class="toolbar">
+</div></section>
+<section id="tab-features" class="tab-panel" role="tabpanel"><table class="features-matrix"><thead><tr><th>ID</th><th>Feature</th><th>Spec</th><th>BE Tech</th><th>BE Code</th><th>Bot Code</th><th>Phase</th></tr></thead><tbody><tr><td class="feature-id">F01</td><td class="feature-name">3-Path Onboarding</td><td class="status-cell status-done">done</td><td class="status-cell status-done">done</td><td class="status-cell status-partial">partial</td><td class="status-cell status-not_started">not_started</td><td class="phase-cell">1,4</td></tr><tr><td class="feature-id">F02</td><td class="feature-name">Transaction Capture (SePay + Email)</td><td class="status-cell status-done">done</td><td class="status-cell status-done">done</td><td class="status-cell status-partial">partial</td><td class="status-cell status-not_started">not_started</td><td class="phase-cell">1,5</td></tr><tr><td class="feature-id">F03</td><td class="feature-name">Transaction Categorization</td><td class="status-cell status-done">done</td><td class="status-cell status-done">done</td><td class="status-cell status-not_started">not_started</td><td class="status-cell status-not_started">not_started</td><td class="phase-cell">2</td></tr><tr><td class="feature-id">F04</td><td class="feature-name">Category Management (/manage)</td><td class="status-cell status-done">done</td><td class="status-cell status-done">done</td><td class="status-cell status-not_started">not_started</td><td class="status-cell status-not_started">not_started</td><td class="phase-cell">2</td></tr><tr><td class="feature-id">F05</td><td class="feature-name">Reports (/status, /today, /weekly)</td><td class="status-cell status-done">done</td><td class="status-cell status-done">done</td><td class="status-cell status-not_started">not_started</td><td class="status-cell status-not_started">not_started</td><td class="phase-cell">2</td></tr><tr><td class="feature-id">F06</td><td class="feature-name">Pricing, Tier Limits &amp; Trial</td><td class="status-cell status-done">done</td><td class="status-cell status-done">done</td><td class="status-cell status-not_started">not_started</td><td class="status-cell status-not_started">not_started</td><td class="phase-cell">3</td></tr><tr><td class="feature-id">F07</td><td class="feature-name">Settings (/settings)</td><td class="status-cell status-done">done</td><td class="status-cell status-done">done</td><td class="status-cell status-not_started">not_started</td><td class="status-cell status-not_started">not_started</td><td class="phase-cell">2</td></tr><tr><td class="feature-id">F08</td><td class="feature-name">Funding Sources</td><td class="status-cell status-done">done</td><td class="status-cell status-done">done</td><td class="status-cell status-partial">partial</td><td class="status-cell status-not_started">not_started</td><td class="phase-cell">2</td></tr><tr><td class="feature-id">F09</td><td class="feature-name">Scheduled Jobs</td><td class="status-cell status-done">done</td><td class="status-cell status-done">done</td><td class="status-cell status-not_started">not_started</td><td class="status-cell status-not_started">not_started</td><td class="phase-cell">6</td></tr><tr><td class="feature-id">F10</td><td class="feature-name">Payment (Bank Transfer Auto-Detect)</td><td class="status-cell status-done">done</td><td class="status-cell status-done">done</td><td class="status-cell status-not_started">not_started</td><td class="status-cell status-not_started">not_started</td><td class="phase-cell">6</td></tr><tr><td class="feature-id">F11</td><td class="feature-name">Admin Tools &amp; Audit</td><td class="status-cell status-done">done</td><td class="status-cell status-done">done</td><td class="status-cell status-partial">partial</td><td class="status-cell status-not_started">not_started</td><td class="phase-cell">6</td></tr><tr><td class="feature-id">F12</td><td class="feature-name">Multi-User Data Isolation</td><td class="status-cell status-done">done</td><td class="status-cell status-not_started">not_started</td><td class="status-cell status-done">done</td><td class="status-cell status-not_started">not_started</td><td class="phase-cell">1</td></tr><tr><td class="feature-id">F13</td><td class="feature-name">Messenger Channel</td><td class="status-cell status-done">done</td><td class="status-cell status-done">done</td><td class="status-cell status-not_started">not_started</td><td class="status-cell status-not_started">not_started</td><td class="phase-cell">6</td></tr><tr><td class="feature-id">F14</td><td class="feature-name">Discord Channel</td><td class="status-cell status-done">done</td><td class="status-cell status-done">done</td><td class="status-cell status-not_started">not_started</td><td class="status-cell status-not_started">not_started</td><td class="phase-cell">1</td></tr><tr><td class="feature-id">F15</td><td class="feature-name">Personal vs Business Toggle</td><td class="status-cell status-done">done</td><td class="status-cell status-done">done</td><td class="status-cell status-not_started">not_started</td><td class="status-cell status-not_started">not_started</td><td class="phase-cell">9</td></tr><tr><td class="feature-id">F16</td><td class="feature-name">P&amp;L View</td><td class="status-cell status-not_started">not_started</td><td class="status-cell status-not_started">not_started</td><td class="status-cell status-not_started">not_started</td><td class="status-cell status-not_started">not_started</td><td class="phase-cell">9</td></tr><tr><td class="feature-id">F17</td><td class="feature-name">Income Source Attribution</td><td class="status-cell status-not_started">not_started</td><td class="status-cell status-not_started">not_started</td><td class="status-cell status-not_started">not_started</td><td class="status-cell status-not_started">not_started</td><td class="phase-cell">9</td></tr><tr><td class="feature-id">F-i18n</td><td class="feature-name">Internationalization</td><td class="status-cell status-done">done</td><td class="status-cell status-done">done</td><td class="status-cell status-partial">partial</td><td class="status-cell status-not_started">not_started</td><td class="phase-cell">1</td></tr><tr><td class="feature-id">F-saas</td><td class="feature-name">SaaS Refactor</td><td class="status-cell status-done">done</td><td class="status-cell status-done">done</td><td class="status-cell status-partial">partial</td><td class="status-cell status-not_started">not_started</td><td class="phase-cell">1</td></tr><tr><td class="feature-id">FAM</td><td class="feature-name">Family Plan</td><td class="status-cell status-done">done</td><td class="status-cell status-done">done</td><td class="status-cell status-not_started">not_started</td><td class="status-cell status-not_started">not_started</td><td class="phase-cell">11</td></tr></tbody></table></section>
+<section id="tab-prs" class="tab-panel" role="tabpanel"><div class="prs-body"><div class="toolbar">
   <input type="search" id="dashboard-search" class="search-input" placeholder="🔍 Search PR by ID or name...">
   <button class="filter-btn active" data-filter="all">All</button>
   <button class="filter-btn" data-filter="in-review">In review</button>
@@ -249,7 +296,6 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <button class="filter-btn" data-filter="blocked">Blocked</button>
   <button class="filter-btn" data-filter="not-started">Not started</button>
 </div>
-
 <div class="board">
 <div class="phase-card">
   <div class="phase-card-head">
@@ -281,7 +327,7 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <span class="dot merged"></span>
   <span class="pr-id">W0.8</span>
   <span class="pr-name"><span class="pr-name-text">Webhook `display_suffix VARCHAR(8)` migration (G3 option b)</span></span>
-</div><div class="pr-row merged" title="Merged · feat/dashboard-realtime">
+</div><div class="pr-row merged" title="Merged · feat/dashboard-realtime · remote: not-started">
   <span class="dot merged"></span>
   <span class="pr-id">W0.9</span>
   <span class="pr-name"><span class="pr-name-text">Dashboard realtime — auto-rebuild + git-state detect + reconcile</span></span>
@@ -312,7 +358,7 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <span class="dot not-started"></span>
   <span class="pr-id">F05</span>
   <span class="pr-name"><span class="pr-name-text">Reports `/status`, `/today`, `/weekly`</span></span>
-</div><div class="pr-row not-started" title="Not started · feat/F08-funding-sources">
+</div><div class="pr-row not-started" title="Not started · feat/F08-funding-sources · local: not-started">
   <span class="dot not-started"></span>
   <span class="pr-id">F08</span>
   <span class="pr-name"><span class="pr-name-text">Funding sources resolver + handlers</span></span>
@@ -450,7 +496,9 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <span class="pr-name"><span class="pr-name-text">—</span></span>
 </div></div>
 </div>
-</div>
+</div></div></section>
+<section id="tab-risks" class="tab-panel" role="tabpanel"><table class="risks-table"><thead><tr><th>Risk</th><th>Phase</th><th>Impact</th><th>Mitigation</th></tr></thead><tbody><tr><td class="risk-name">Email parser Phase 5 slip</td><td class="risk-phase">5</td><td class="risk-impact risk-medium">Medium</td><td class="risk-mitigation">Parser shells + plugin framework exist (W0.6). Fallback: giảm scope xuống 3 banks MVP (TCB, Cake, MB)</td></tr><tr><td class="risk-name">Low conversion Free→Pro</td><td class="risk-phase">8+</td><td class="risk-impact risk-medium">Medium</td><td class="risk-mitigation">Monitor hit-limit-rate, adjust 45→60-75 if churn &gt; upgrade</td></tr><tr><td class="risk-name">Business tier validation fail</td><td class="risk-phase">9</td><td class="risk-impact risk-high">High</td><td class="risk-mitigation">Reposition as personal+freelancer tracker</td></tr><tr><td class="risk-name">Railway cost &gt; $50/mo</td><td class="risk-phase">8+</td><td class="risk-impact risk-medium">Medium</td><td class="risk-mitigation">Trigger Hetzner migration</td></tr><tr><td class="risk-name">Family Plan pricing conflict</td><td class="risk-phase">11</td><td class="risk-impact risk-low">Low</td><td class="risk-mitigation">Merge F06 addendum doc — decision work done</td></tr><tr><td class="risk-name">Legacy handler migration drag</td><td class="risk-phase">2</td><td class="risk-impact risk-medium">Medium</td><td class="risk-mitigation">Each handler = focused PR with isolation tests</td></tr></tbody></table></section>
+<section id="tab-docs" class="tab-panel" role="tabpanel"><table class="docs-table"><thead><tr><th>Document</th><th>Version</th><th>Last Updated</th><th>Staleness</th></tr></thead><tbody><tr class="stale-current"><td class="doc-name">brd-vi.md</td><td class="doc-version">v3.1.0</td><td class="doc-updated">2026-05-10</td><td class="doc-stale">4d</td></tr><tr class="stale-current"><td class="doc-name">prd-vi.md</td><td class="doc-version">v1.7.1</td><td class="doc-updated">2026-05-10</td><td class="doc-stale">4d</td></tr><tr class="stale-current"><td class="doc-name">tdd-vi.md</td><td class="doc-version">v1.8.1</td><td class="doc-updated">2026-05-10</td><td class="doc-stale">4d</td></tr><tr class="stale-current"><td class="doc-name">mymoneywent-roadmap.md</td><td class="doc-version">v1.1.0</td><td class="doc-updated">2026-05-12</td><td class="doc-stale">2d</td></tr></tbody></table></section>
 
 <div class="callout warn">
   <div>
@@ -468,6 +516,35 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <span class="item"><span class="dot deferred"></span> Deferred</span>
   <span class="item" style="margin-left:auto;color:var(--text-tertiary);">Click PR → GitHub · Rebuild: <code>python scripts/build-dashboard.py</code></span>
 </div>
+
+<!-- B-2: tab switcher INSIDE .container so refreshDashboardDOM() re-runs it
+     after live refresh. A-P1-4 re-creates <script> nodes within the
+     replaced container; scripts outside it would be orphaned after the
+     first auto-refresh (Codex round 2). -->
+<script class="tab-switcher">
+(function() {
+  var tabs = document.querySelectorAll('.tab-bar [data-tab]');
+  var panels = document.querySelectorAll('.tab-panel');
+  function activate(name) {
+    var found = false;
+    tabs.forEach(function(t) {
+      var active = t.dataset.tab === name;
+      t.classList.toggle('active', active);
+      if (active) found = true;
+    });
+    panels.forEach(function(p) { p.classList.toggle('active', p.id === 'tab-' + name); });
+    if (found) {
+      try { localStorage.setItem('activeTab', name); } catch (e) { /* noop */ }
+    }
+  }
+  tabs.forEach(function(t) {
+    t.addEventListener('click', function() { activate(t.dataset.tab); });
+  });
+  var saved = null;
+  try { saved = localStorage.getItem('activeTab'); } catch (e) { /* noop */ }
+  activate(saved || 'overview');
+})();
+</script>
 
 </div>
 <script>
@@ -675,7 +752,7 @@ if (ctx && window.Chart) {
         },
         {
           label: "Target",
-          data: [0, 6.0, 100],
+          data: [0, 6.8, 100],
           borderColor: "#888780",
           borderDash: [5, 5],
           tension: 0,
