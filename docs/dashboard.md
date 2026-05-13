@@ -2,7 +2,7 @@
 
 > **Auto-generated** từ [`implementation-tracker.md`](implementation-tracker.md) bằng `scripts/build-dashboard.py`.
 > KHÔNG edit trực tiếp — sửa tracker rồi rebuild.
-> **Cập nhật:** 2026-05-13 11:42 · **Branch hiện tại:** `main`
+> **Cập nhật:** 2026-05-13 11:53 · **Branch hiện tại:** `main`
 
 Để xem dashboard HTML đẹp hơn: mở [`dashboard.html`](dashboard.html) bằng browser.
 
@@ -34,7 +34,7 @@
 | `W0.7` | Public `request_id` helpers + F02 xfail contract pin | ✅ Merged | `chore/W0.7-tenant-context-public-api` |
 | `W0.8` | Webhook `display_suffix VARCHAR(8)` migration (G3 option b) | ✅ Merged | `feat/webhook-display-suffix-migration` |
 | `W0.9` | Dashboard realtime — auto-rebuild + git-state detect + reconcile | ✅ Merged | `feat/dashboard-realtime` |
-| `W0.10` | Dashboard v3 rich UI + FastAPI serve | 🟡 In review | `feat/dashboard-v3-rich` |
+| `W0.10` | Dashboard v3 rich UI + FastAPI serve | 🟡 In progress | `feat/dashboard-v3-rich` |
 | `W1.1` | Docker Compose dev + prod | ⬜ Not started | `infra/W1.1-docker-compose` |
 | `W1.2` | Discord adapter (`core/messenger/discord.py`) | ⬜ Not started | `feat/W1.2-discord-adapter` |
 | `W1.3` | Phase 1 integration smoke | ⬜ Not started | `chore/W1.3-phase1-smoke` |
@@ -121,7 +121,7 @@ gantt
 
 ### W0.10 — Dashboard v3 rich UI + FastAPI serve
 
-- **Status:** 🟡 In review
+- **Status:** 🟡 In progress
 - **Branch:** `feat/dashboard-v3-rich`
 - **Wave:** Wave 0 follow-up
 - **Gates:** 🔒X
