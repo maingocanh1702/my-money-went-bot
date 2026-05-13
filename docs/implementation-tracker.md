@@ -61,7 +61,7 @@
 
 | PR | Wave | Feature | Status | Branch | Gates | Notes |
 |----|------|---------|:------:|--------|:-----:|-------|
-| F-onboarding | Wave 1 | F01 — `/start` + user create + trial assign | ⬜ | `feat/F01-onboarding-start` | 🔒T 🔒M 🔒X | Path A/B/C onboarding logic in Phase 4; chỉ ship `/start` here |
+| F-onboarding | Wave 1 | F01 — `/start` + user create + trial assign | ✅ | `feat/F01-onboarding-start` | 🔒T 🔒M 🔒X | **Merged `9f07c57` (2026-05-13).** 8-round Codex saga (P1 manual_only). Multi-channel `/start` (TG wired, Discord handler-ready). Idempotent user create + mint_token (sepay) + 3 default categories + 14d trial. 17 new tests (12 integration + 5 unit), baseline 376→393. Defensive guards added during rounds 01-06: `/start@bot` suffix strip, deep-link payload, missing from.id reject (tenant isolation), non-private chat drop (DM routability), chat_id self-heal, mint_token graceful degrade, `_safe_send` wrapper for missing adapter. 5 founder-review decisions: (1) inbound_email domain `in.mymoneywent.com` codebase invariant wins vs lockdown's `tienvenoidau.com` drift; (2) .importlinter exemption for core.handlers.start→mint_token bridge; (3) welcome_back no `{name}` placeholder (cross-channel display_name unreliable); (4) DB-down test via capsys not caplog (structlog→stdout); (5) /start non-private dropped. Path A/B/C still Phase 4. Unblocks F08 (FK chain) + F02 (user_id INSERT). |
 | F08 | Wave 2 | F08 — Funding sources resolver + handlers | ⬜ | `feat/F08-funding-sources` | 🔒T 🔒I 🔒X | DDL landed W0.2 → only service + handler logic |
 | F02 | Wave 2 | F02 — Transaction capture EXPANDED (inherit W0.6 legacy cutover) | ⬜ | `feat/F02-tx-capture-cutover` | 🔒T 🔒I 🔒M 🔒X | Strangler: rewrite legacy handlers/, delete sheets.py, refactor main.py, run migrate_sheets.py. **MUST remove `xfail` marker on `test_persisted_tx_has_resolved_funding_source_id`** (W0.7 contract pin). Decide legacy formatter drift (revert vs `style:` commit) per phase-2 lockdown. |
 | F04 | Wave 3 | F04 — Category management (`/manage`) | ⬜ | `feat/F04-category-mgmt` | 🔒T 🔒X | CRUD + parent/sub tree |
@@ -197,15 +197,15 @@ Nếu 1 trong 5 fail → KHÔNG generate autopilot prompt. Manual mode (founder 
 | Phase | Total PRs | Merged | In progress | Blocked | Deferred | % |
 |-------|:---------:|:------:|:-----------:|:-------:|:--------:|:-:|
 | 1 | 7 | 3 (W0.7, W0.8, W0.9) | 1 (W0.10) | 0 | 0 | 43% |
-| 2 | 9 | 1 (F07) | 0 | 0 | 0 | 11% |
+| 2 | 9 | 2 (F07, F01) | 0 | 0 | 0 | 22% |
 | 3 | 1 | 0 | 0 | 0 | 0 | 0% |
 | 4 | 2 | 0 | 0 | 0 | 0 | 0% |
 | 5 (MVP) | 6 | 0 | 0 | 0 | 0 | 0% |
 | 5b (post-launch) | — | — | — | — | 3 (P-ACB, P-STB, P-BIDV) | n/a |
 | 6 | 10 | 0 | 0 | 0 | 0 | 0% |
-| **MVP total** | **35** | **4** | **1** | **0** | **0** | **11%** |
+| **MVP total** | **35** | **5** | **1** | **0** | **0** | **14%** |
 
-(Wave 0 = 6 PRs đã merged, không count vào MVP remaining. W0.7 merged 2026-05-12. W0.8 merged 2026-05-12 (7105e86). W0.9 dashboard-realtime merged 2026-05-13 via 4 commits on main. F07 merged 2026-05-13 (f232b63) — 6-session pilot validated v0.2.0→v0.2.3 orchestrator. W0.10 dashboard-v3-rich stale, base trước F07 — needs rebase. Phase 5b = 3 parsers deferred, unlock per demand signal.)
+(Wave 0 = 6 PRs đã merged, không count vào MVP remaining. W0.7 merged 2026-05-12. W0.8 merged 2026-05-12 (7105e86). W0.9 dashboard-realtime merged 2026-05-13 via 4 commits on main. F07 merged 2026-05-13 (f232b63) — 6-session pilot. F01 merged 2026-05-13 (9f07c57) — 8-round Codex saga, 17 new tests, baseline 376→393. W0.10 dashboard-v3-rich stale, base trước F07 — needs rebase. Phase 5b = 3 parsers deferred, unlock per demand signal.)
 
 ---
 
@@ -220,3 +220,4 @@ Nếu 1 trong 5 fail → KHÔNG generate autopilot prompt. Manual mode (founder 
 | v1.1.1 | 2026-05-13 | Autopilot v0.2.2 (tooling hardening) shipped to main (`533e9fd`). F07 Phase B resume attempted on `feat/F07-settings`@`17f039b` post-merge; halted Codex R2 [P2] CONCURRENCY_FINDING false-positive (substring "lock" in "block"). F07 row ⬜→❌ pending founder Path A/B/C. v0.2.3 backlog: word-boundary match for non-SEVERE keyword categories. |
 | v1.2.0 | 2026-05-13 | **F07 ✅ merged (`f232b63`).** 6-session pilot complete. Autopilot v0.2.3 (`9a00be6`) shipped to unblock F07 (keyword word-boundary fix mirrored from v0.2.2 R4 to CONCURRENCY/ARCH/SOFT). F07 row ❌→✅. Phase 2: 11% (1/9). MVP: 9% (3/33). F02 unblocked next. Pilot saga lessons in memory `project_f07_pilot_saga.md`. |
 | v1.2.1 | 2026-05-13 | **Dashboard tooling backfill.** Added W0.9 (dashboard-realtime ✅ merged via 4 commits — `9e561d3` feat, `a5ea4c4` CI, `3f3cdf8` pre-commit, `1edc7a5` ruff/mypy) + W0.10 (dashboard-v3-rich 🟡 stale, 2 unmerged commits trên base trước F07 → cần rebase). Phase 1: 5→7 PRs, 43% (3/7). MVP: 33→35, 11% (4/35). Tracker rows backfill, không có code change. |
+| v1.2.2 | 2026-05-13 | **F01 ✅ merged (`9f07c57`).** 8-round Codex autopilot saga (P1 manual_only, vượt MAX_ROUNDS=5 nhưng mỗi round fresh finding, không RECURRING). 17 tests new (12 integration + 5 unit), baseline 376→393. Multi-channel `/start` minimal (Path A/B/C still Phase 4). Codex catches valuable: P1 tenant isolation (missing from.id), P1 non-private chat drop, P1 unregistered adapter (Discord), P2 Telegram routing edge cases. F01 row ⬜→✅. Phase 2: 11%→22% (2/9 merged). MVP: 11%→14% (5/35). Unblocks F08 + F02. Saga lessons appended to memory `project_f07_pilot_saga.md`. |

@@ -2,7 +2,7 @@
 
 > **Auto-generated** từ [`implementation-tracker.md`](implementation-tracker.md) bằng `scripts/build-dashboard.py`.
 > KHÔNG edit trực tiếp — sửa tracker rồi rebuild.
-> **Cập nhật:** 2026-05-13 09:06 · **Branch hiện tại:** `main`
+> **Cập nhật:** 2026-05-13 16:10 · **Branch hiện tại:** `main`
 
 Để xem dashboard HTML đẹp hơn: mở [`dashboard.html`](dashboard.html) bằng browser.
 
@@ -10,7 +10,7 @@
 
 ## Tổng quan
 
-- **MVP progress:** **11%** (4/35 PR merged)
+- **MVP progress:** **14%** (5/35 PR merged)
 - **In flight:** 1 PR · **Blocked:** 0 · **Deferred:** 0
 - **Target launch:** Tháng 9/2026 (~16 weeks runway)
 
@@ -19,7 +19,7 @@
 | Phase | Merged / Total | % | Progress |
 |-------|:--------------:|:-:|:---------|
 | Phase 1 | 3 / 7 | 43% | `████░░░░░░` |
-| Phase 2 | 1 / 9 | 11% | `█░░░░░░░░░` |
+| Phase 2 | 2 / 9 | 22% | `██░░░░░░░░` |
 | Phase 3 | 0 / 1 | 0% | `░░░░░░░░░░` |
 | Phase 4 | 0 / 2 | 0% | `░░░░░░░░░░` |
 | Phase 5 | 0 / 6 | 0% | `░░░░░░░░░░` |
@@ -39,11 +39,11 @@
 | `W1.2` | Discord adapter (`core/messenger/discord.py`) | ⬜ Not started | `feat/W1.2-discord-adapter` |
 | `W1.3` | Phase 1 integration smoke | ⬜ Not started | `chore/W1.3-phase1-smoke` |
 
-### Phase 2 — 1/9 · 11% `█░░░░░░░░░`
+### Phase 2 — 2/9 · 22% `██░░░░░░░░`
 
 | PR | Feature | Status | Branch |
 |----|---------|:------:|--------|
-| `F-onboarding` | F01 — `/start` + user create + trial assign | ⬜ Not started | `feat/F01-onboarding-start` |
+| `F-onboarding` | F01 — `/start` + user create + trial assign | ✅ Merged | `feat/F01-onboarding-start` |
 | `F08` | Funding sources resolver + handlers | ⬜ Not started | `feat/F08-funding-sources` |
 | `F02` | Transaction capture EXPANDED (inherit W0.6 legacy cutover) | ⬜ Not started | `feat/F02-tx-capture-cutover` |
 | `F04` | Category management (`/manage`) | ⬜ Not started | `feat/F04-category-mgmt` |
@@ -106,7 +106,7 @@ gantt
     section Phase 1
     P1 (43%) : active, 2026-05-05, 2026-05-22
     section Phase 2
-    P2 (11%) : active, 2026-05-22, 2026-06-15
+    P2 (22%) : active, 2026-05-22, 2026-06-15
     section Phase 3
     P3 (0%) : 2026-06-15, 2026-06-25
     section Phase 4
@@ -144,8 +144,8 @@ gantt
 | `W1.1` | Docker Compose dev + prod | Phase 1 | ⬜ Not started |
 | `W1.2` | Discord adapter (`core/messenger/discord.py`) | Phase 1 | ⬜ Not started |
 | `W1.3` | Phase 1 integration smoke | Phase 1 | ⬜ Not started |
-| `F-onboarding` | F01 — `/start` + user create + trial assign | Phase 2 | ⬜ Not started |
 | `F08` | F08 — Funding sources resolver + handlers | Phase 2 | ⬜ Not started |
+| `F02` | F02 — Transaction capture EXPANDED (inherit W0.6 legacy cutover) | Phase 2 | ⬜ Not started |
 
 ---
 
