@@ -169,6 +169,45 @@ async def _handle_message(message: dict):
     text  = (message.get("text") or "").strip()
     state = sh.get_state(CHAT_ID) or {}
 
+    # F01: multi-tenant /start enters via core.handlers (parallel to legacy).
+    # Lazy import so a missing module never breaks legacy paths during the
+    # strangler-fig cutover (F02 will delete legacy paths).
+    # Match the command token, not the whole text — Telegram deep-link starts
+    # arrive as `/start <payload>` (e.g. referral / family-invite tokens).
+    # In group chats Telegram appends `@<bot_username>` to commands —
+    # normalize both `/start` and `/start@MyMoneyWentBot` to the same token.
+    raw_token = text.split(maxsplit=1)[0].lower() if text else ""
+    cmd_token = raw_token.split("@", 1)[0]
+    if cmd_token == "/start":
+        from core.handlers.start import handle_start
+
+        sender = message.get("from") or {}
+        sender_id = sender.get("id")
+        # Channel-originated / anonymous-admin updates lack `from.id` —
+        # without a stable per-user key, multiple unrelated senders would
+        # collapse onto the same row. Drop the update silently and let the
+        # caller retry with a proper user context.
+        if sender_id is None:
+            print("[/start] dropped — missing from.id (channel or anonymous-admin update)")
+            return
+        # Telegram requires a routable `chat_id` (or legacy telegram_id) for
+        # any outbound send. Onboarding from a group/supergroup/channel has
+        # no DM channel to deliver the welcome / future messages on, so we
+        # drop the /start instead of creating a non-routable user row. The
+        # user can /start again from a private DM to onboard.
+        chat = message.get("chat") or {}
+        if chat.get("type") != "private":
+            print(f"[/start] dropped — non-private chat (type={chat.get('type')!r})")
+            return
+        await handle_start(
+            channel_type="telegram",
+            channel_user_id=str(sender_id),
+            chat_id=chat.get("id"),
+            language_code=sender.get("language_code"),
+            display_name=sender.get("first_name") or sender.get("username"),
+        )
+        return
+
     # Commands take priority
     if text.startswith("/"):
         await _handle_command(text)

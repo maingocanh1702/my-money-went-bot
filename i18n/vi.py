@@ -33,10 +33,21 @@ VI: dict[str, str] = {
     "onboard.path_quick": "⚡ Bắt đầu nhanh (3 danh mục mẫu)",
     "onboard.path_custom": "✏️ Tự chọn danh mục",
     "onboard.done": "Xong! Gõ /help để xem hướng dẫn.",
+    "onboard.welcome_new": (
+        "👋 Chào mừng bạn đến với MyMoneyWent!\n\n"
+        "🎁 Bạn được dùng thử Pro miễn phí đến hết ngày {trial_end}.\n\n"
+        "Gõ /help để xem hướng dẫn."
+    ),
+    "onboard.welcome_back": "👋 Chào mừng bạn quay lại!",
+    "onboard.trial_expired_info": "⏰ Trial Pro đã hết hạn. Bạn đang ở gói Free.",
+    "onboard.create_fail": "⚠️ Không tạo được tài khoản. Vui lòng thử lại sau ít phút.",
     # ── categories ───────────────────────────────────────────────
     "cat.pick_prompt": "📂 Chọn nhóm chi tiêu cho khoản này:",
     "cat.confirm_tracking": "Đã ghi vào {name}: {amount}.",
     "cat.created": "✅ Đã tạo nhóm “{name}”.",
+    "cat.default.daily_spending": "🛒 Chi tiêu hàng ngày",
+    "cat.default.saving": "🏦 Tiết kiệm",
+    "cat.default.subscription": "📱 Đăng ký dịch vụ",
     # ── manage ───────────────────────────────────────────────────
     "manage.list_header": "Danh mục của bạn:",
     "manage.deleted": "🗑️ Đã xoá nhóm “{name}”.",
