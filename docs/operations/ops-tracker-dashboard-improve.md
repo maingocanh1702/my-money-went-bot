@@ -4,7 +4,7 @@
 > **Ngày tạo:** 2026-05-13
 > **Cập nhật:** 2026-05-13
 > **Target:** `docs/dashboard.html` + `scripts/build-dashboard.py` + Linear integration + Railway `/ops-dashboard.json` endpoint
-> **Ref:** [Dashboard Realtime Explained](dashboard-realtime-explained.md) | [Roadmap](../mymoneywent-roadmap.md) | [Tracker](../implementation-tracker.md)
+> **Ref:** [Dashboard Realtime Explained](ops-tracker-dashboard-explained.md) | [Roadmap](../mymoneywent-roadmap.md) | [Tracker](../implementation-tracker.md)
 > **Decision:** Task management → **Linear** (free tier). GitHub Projects evaluated — Linear thắng ở UX, automation, velocity tracking, multi-dev scalability.
 
 ---

@@ -12,6 +12,9 @@ date: 2026-05-13
 > **Trạng thái:** Active — shipped end-to-end 2026-05-13
 > **Mục đích:** Giải thích đầy đủ cách dashboard tự cập nhật tiến độ dự án trong realtime, không cần reload tay.
 
+> **⚠️ INTERNAL development tracker dashboard** — KHÔNG phải user-facing.
+> User-facing: [web-dashboard/](../../web-dashboard/).
+
 ---
 
 ## TL;DR
