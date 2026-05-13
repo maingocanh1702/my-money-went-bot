@@ -2,7 +2,7 @@
 
 > **Auto-generated** từ [`implementation-tracker.md`](implementation-tracker.md) bằng `scripts/build-dashboard.py`.
 > KHÔNG edit trực tiếp — sửa tracker rồi rebuild.
-> **Cập nhật:** 2026-05-13 09:34 · **Branch hiện tại:** `main`
+> **Cập nhật:** 2026-05-13 17:07 · **Branch hiện tại:** `main`
 
 Để xem dashboard HTML đẹp hơn: mở [`dashboard.html`](dashboard.html) bằng browser.
 
@@ -51,7 +51,7 @@
 | `F05` | Reports `/status`, `/today`, `/weekly` | ⬜ Not started | `feat/F05-reports` |
 | `F07` | Settings `/settings` | ✅ Merged | `feat/F07-settings` |
 | `F11a` | F11 — Admin auth framework only (commands defer Phase 6) | ⬜ Not started | `feat/F11a-admin-auth` |
-| `F-i18n` | VI/EN locale switcher | ❌ Blocked | `feat/F-i18n` |
+| `F-i18n` | VI/EN locale switcher | ⬜ Not started | `feat/F-i18n` |
 
 ### Phase 3 — 0/1 · 0% `░░░░░░░░░░`
 
@@ -127,15 +127,6 @@ gantt
 - **Gates:** 🔒X
 - **Phase:** Phase 1
 - **Notes:** **STALE — base = `1ec2f4f` (trước F07 merge)**. 2 dashboard commits trên top of autopilot v0.2.2 stack (16 total commits ahead): `4e59b64` (Chart.js MVP trajectory, filter buttons, search, click-through, animations) + `c5721be` (FastAPI `/dashboard` + `/dashboard.md` cho Railway, 30s cache). Dashboard portion chưa Codex-reviewed (14 fix() commits dưới là từ autopilot v0.2.2 internal rounds, đã shipped riêng → reconcile_status heuristic false-positive thành 🟠 trong dashboard view). `git diff main..feat/dashboard-v3-rich` show ~6000 lines deletion vì branch chưa rebase qua F07 → **merge thẳng = mất F07 + autopilot v0.2.2/v0.2.3**. Next move: cherry-pick 2 commits sang branch mới từ main, resolve conflict ở `scripts/build-dashboard.py` (overlap với W0.9 detect_git_state), verify, Codex 1× → ready merge.
-
-### F-i18n — VI/EN locale switcher
-
-- **Status:** ❌ Blocked
-- **Branch:** `feat/F-i18n`
-- **Wave:** Wave 1
-- **Gates:** 🔒X
-- **Phase:** Phase 2
-- **Notes:** Stub đã land W0.4; expand to all user-facing strings
 
 ## Up next
 
