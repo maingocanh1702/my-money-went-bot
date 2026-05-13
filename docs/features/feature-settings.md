@@ -204,9 +204,9 @@ Xử lý qua Telegram command / Discord slash command `/settings` + callback/but
 - id: G4
   question: inbound_email — auto-derived or stored?
   status: CLOSED
-  decision: Stored in users.inbound_email (UNIQUE column) populated at user creation by F-onboarding/W0. F07 reads only; renders as-is. If row is NULL (legacy users), F07 backfills via f"u{user_id}@in.mymoneywent.com" on read and writes back.
-  rationale: Schema already enforces uniqueness; F07 must not re-issue or mutate the email.
-  alternatives_rejected: Always-computed (loses UNIQUE guarantee); never-backfilled (breaks display for any user missing the field).
+  decision: Stored in users.inbound_email (UNIQUE column) populated at user creation by F-onboarding/W0. F07 reads `get_overview` is PURE (no DB writes). If row is NULL (legacy users), UI renders the deterministic fallback display string `u{user_id}@in.mymoneywent.com` (via `settings_svc.fallback_inbound_email`). Backfill is handled separately, at trusted callsites only — (1) one-time alembic migration 0003 backfills existing NULL rows; (2) `settings_svc.ensure_inbound_email(user_id)` idempotent helper available for any future post-auth gate / onboarding seam to catch a post-migration NULL (defense in depth — should not occur, cheap to guard).
+  rationale: Original G4 lock had `get_overview` doing implicit backfill, which became a hidden write side-effect surfacing in every handler that called `get_overview` before validation (Codex F07 R2 + R3 both caught instances). Root-cause refactor 2026-05-13 separated read from write; explicit backfill at trusted callsite. CQRS-aligned. Schema still enforces UNIQUE; F07 must not re-issue or mutate the email.
+  alternatives_rejected: Per-handler validate-before-`get_overview` (R2 band-aid pattern) — requires N audits, doesn't enforce purity, future handlers can re-fall into the trap. Inline backfill inside `get_overview` — original anti-pattern; this refactor removes it. Always-computed (loses UNIQUE guarantee). Never-backfilled (breaks display for any user missing the field — but mitigated by UI fallback rendering).
 
 - id: G5
   question: Plan info display format — how is "trial vs active vs expired" computed?

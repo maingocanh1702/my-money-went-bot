@@ -14,6 +14,57 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed — F07 Settings (architecture cleanup, 2026-05-13)
+
+- `core/settings_svc.get_overview()` is now PURE READ — no DB
+  side-effects. Returns `SettingsOverview.inbound_email: str | None`
+  (None for legacy NULL rows; UI renders fallback via
+  `settings_svc.fallback_inbound_email`).
+- Renamed `backfill_inbound_email` → `ensure_inbound_email(user_id)`.
+  Idempotent backfill helper now invoked only from trusted callsites
+  (migration 0003 today; future post-auth gate later). NOT called from
+  `get_overview`.
+- New pure helper `core/settings_svc.fallback_inbound_email(user_id)` —
+  deterministic display string for NULL rows. Formula matches what
+  `ensure_inbound_email` / migration 0003 would persist, so display and
+  backfilled value always agree.
+- New migration `migrations/versions/0003_backfill_inbound_email.py` —
+  one-time backfill of `users.inbound_email = NULL` rows with
+  deterministic `u{id}@in.mymoneywent.com`. Idempotent; downgrade is a
+  no-op (pre-state not safely recoverable).
+- F07 spec G4 revised: read/write separated, CQRS-aligned. See
+  `docs/features/feature-settings.md` G4 for rationale +
+  alternatives_rejected.
+
+### Fixed — F07 Settings (Codex catches R2 + R3, root-cause version)
+
+- R2 (`handle_timezone_input` called `get_overview` before tz validation
+  → side-effect on invalid input) and R3
+  (`handle_settings_callback` called `get_overview` before sub-command
+  dispatch → side-effect on unknown callback) resolved by the
+  architecture cleanup above. The previous R2 band-aid (commit
+  `0246010`) is superseded — `get_overview` is now safe to call anywhere
+  because it no longer mutates. Comments updated; the upfront
+  `is_valid_timezone` short-circuit in `handle_timezone_input` is kept
+  on UX grounds (saves a `set_timezone` DB roundtrip on invalid input).
+
+### Added — F07 Settings (autopilot codegen)
+
+- `core/services/settings_svc.py`: `compute_plan_status()` (Free /
+  trial-with-days-left / active-paid / expired) and `valid_timezone()`
+  IANA validation (≤64 chars, zoneinfo lookup). Pure, no DB / no
+  messenger.
+- `handlers/settings_handler.py`: `/settings` command scaffold rendering
+  plan status + timezone via i18n keys; uses abstract Messenger payload
+  (text_key + markup), no Telegram coupling.
+- i18n keys for settings screen (vi + en): `settings.title`,
+  `settings.plan.free`, `settings.plan.trial`, `settings.plan.active`,
+  `settings.plan.expired`, `settings.tz.label`, `settings.tz.invalid`.
+- Test coverage: happy-path, retry/idempotency, missing-optional,
+  pathological inputs (SQL-shaped / oversized tz), concurrent updates,
+  and MANDATORY tenant-isolation integration test (testcontainers
+  Postgres, no mock DB).
+
 ### Fixed — Autopilot orchestrator v0.2.3 (keyword word-boundary)
 
 - **`CONCURRENCY_KEYWORDS`, `ARCH_KEYWORDS`, `SECURITY_KEYWORDS_SOFT`
