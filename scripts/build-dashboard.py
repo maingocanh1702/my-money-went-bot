@@ -15,16 +15,41 @@ Outputs:
 from __future__ import annotations
 
 import html
+import json
 import re
 import subprocess
+import sys
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
+
+# Allow running as a script (python scripts/build-dashboard.py) AND as a
+# module under pytest: prepend repo root so `scripts.dashboard.*` resolves.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from scripts.dashboard.build_json import build_dashboard_json  # noqa: E402
+from scripts.dashboard.parse_docs import parse_doc_version_header  # noqa: E402
+from scripts.dashboard.parse_roadmap import (  # noqa: E402
+    parse_roadmap_blockers,
+    parse_roadmap_features,
+    parse_roadmap_overall_progress,
+    parse_roadmap_risks,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 TRACKER = ROOT / "docs" / "implementation-tracker.md"
+ROADMAP = ROOT / "docs" / "mymoneywent-roadmap.md"
 HTML_OUT = ROOT / "docs" / "dashboard.html"
 MD_OUT = ROOT / "docs" / "dashboard.md"
+JSON_OUT = ROOT / "docs" / "dashboard.json"
+
+# Canonical docs whose Version/Updated headers feed the staleness widget.
+TRACKED_DOCS = [
+    ROOT / "docs" / "brd-vi.md",
+    ROOT / "docs" / "prd-vi.md",
+    ROOT / "docs" / "tdd-vi.md",
+    ROOT / "docs" / "mymoneywent-roadmap.md",
+]
 
 
 # Status emoji → (label, css/slug)
@@ -1275,6 +1300,42 @@ def render_md(prs, stats, mvp, active, in_flight, upcoming, branch) -> str:
 # ---------- main ----------
 
 
+def _collect_roadmap_data() -> dict:
+    """Parse roadmap §1/§2/§6/§7 — empty defaults if file missing."""
+    if not ROADMAP.exists():
+        return {
+            "overall": {"overall_progress": 0, "phases": []},
+            "features": [],
+            "blockers": [],
+            "risks": [],
+        }
+    text = ROADMAP.read_text(encoding="utf-8")
+    sec1 = _extract_section(text, r"^##\s+1\.\s", r"^##\s+2\.\s")
+    sec2 = _extract_section(text, r"^##\s+2\.\s", r"^##\s+3\.\s")
+    sec6 = _extract_section(text, r"^##\s+6\.\s", r"^##\s+7\.\s")
+    sec7 = _extract_section(text, r"^##\s+7\.\s", r"^##\s+8\.\s")
+    return {
+        "overall": parse_roadmap_overall_progress(sec1),
+        "features": parse_roadmap_features(sec2),
+        "blockers": parse_roadmap_blockers(sec6),
+        "risks": parse_roadmap_risks(sec7),
+    }
+
+
+def _extract_section(text: str, start_pat: str, end_pat: str) -> str:
+    s = re.search(start_pat, text, re.MULTILINE)
+    if not s:
+        return ""
+    rest = text[s.start() :]
+    e = re.search(end_pat, rest[1:], re.MULTILINE)
+    return rest if not e else rest[: e.start() + 1]
+
+
+def _collect_doc_versions() -> list[dict]:
+    today = date.today()
+    return [parse_doc_version_header(p, today) for p in TRACKED_DOCS if p.exists()]
+
+
 def main() -> None:
     if not TRACKER.exists():
         raise SystemExit(f"Tracker not found: {TRACKER}")
@@ -1308,8 +1369,23 @@ def main() -> None:
         render_md(prs, stats, mvp, active, in_flight, upcoming, branch),
         encoding="utf-8",
     )
+
+    # B-1: emit dashboard.json — multi-source aggregate (tracker + roadmap + docs).
+    # Read-only against roadmap and tracked docs; never mutates them.
+    roadmap_data = _collect_roadmap_data()
+    doc_versions = _collect_doc_versions()
+    tracker_data = {"mvp": mvp or {}, "phases": [s.__dict__ for s in stats]}
+    payload = build_dashboard_json(tracker_data, roadmap_data, doc_versions)
+    JSON_OUT.write_text(
+        json.dumps(payload, indent=2, default=str, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
     print(f"✓ {HTML_OUT.relative_to(ROOT)}  ({len(prs)} PRs, {len(stats)} phases)")
     print(f"✓ {MD_OUT.relative_to(ROOT)}")
+    print(
+        f"✓ {JSON_OUT.relative_to(ROOT)}  ({len(roadmap_data['features'])} features, {len(doc_versions)} docs)"
+    )
     if mvp:
         print(
             f"  MVP: {mvp['percent']}% ({mvp['merged']}/{mvp['total']})  ·  In flight: {len(in_flight)}  ·  Active: {len(active)}"
