@@ -35,6 +35,16 @@ from scripts.dashboard.parse_roadmap import (  # noqa: E402
     parse_roadmap_overall_progress,
     parse_roadmap_risks,
 )
+from scripts.dashboard.render import (  # noqa: E402
+    TAB_CSS,
+    TAB_SWITCHER_JS,
+    render_docs_tab,
+    render_features_tab,
+    render_overview_tab,
+    render_prs_tab,
+    render_risks_tab,
+    render_tab_bar,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 TRACKER = ROOT / "docs" / "implementation-tracker.md"
@@ -838,7 +848,17 @@ HTML_LIVE_JS = """
 """
 
 
-def render_html(prs, stats, mvp, active, in_flight, upcoming, branch) -> str:
+def render_html(
+    prs,
+    stats,
+    mvp,
+    active,
+    in_flight,
+    upcoming,
+    branch,
+    roadmap_data=None,
+    doc_versions=None,
+) -> str:
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     branch_tag = f" · <code>{html.escape(branch)}</code>" if branch else ""
     # Bind repo slug for live-poll JS. Detect via `git remote get-url origin` fallback to default.
@@ -1101,6 +1121,30 @@ document.querySelectorAll(".next-chip").forEach(chip => {{
 }});
 </script>"""
 
+    # B-2: 5-tab UI. Overview wraps the legacy hero+chart+next strip; PRs
+    # wraps the legacy toolbar+board; Features/Risks/Docs are new and draw
+    # from B-1 roadmap parser output.
+    rd = roadmap_data or {
+        "overall": {"overall_progress": 0, "mvp_percent": mvp_pct, "phases": []},
+        "features": [],
+        "risks": [],
+    }
+    overall = rd.get("overall") or {}
+    # Backfill mvp_percent so the Overview KPI matches the legacy hero.
+    overall = {**overall, "mvp_percent": mvp_pct}
+    legacy_overview_inner = f"""<div class="hero">
+{hero_current}
+{hero_kpis}
+</div>
+{chart_section}
+{next_strip}"""
+    overview_tab = render_overview_tab(overall, overall.get("phases", []), legacy_overview_inner)
+    features_tab = render_features_tab(rd.get("features", []))
+    prs_tab = render_prs_tab(f"{toolbar_html}\n{board_html}")
+    risks_tab = render_risks_tab(rd.get("risks", []))
+    docs_tab = render_docs_tab(doc_versions or [])
+    tab_bar = render_tab_bar()
+
     return f"""<!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -1108,7 +1152,8 @@ document.querySelectorAll(".next-chip").forEach(chip => {{
 <title>MyMoneyWent — progress dashboard</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="refresh" content="60">
-<style>{HTML_CSS}</style>
+<style>{HTML_CSS}
+{TAB_CSS}</style>
 </head>
 <body>
 <div class="container">
@@ -1121,18 +1166,13 @@ document.querySelectorAll(".next-chip").forEach(chip => {{
   </div>
 </div>
 
-<div class="hero">
-{hero_current}
-{hero_kpis}
-</div>
+{tab_bar}
 
-{chart_section}
-
-{next_strip}
-
-{toolbar_html}
-
-{board_html}
+{overview_tab}
+{features_tab}
+{prs_tab}
+{risks_tab}
+{docs_tab}
 
 <div class="callout warn">
   <div>
@@ -1150,6 +1190,12 @@ document.querySelectorAll(".next-chip").forEach(chip => {{
   <span class="item"><span class="dot deferred"></span> Deferred</span>
   <span class="item" style="margin-left:auto;color:var(--text-tertiary);">Click PR → GitHub · Rebuild: <code>python scripts/build-dashboard.py</code></span>
 </div>
+
+<!-- B-2: tab switcher INSIDE .container so refreshDashboardDOM() re-runs it
+     after live refresh. A-P1-4 re-creates <script> nodes within the
+     replaced container; scripts outside it would be orphaned after the
+     first auto-refresh (Codex round 2). -->
+<script class="tab-switcher">{TAB_SWITCHER_JS}</script>
 
 </div>
 <script>{live_js}</script>
@@ -1361,19 +1407,28 @@ def main() -> None:
     active = [p for p in prs if p.status_slug in ACTIVE_STATUSES]
     upcoming = [p for p in prs if p.status_slug == "not-started"][:5]
 
+    # B-1: collect roadmap + doc data (read-only) — feeds both HTML render and JSON emit.
+    roadmap_data = _collect_roadmap_data()
+    doc_versions = _collect_doc_versions()
+
     HTML_OUT.write_text(
-        render_html(prs, stats, mvp, active, in_flight, upcoming, branch),
+        render_html(
+            prs,
+            stats,
+            mvp,
+            active,
+            in_flight,
+            upcoming,
+            branch,
+            roadmap_data=roadmap_data,
+            doc_versions=doc_versions,
+        ),
         encoding="utf-8",
     )
     MD_OUT.write_text(
         render_md(prs, stats, mvp, active, in_flight, upcoming, branch),
         encoding="utf-8",
     )
-
-    # B-1: emit dashboard.json — multi-source aggregate (tracker + roadmap + docs).
-    # Read-only against roadmap and tracked docs; never mutates them.
-    roadmap_data = _collect_roadmap_data()
-    doc_versions = _collect_doc_versions()
     tracker_data = {"mvp": mvp or {}, "phases": [s.__dict__ for s in stats]}
     payload = build_dashboard_json(tracker_data, roadmap_data, doc_versions)
     JSON_OUT.write_text(
