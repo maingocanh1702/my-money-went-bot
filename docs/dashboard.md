@@ -2,7 +2,7 @@
 
 > **Auto-generated** từ [`implementation-tracker.md`](implementation-tracker.md) bằng `scripts/build-dashboard.py`.
 > KHÔNG edit trực tiếp — sửa tracker rồi rebuild.
-> **Cập nhật:** 2026-05-13 06:41 · **Branch hiện tại:** `main`
+> **Cập nhật:** 2026-05-13 07:01 · **Branch hiện tại:** `main`
 
 Để xem dashboard HTML đẹp hơn: mở [`dashboard.html`](dashboard.html) bằng browser.
 
@@ -10,7 +10,7 @@
 
 ## Tổng quan
 
-- **MVP progress:** **6%** (2/33 PR merged)
+- **MVP progress:** **9%** (3/33 PR merged)
 - **In flight:** 0 PR · **Blocked:** 0 · **Deferred:** 0
 - **Target launch:** Tháng 9/2026 (~16 weeks runway)
 
@@ -19,7 +19,7 @@
 | Phase | Merged / Total | % | Progress |
 |-------|:--------------:|:-:|:---------|
 | Phase 1 | 2 / 5 | 40% | `████░░░░░░` |
-| Phase 2 | 0 / 9 | 0% | `░░░░░░░░░░` |
+| Phase 2 | 1 / 9 | 11% | `█░░░░░░░░░` |
 | Phase 3 | 0 / 1 | 0% | `░░░░░░░░░░` |
 | Phase 4 | 0 / 2 | 0% | `░░░░░░░░░░` |
 | Phase 5 | 0 / 6 | 0% | `░░░░░░░░░░` |
@@ -37,7 +37,7 @@
 | `W1.2` | Discord adapter (`core/messenger/discord.py`) | ⬜ Not started | `feat/W1.2-discord-adapter` |
 | `W1.3` | Phase 1 integration smoke | ⬜ Not started | `chore/W1.3-phase1-smoke` |
 
-### Phase 2 — 0/9 · 0% `░░░░░░░░░░`
+### Phase 2 — 1/9 · 11% `█░░░░░░░░░`
 
 | PR | Feature | Status | Branch |
 |----|---------|:------:|--------|
@@ -47,7 +47,7 @@
 | `F04` | Category management (`/manage`) | ⬜ Not started | `feat/F04-category-mgmt` |
 | `F03` | Categorization auto-rules + manual | ⬜ Not started | `feat/F03-categorization` |
 | `F05` | Reports `/status`, `/today`, `/weekly` | ⬜ Not started | `feat/F05-reports` |
-| `F07` | Settings `/settings` | ❌ Blocked | `feat/F07-settings` |
+| `F07` | Settings `/settings` | ✅ Merged | `feat/F07-settings` |
 | `F11a` | F11 — Admin auth framework only (commands defer Phase 6) | ⬜ Not started | `feat/F11a-admin-auth` |
 | `F-i18n` | VI/EN locale switcher | ❌ Blocked | `feat/F-i18n` |
 
@@ -103,7 +103,7 @@ gantt
     section Phase 1
     P1 (40%) : active, 2026-05-05, 2026-05-22
     section Phase 2
-    P2 (0%) : active, 2026-05-22, 2026-06-15
+    P2 (11%) : active, 2026-05-22, 2026-06-15
     section Phase 3
     P3 (0%) : 2026-06-15, 2026-06-25
     section Phase 4
@@ -115,15 +115,6 @@ gantt
 ```
 
 ## Đang làm
-
-### F07 — Settings `/settings`
-
-- **Status:** ❌ Blocked
-- **Branch:** `feat/F07-settings`
-- **Wave:** Wave 1
-- **Gates:** 🔒T 🔒X
-- **Phase:** Phase 2
-- **Notes:** Locale + TZ + daily recap toggle. 24 commits ahead (incl. `17f039b` v0.2.2 merge). Autopilot resume halted 2026-05-13 on Codex R2 [P2] `emit_analytics` json.dumps outside try-block. Root cause = orchestrator substring keyword match (CONCURRENCY "lock" hit "block") — same class as v0.2.2 R4 fix, not propagated. See `.autopilot/state/F07/phase-b-halt-report.md` Path A/B/C. Unblock = manual 1-line fix + re-resume, OR ship v0.2.3 word-boundary fix first.
 
 ### F-i18n — VI/EN locale switcher
 
