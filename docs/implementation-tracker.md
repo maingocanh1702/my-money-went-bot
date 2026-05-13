@@ -65,7 +65,7 @@
 | F04 | Wave 3 | F04 — Category management (`/manage`) | ⬜ | `feat/F04-category-mgmt` | 🔒T 🔒X | CRUD + parent/sub tree |
 | F03 | Wave 3 | F03 — Categorization auto-rules + manual | ⬜ | `feat/F03-categorization` | 🔒T 🔒X | After F04 (needs categories) |
 | F05 | Wave 4 | F05 — Reports `/status`, `/today`, `/weekly` | ⬜ | `feat/F05-reports` | 🔒T 🔒X | Pure read; no writes |
-| F07 | Wave 1 | F07 — Settings `/settings` | ❌ | `feat/F07-settings` | 🔒T 🔒X | Locale + TZ + daily recap toggle. 24 commits ahead (incl. `17f039b` v0.2.2 merge). Autopilot resume halted 2026-05-13 on Codex R2 [P2] `emit_analytics` json.dumps outside try-block. Root cause = orchestrator substring keyword match (CONCURRENCY "lock" hit "block") — same class as v0.2.2 R4 fix, not propagated. See `.autopilot/state/F07/phase-b-halt-report.md` Path A/B/C. Unblock = manual 1-line fix + re-resume, OR ship v0.2.3 word-boundary fix first. |
+| F07 | Wave 1 | F07 — Settings `/settings` | ✅ | `feat/F07-settings` | 🔒T 🔒X | Merged `f232b63` (2026-05-13). 6-session pilot validated v0.2.0→v0.2.3 orchestrator end-to-end. Locale + TZ + daily recap toggle, regen webhook, `get_overview` pure-read refactor, `ensure_inbound_email` helper, migration 0003 backfill_inbound_email. 376 tests pass. Pilot also surfaced 9 cumulative orchestrator hardening items, 3 shipped (v0.2.1+v0.2.2+v0.2.3), 6 deferred to v0.2.4 backlog. See memory `project_f07_pilot_saga.md`. |
 | F11a | Wave 1 | F11 — Admin auth framework only (commands defer Phase 6) | ⬜ | `feat/F11a-admin-auth` | 🔒T 🔒X | `ADMIN_IDS` env + decorator; actual `/admin_*` commands ship Phase 6 |
 | F-i18n | Wave 1 | F-i18n — VI/EN locale switcher | ❌ | `feat/F-i18n` | 🔒X | Stub đã land W0.4; expand to all user-facing strings |
 
@@ -180,15 +180,15 @@ Nếu 1 trong 5 fail → KHÔNG generate autopilot prompt. Manual mode (founder 
 | Phase | Total PRs | Merged | In progress | Blocked | Deferred | % |
 |-------|:---------:|:------:|:-----------:|:-------:|:--------:|:-:|
 | 1 | 5 | 2 (W0.7, W0.8) | 0 | 0 | 0 | 40% |
-| 2 | 9 | 0 | 0 | 0 | 0 | 0% |
+| 2 | 9 | 1 (F07) | 0 | 0 | 0 | 11% |
 | 3 | 1 | 0 | 0 | 0 | 0 | 0% |
 | 4 | 2 | 0 | 0 | 0 | 0 | 0% |
 | 5 (MVP) | 6 | 0 | 0 | 0 | 0 | 0% |
 | 5b (post-launch) | — | — | — | — | 3 (P-ACB, P-STB, P-BIDV) | n/a |
 | 6 | 10 | 0 | 0 | 0 | 0 | 0% |
-| **MVP total** | **33** | **2** | **0** | **0** | **0** | **6%** |
+| **MVP total** | **33** | **3** | **0** | **0** | **0** | **9%** |
 
-(Wave 0 = 6 PRs đã merged, không count vào MVP remaining. W0.7 merged 2026-05-12. W0.8 merged 2026-05-12 (7105e86) — F07 unblocked. Phase 5b = 3 parsers deferred, unlock per demand signal.)
+(Wave 0 = 6 PRs đã merged, không count vào MVP remaining. W0.7 merged 2026-05-12. W0.8 merged 2026-05-12 (7105e86). F07 merged 2026-05-13 (f232b63) — 6-session pilot validated v0.2.0→v0.2.3 orchestrator. Phase 5b = 3 parsers deferred, unlock per demand signal.)
 
 ---
 
@@ -201,3 +201,4 @@ Nếu 1 trong 5 fail → KHÔNG generate autopilot prompt. Manual mode (founder 
 | v1.0.2 | 2026-05-12 | Added W0.8 (Wave 0 follow-up): webhook `display_suffix VARCHAR(8)` migration per G3 option (b). F07 marked Blocked-on-W0.8. Phase 1 total 4→5; MVP total 32→33; Blocked column reflects F07+W0.8 chain. |
 | v1.1.0 | 2026-05-13 | W0.7 + W0.8 → ✅ merged. F07 unblocked (❌→⬜). Phase 1: 40% (2/5 merged). MVP: 6% (2/33). All `.autopilot/` refs → `docs/autopilot/` (tracked). |
 | v1.1.1 | 2026-05-13 | Autopilot v0.2.2 (tooling hardening) shipped to main (`533e9fd`). F07 Phase B resume attempted on `feat/F07-settings`@`17f039b` post-merge; halted Codex R2 [P2] CONCURRENCY_FINDING false-positive (substring "lock" in "block"). F07 row ⬜→❌ pending founder Path A/B/C. v0.2.3 backlog: word-boundary match for non-SEVERE keyword categories. |
+| v1.2.0 | 2026-05-13 | **F07 ✅ merged (`f232b63`).** 6-session pilot complete. Autopilot v0.2.3 (`9a00be6`) shipped to unblock F07 (keyword word-boundary fix mirrored from v0.2.2 R4 to CONCURRENCY/ARCH/SOFT). F07 row ❌→✅. Phase 2: 11% (1/9). MVP: 9% (3/33). F02 unblocked next. Pilot saga lessons in memory `project_f07_pilot_saga.md`. |
