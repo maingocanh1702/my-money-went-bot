@@ -1,0 +1,378 @@
+{
+  "blockers": [
+    {
+      "affects": "Phase 11 (Family Plan)",
+      "name": "F06 Pricing Addendum doc merge",
+      "notes": "Pro 99k, Family 169k, Business 299k \u2014 locked 2026-05-11",
+      "status": "\ud83d\udfe1 Decisions locked, merge pending",
+      "status_slug": "partial"
+    },
+    {
+      "affects": "Phase 6 (Messenger flip ON)",
+      "name": "Meta App Review (`pages_messaging`)",
+      "notes": "External dependency",
+      "status": "\ud83d\udd32 Pending",
+      "status_slug": "not_started"
+    },
+    {
+      "affects": "Phase 6 (Payment)",
+      "name": "H\u1ed9 kinh doanh registration",
+      "notes": "Lead time 1-2 tu\u1ea7n",
+      "status": "\ud83d\udd32 Pending",
+      "status_slug": "not_started"
+    },
+    {
+      "affects": "Phase 9 (Business go/no-go)",
+      "name": "H\u00f9ng+ customer interviews (5-7)",
+      "notes": "Validate hypothesis",
+      "status": "\ud83d\udd32 Pending",
+      "status_slug": "not_started"
+    },
+    {
+      "affects": "~~Phase 1~~",
+      "name": "~~Bot Finance \u2192 SaaS migration~~",
+      "notes": "Strangler fig pattern. W0.6 ships invariants. Legacy cutover deferred to F02 handler refactor.",
+      "status": "\u2705 Resolved",
+      "status_slug": "done"
+    },
+    {
+      "affects": "Phase 1 completion",
+      "name": "Discord adapter",
+      "notes": "Last major Phase 1 item",
+      "status": "\ud83d\udd32 Pending",
+      "status_slug": "not_started"
+    }
+  ],
+  "docs": [
+    {
+      "name": "brd-vi.md",
+      "stale_days": 4,
+      "updated": "2026-05-10",
+      "version": "v3.1.0"
+    },
+    {
+      "name": "prd-vi.md",
+      "stale_days": 4,
+      "updated": "2026-05-10",
+      "version": "v1.7.1"
+    },
+    {
+      "name": "tdd-vi.md",
+      "stale_days": 4,
+      "updated": "2026-05-10",
+      "version": "v1.8.1"
+    },
+    {
+      "name": "mymoneywent-roadmap.md",
+      "stale_days": 2,
+      "updated": "2026-05-12",
+      "version": "v1.1.0"
+    }
+  ],
+  "features": [
+    {
+      "be_code": "partial",
+      "be_tech": "done",
+      "bot_code": "not_started",
+      "id": "F01",
+      "name": "3-Path Onboarding",
+      "phase": "1,4",
+      "spec": "done"
+    },
+    {
+      "be_code": "partial",
+      "be_tech": "done",
+      "bot_code": "not_started",
+      "id": "F02",
+      "name": "Transaction Capture (SePay + Email)",
+      "phase": "1,5",
+      "spec": "done"
+    },
+    {
+      "be_code": "not_started",
+      "be_tech": "done",
+      "bot_code": "not_started",
+      "id": "F03",
+      "name": "Transaction Categorization",
+      "phase": "2",
+      "spec": "done"
+    },
+    {
+      "be_code": "not_started",
+      "be_tech": "done",
+      "bot_code": "not_started",
+      "id": "F04",
+      "name": "Category Management (/manage)",
+      "phase": "2",
+      "spec": "done"
+    },
+    {
+      "be_code": "not_started",
+      "be_tech": "done",
+      "bot_code": "not_started",
+      "id": "F05",
+      "name": "Reports (/status, /today, /weekly)",
+      "phase": "2",
+      "spec": "done"
+    },
+    {
+      "be_code": "not_started",
+      "be_tech": "done",
+      "bot_code": "not_started",
+      "id": "F06",
+      "name": "Pricing, Tier Limits & Trial",
+      "phase": "3",
+      "spec": "done"
+    },
+    {
+      "be_code": "not_started",
+      "be_tech": "done",
+      "bot_code": "not_started",
+      "id": "F07",
+      "name": "Settings (/settings)",
+      "phase": "2",
+      "spec": "done"
+    },
+    {
+      "be_code": "partial",
+      "be_tech": "done",
+      "bot_code": "not_started",
+      "id": "F08",
+      "name": "Funding Sources",
+      "phase": "2",
+      "spec": "done"
+    },
+    {
+      "be_code": "not_started",
+      "be_tech": "done",
+      "bot_code": "not_started",
+      "id": "F09",
+      "name": "Scheduled Jobs",
+      "phase": "6",
+      "spec": "done"
+    },
+    {
+      "be_code": "not_started",
+      "be_tech": "done",
+      "bot_code": "not_started",
+      "id": "F10",
+      "name": "Payment (Bank Transfer Auto-Detect)",
+      "phase": "6",
+      "spec": "done"
+    },
+    {
+      "be_code": "partial",
+      "be_tech": "done",
+      "bot_code": "not_started",
+      "id": "F11",
+      "name": "Admin Tools & Audit",
+      "phase": "6",
+      "spec": "done"
+    },
+    {
+      "be_code": "done",
+      "be_tech": "not_started",
+      "bot_code": "not_started",
+      "id": "F12",
+      "name": "Multi-User Data Isolation",
+      "phase": "1",
+      "spec": "done"
+    },
+    {
+      "be_code": "not_started",
+      "be_tech": "done",
+      "bot_code": "not_started",
+      "id": "F13",
+      "name": "Messenger Channel",
+      "phase": "6",
+      "spec": "done"
+    },
+    {
+      "be_code": "not_started",
+      "be_tech": "done",
+      "bot_code": "not_started",
+      "id": "F14",
+      "name": "Discord Channel",
+      "phase": "1",
+      "spec": "done"
+    },
+    {
+      "be_code": "not_started",
+      "be_tech": "done",
+      "bot_code": "not_started",
+      "id": "F15",
+      "name": "Personal vs Business Toggle",
+      "phase": "9",
+      "spec": "done"
+    },
+    {
+      "be_code": "not_started",
+      "be_tech": "not_started",
+      "bot_code": "not_started",
+      "id": "F16",
+      "name": "P&L View",
+      "phase": "9",
+      "spec": "not_started"
+    },
+    {
+      "be_code": "not_started",
+      "be_tech": "not_started",
+      "bot_code": "not_started",
+      "id": "F17",
+      "name": "Income Source Attribution",
+      "phase": "9",
+      "spec": "not_started"
+    },
+    {
+      "be_code": "partial",
+      "be_tech": "done",
+      "bot_code": "not_started",
+      "id": "F-i18n",
+      "name": "Internationalization",
+      "phase": "1",
+      "spec": "done"
+    },
+    {
+      "be_code": "partial",
+      "be_tech": "done",
+      "bot_code": "not_started",
+      "id": "F-saas",
+      "name": "SaaS Refactor",
+      "phase": "1",
+      "spec": "done"
+    },
+    {
+      "be_code": "not_started",
+      "be_tech": "done",
+      "bot_code": "not_started",
+      "id": "FAM",
+      "name": "Family Plan",
+      "phase": "11",
+      "spec": "done"
+    }
+  ],
+  "generated_at": "2026-05-13T19:45:39+00:00",
+  "overall": {
+    "mvp_merged": 6,
+    "mvp_percent": 17,
+    "mvp_total": 35,
+    "overall_progress": 30
+  },
+  "phases": [
+    {
+      "name": "Phase 0: Docs & Specs",
+      "progress": 100,
+      "status": "done",
+      "status_label": "\u2705 Complete",
+      "tasks": "\u2014"
+    },
+    {
+      "name": "Phase 1: Foundation",
+      "progress": 75,
+      "status": "partial",
+      "status_label": "\ud83d\udfe1 In Progress",
+      "tasks": "[plan](implementation-plans/phase-1-foundation-remaining.md)"
+    },
+    {
+      "name": "Phase 2: Handlers Refactor",
+      "progress": 0,
+      "status": "not_started",
+      "status_label": "\u2b1c Not Started",
+      "tasks": "[9 PRs](implementation-plans/phase-2-handlers.md)"
+    },
+    {
+      "name": "Phase 3: Pricing Logic",
+      "progress": 0,
+      "status": "not_started",
+      "status_label": "\u2b1c Not Started",
+      "tasks": "[1 PR](implementation-plans/phase-3-pricing.md)"
+    },
+    {
+      "name": "Phase 4: SePay Onboarding",
+      "progress": 0,
+      "status": "not_started",
+      "status_label": "\u2b1c Not Started",
+      "tasks": "[2 PRs](implementation-plans/phase-4-sepay-onboarding.md)"
+    },
+    {
+      "name": "Phase 5: Email Parsing",
+      "progress": 0,
+      "status": "not_started",
+      "status_label": "\u2b1c Not Started",
+      "tasks": "[plan](implementation-plans/phase-5-email-parsing.md)"
+    },
+    {
+      "name": "Phase 6: Polish + Deploy",
+      "progress": 0,
+      "status": "not_started",
+      "status_label": "\u2b1c Not Started",
+      "tasks": "[10 PRs](implementation-plans/phase-6-polish-deploy.md)"
+    },
+    {
+      "name": "Phase 7: Closed Beta",
+      "progress": 0,
+      "status": "not_started",
+      "status_label": "\u2b1c Not Started",
+      "tasks": "\u2014 (create plan when Phase 6 ships)"
+    },
+    {
+      "name": "Phase 8: Public Soft Launch",
+      "progress": 0,
+      "status": "not_started",
+      "status_label": "\u2b1c Not Started",
+      "tasks": "\u2191 same file"
+    },
+    {
+      "name": "Phase 9-10: Growth + Business Tier",
+      "progress": 0,
+      "status": "not_started",
+      "status_label": "\u2b1c Not Started",
+      "tasks": "\u2014 (create when Phase 8 ships)"
+    },
+    {
+      "name": "Phase 11: Family Plan",
+      "progress": 0,
+      "status": "not_started",
+      "status_label": "\u2b1c Not Started",
+      "tasks": "\u2014 (create when F06 addendum merged)"
+    }
+  ],
+  "risks": [
+    {
+      "impact": "Medium",
+      "mitigation": "Parser shells + plugin framework exist (W0.6). Fallback: gi\u1ea3m scope xu\u1ed1ng 3 banks MVP (TCB, Cake, MB)",
+      "name": "Email parser Phase 5 slip",
+      "phase": "5"
+    },
+    {
+      "impact": "Medium",
+      "mitigation": "Monitor hit-limit-rate, adjust 45\u219260-75 if churn > upgrade",
+      "name": "Low conversion Free\u2192Pro",
+      "phase": "8+"
+    },
+    {
+      "impact": "High",
+      "mitigation": "Reposition as personal+freelancer tracker",
+      "name": "Business tier validation fail",
+      "phase": "9"
+    },
+    {
+      "impact": "Medium",
+      "mitigation": "Trigger Hetzner migration",
+      "name": "Railway cost > $50/mo",
+      "phase": "8+"
+    },
+    {
+      "impact": "Low",
+      "mitigation": "Merge F06 addendum doc \u2014 decision work done",
+      "name": "Family Plan pricing conflict",
+      "phase": "11"
+    },
+    {
+      "impact": "Medium",
+      "mitigation": "Each handler = focused PR with isolation tests",
+      "name": "Legacy handler migration drag",
+      "phase": "2"
+    }
+  ]
+}
