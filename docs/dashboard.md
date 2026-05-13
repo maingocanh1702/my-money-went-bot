@@ -2,7 +2,7 @@
 
 > **Auto-generated** từ [`implementation-tracker.md`](implementation-tracker.md) bằng `scripts/build-dashboard.py`.
 > KHÔNG edit trực tiếp — sửa tracker rồi rebuild.
-> **Cập nhật:** 2026-05-13 16:17 · **Branch hiện tại:** `feat/dashboard-live-poll`
+> **Cập nhật:** 2026-05-13 09:34 · **Branch hiện tại:** `main`
 
 Để xem dashboard HTML đẹp hơn: mở [`dashboard.html`](dashboard.html) bằng browser.
 
