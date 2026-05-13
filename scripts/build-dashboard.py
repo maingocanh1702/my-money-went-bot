@@ -632,7 +632,9 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
 HTML_LIVE_JS = """
 (function() {
   var REPO = '__REPO__';
-  var POLL_INTERVAL_MS = 30000;
+  var PAT = null;
+  try { PAT = localStorage.getItem('github_pat'); } catch (e) { /* SecurityError in some sandboxes */ }
+  var POLL_INTERVAL_MS = PAT ? 30000 : 120000;  // 30s authed (5000/hr), 2min unauth (30 req/hr, under 60/hr limit)
   // Polling docs/dashboard.html alone catches all updates: tracker.md changes
   // are downstream via the pre-commit build-dashboard hook (regen + auto-stage)
   // and the GH Action dashboard.yml workflow. Polling both paths would double
