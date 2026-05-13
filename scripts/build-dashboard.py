@@ -728,10 +728,28 @@ HTML_LIVE_JS = """
         // Preserve our live-indicator element (template doesn't have current state)
         var indicator = oldContainer.querySelector('#live-indicator');
         var indicatorHtml = indicator ? indicator.outerHTML : '';
-        oldContainer.innerHTML = newContainer.innerHTML;
+        // Script-safe swap: replaceChild + manual <script> re-execution.
+        // Plain innerHTML drops <script> tags silently (browsers refuse to run
+        // them when set via innerHTML), so any inline scripts shipped by v2
+        // (tab switcher, charts) would not re-run after refresh. We deep-clone
+        // the new container, replace the old one in-place, then re-create each
+        // <script> element so the browser executes it.
+        var clone = document.importNode(newContainer, true);
+        oldContainer.parentNode.replaceChild(clone, oldContainer);
+        var scripts = clone.querySelectorAll('script');
+        for (var i = 0; i < scripts.length; i++) {
+          var oldScript = scripts[i];
+          var newScript = document.createElement('script');
+          for (var j = 0; j < oldScript.attributes.length; j++) {
+            var attr = oldScript.attributes[j];
+            newScript.setAttribute(attr.name, attr.value);
+          }
+          newScript.textContent = oldScript.textContent;
+          oldScript.parentNode.replaceChild(newScript, oldScript);
+        }
         // Re-inject indicator if new content doesn't already have it
-        if (indicatorHtml && !oldContainer.querySelector('#live-indicator')) {
-          var meta = oldContainer.querySelector('.head-meta') || oldContainer.querySelector('.page-head');
+        if (indicatorHtml && !clone.querySelector('#live-indicator')) {
+          var meta = clone.querySelector('.head-meta') || clone.querySelector('.page-head');
           if (meta) meta.insertAdjacentHTML('afterbegin', indicatorHtml);
         }
         window.scrollTo(0, scrollY);
