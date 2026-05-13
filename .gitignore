@@ -36,3 +36,4 @@ docs/tasks/
 
 # Autopilot orchestrator state (per-feature checkpoints + Codex artifacts)
 .autopilot/
+.linear-cache.json
