@@ -141,22 +141,22 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
 
 <div class="page-head">
   <h1>MyMoneyWent — progress dashboard</h1>
-  <p class="meta">Updated 2026-05-13 07:34 · <code>main</code></p>
+  <p class="meta">Updated 2026-05-13 15:03 · <code>main</code></p>
 </div>
 
 <div class="hero">
-<div class="hero-current empty">
-  <span class="dot not-started"></span>
+<div class="hero-current">
+  <span class="dot in-review"></span>
   <div class="hero-text">
     <p class="hero-label">Đang làm</p>
-    <p class="hero-title">Không có PR active</p>
-    <p class="hero-sub">Pick task từ Next strip phía dưới</p>
+    <p class="hero-title">W0.10 · Dashboard v3 rich UI + FastAPI serve</p>
+    <p class="hero-sub">In review · feat/dashboard-v3-rich</p>
   </div>
 </div>
 <div class="hero-kpis">
-  <div class="kpi"><p class="kpi-val">9%</p><p class="kpi-lbl">MVP</p><p class="kpi-sub">3/33</p></div>
-  <div class="kpi"><p class="kpi-val">40%</p><p class="kpi-lbl">Phase 1</p><p class="kpi-sub">2/5</p></div>
-  <div class="kpi"><p class="kpi-val">0</p><p class="kpi-lbl">In flight</p></div>
+  <div class="kpi"><p class="kpi-val">11%</p><p class="kpi-lbl">MVP</p><p class="kpi-sub">4/35</p></div>
+  <div class="kpi"><p class="kpi-val">43%</p><p class="kpi-lbl">Phase 1</p><p class="kpi-sub">3/7</p></div>
+  <div class="kpi"><p class="kpi-val">1</p><p class="kpi-lbl">In flight</p></div>
   <div class="kpi alert"><p class="kpi-val">1</p><p class="kpi-lbl">Blocked</p></div>
   <div class="kpi"><p class="kpi-val">↑0</p><p class="kpi-lbl">Unpushed</p><p class="kpi-sub">0 PR</p></div>
   <div class="kpi"><p class="kpi-val">↓23</p><p class="kpi-lbl">Unpulled</p><p class="kpi-sub">1 PR</p></div>
@@ -185,13 +185,17 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
 </div>
 
 <div class="board">
-<div class="phase-card">
+<div class="phase-card active">
   <div class="phase-card-head">
     <p class="phase-card-name">Phase 1</p>
-    <span class="phase-card-meta">2/5 · 40%</span>
+    <span class="phase-card-meta">3/7 · 43%</span>
   </div>
-  <div class="phase-card-bar"><div class="" style="width:40%;"></div></div>
-  <div class="phase-prs"><div class="pr-row not-started" title="Not started · infra/W1.1-docker-compose">
+  <div class="phase-card-bar"><div class="" style="width:43%;"></div></div>
+  <div class="phase-prs"><div class="pr-row in-review" title="In review · feat/dashboard-v3-rich · local: in-review · remote: in-review">
+  <span class="dot in-review"></span>
+  <span class="pr-id">W0.10</span>
+  <span class="pr-name"><span class="pr-name-text">Dashboard v3 rich UI + FastAPI serve</span></span>
+</div><div class="pr-row not-started" title="Not started · infra/W1.1-docker-compose">
   <span class="dot not-started"></span>
   <span class="pr-id">W1.1</span>
   <span class="pr-name"><span class="pr-name-text">Docker Compose dev + prod</span></span>
@@ -211,6 +215,10 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <span class="dot merged"></span>
   <span class="pr-id">W0.8</span>
   <span class="pr-name"><span class="pr-name-text">Webhook `display_suffix VARCHAR(8)` migration (G3 option b)</span></span>
+</div><div class="pr-row merged" title="Merged · feat/dashboard-realtime · remote: not-started">
+  <span class="dot merged"></span>
+  <span class="pr-id">W0.9</span>
+  <span class="pr-name"><span class="pr-name-text">Dashboard realtime — auto-rebuild + git-state detect + reconcile</span></span>
 </div></div>
 </div><div class="phase-card active">
   <div class="phase-card-head">
@@ -370,6 +378,10 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <span class="dot not-started"></span>
   <span class="pr-id">W6.4</span>
   <span class="pr-name"><span class="pr-name-text">DR runbook full validation (test restore)</span></span>
+</div><div class="pr-row deferred" title="Deferred · —">
+  <span class="dot deferred"></span>
+  <span class="pr-id">(to be created when Phase W enters implementation planning)</span>
+  <span class="pr-name"><span class="pr-name-text">—</span></span>
 </div></div>
 </div>
 </div>
