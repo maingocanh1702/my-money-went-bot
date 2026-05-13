@@ -2,6 +2,23 @@
 
 > Founder UI work (or applied via PHASE 5 gh api automation).
 
+## Status (2026-05-14)
+
+**Enforcement deferred** — GitHub Free does not support branch protection
+on private repos (`gh api PUT branches/main/protection` → HTTP 403
+"Upgrade to GitHub Pro or make this repository public").
+
+**Active mode: convention-only.** The rules below are the *agreed*
+convention. They are NOT mechanically enforced by GitHub today. CODEOWNERS
+still drives automatic reviewer assignment, and `pr-validate` still runs
+as a status check (devs see ❌ in the PR UI), but neither blocks merge.
+
+To enable enforcement later, pick one:
+- Upgrade repo to GitHub Pro / Team (paid), OR
+- Make repo public: `gh repo edit <owner>/<repo> --visibility public --accept-visibility-change-consequences`
+
+Then run the PHASE 5 `gh api PUT` from `docs/autopilot/ops-tracker-dashboard/walk-away-prompt.md`.
+
 ## Settings → Branches → Add rule for `main`
 
 | Rule | Setting |
