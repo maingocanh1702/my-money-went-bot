@@ -2,7 +2,7 @@
 
 > **Auto-generated** từ [`implementation-tracker.md`](implementation-tracker.md) bằng `scripts/build-dashboard.py`.
 > KHÔNG edit trực tiếp — sửa tracker rồi rebuild.
-> **Cập nhật:** 2026-05-13 13:28 · **Branch hiện tại:** `feat/F07-settings`
+> **Cập nhật:** 2026-05-13 06:41 · **Branch hiện tại:** `main`
 
 Để xem dashboard HTML đẹp hơn: mở [`dashboard.html`](dashboard.html) bằng browser.
 
@@ -118,7 +118,7 @@ gantt
 
 ### F07 — Settings `/settings`
 
-- **Status:** ❌ Blocked · 🌿 đang trên branch này
+- **Status:** ❌ Blocked
 - **Branch:** `feat/F07-settings`
 - **Wave:** Wave 1
 - **Gates:** 🔒T 🔒X
