@@ -70,7 +70,7 @@ def render_overview_tab(
     )
 
 
-def render_features_tab(features: list[dict[str, Any]]) -> str:
+def render_features_tab(features: list[dict[str, Any]], prefix_html: str = "") -> str:
     rows: list[str] = []
     for f in features:
         rows.append(
@@ -86,6 +86,7 @@ def render_features_tab(features: list[dict[str, Any]]) -> str:
         )
     return (
         '<section id="tab-features" class="tab-panel" role="tabpanel">'
+        f"{prefix_html}"
         '<table class="features-matrix">'
         "<thead><tr>"
         "<th>ID</th><th>Feature</th><th>Spec</th><th>BE Tech</th>"

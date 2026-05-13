@@ -22,6 +22,7 @@ import sys
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
+from typing import Any
 
 # Allow running as a script (python scripts/build-dashboard.py) AND as a
 # module under pytest: prepend repo root so `scripts.dashboard.*` resolves.
@@ -34,6 +35,12 @@ from scripts.dashboard.parse_roadmap import (  # noqa: E402
     parse_roadmap_features,
     parse_roadmap_overall_progress,
     parse_roadmap_risks,
+)
+from scripts.dashboard.polish import (  # noqa: E402
+    POLISH_CSS,
+    compute_readiness,
+    render_gantt,
+    render_readiness_bar,
 )
 from scripts.dashboard.render import (  # noqa: E402
     TAB_CSS,
@@ -1132,14 +1139,33 @@ document.querySelectorAll(".next-chip").forEach(chip => {{
     overall = rd.get("overall") or {}
     # Backfill mvp_percent so the Overview KPI matches the legacy hero.
     overall = {**overall, "mvp_percent": mvp_pct}
+
+    # B-3: enrich roadmap phases with PHASE_DATES so render_gantt has spans.
+    # Only "Phase N" rows get dates — meta rows pass through without bars.
+    enriched_phases: list[dict[str, Any]] = []
+    for ph in overall.get("phases", []):
+        match = re.search(r"Phase\s+(\d+)", ph.get("name", ""))
+        if match:
+            key = f"Phase {match.group(1)}"
+            if key in PHASE_DATES:
+                start, end = PHASE_DATES[key]
+                enriched_phases.append({**ph, "start_date": start, "target_date": end})
+                continue
+        enriched_phases.append(ph)
+    gantt_html = render_gantt(enriched_phases, date.today())
+    readiness = compute_readiness(rd.get("features", []))
+    readiness_html = render_readiness_bar(readiness)
+
     legacy_overview_inner = f"""<div class="hero">
 {hero_current}
 {hero_kpis}
 </div>
 {chart_section}
-{next_strip}"""
+{next_strip}
+<h3 class="section-h">Timeline (Gantt)</h3>
+{gantt_html}"""
     overview_tab = render_overview_tab(overall, overall.get("phases", []), legacy_overview_inner)
-    features_tab = render_features_tab(rd.get("features", []))
+    features_tab = render_features_tab(rd.get("features", []), prefix_html=readiness_html)
     prs_tab = render_prs_tab(f"{toolbar_html}\n{board_html}")
     risks_tab = render_risks_tab(rd.get("risks", []))
     docs_tab = render_docs_tab(doc_versions or [])
@@ -1153,7 +1179,8 @@ document.querySelectorAll(".next-chip").forEach(chip => {{
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="refresh" content="60">
 <style>{HTML_CSS}
-{TAB_CSS}</style>
+{TAB_CSS}
+{POLISH_CSS}</style>
 </head>
 <body>
 <div class="container">
