@@ -584,6 +584,43 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   .pr-row { grid-template-columns: 12px 56px minmax(0, 1fr); gap: 6px; }
   .sync-badge { font-size: 9px; padding: 1px 4px; }
 }
+
+/* === v3: animations + filter/search + chart === */
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+@keyframes ring-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(24, 95, 165, 0.4); }
+  100% { box-shadow: 0 0 0 8px rgba(24, 95, 165, 0); }
+}
+.phase-card { animation: fade-in 0.3s ease-out; }
+.phase-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06); transition: transform 0.2s, box-shadow 0.2s; }
+.pr-row { cursor: pointer; transition: background 0.15s, transform 0.1s; }
+.pr-row:hover { transform: translateX(2px); }
+.pr-row.hidden { display: none; }
+.sync-badge { animation: pulse 2s infinite; }
+.dot.in-review { animation: ring-pulse 2s infinite; }
+.toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+.search-input {
+  flex: 1; min-width: 180px; padding: 6px 10px; font-size: 13px;
+  border: 0.5px solid var(--border-tertiary); border-radius: var(--radius-md);
+  background: var(--bg-surface); color: var(--text-primary); font-family: var(--font-sans);
+}
+.search-input:focus { outline: none; border-color: var(--text-info); }
+.filter-btn {
+  padding: 5px 12px; font-size: 12px; cursor: pointer;
+  border: 0.5px solid var(--border-tertiary); border-radius: var(--radius-md);
+  background: var(--bg-surface); color: var(--text-secondary); font-family: var(--font-sans);
+}
+.filter-btn:hover { background: var(--bg-hover); }
+.filter-btn.active { background: var(--text-info); color: white; border-color: var(--text-info); }
+.chart-section {
+  background: var(--bg-surface); border: 0.5px solid var(--border-tertiary);
+  border-radius: var(--radius-lg); padding: 14px 16px; margin-bottom: 14px;
+}
+.chart-title { font-size: 11px; color: var(--text-tertiary); margin: 0 0 10px;
+  text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500;
+}
+.chart-section canvas { max-height: 140px; }
 """
 
 
@@ -902,12 +939,130 @@ def render_html(prs, stats, mvp, active, in_flight, upcoming, branch) -> str:
 
     board_html = f'<div class="board">\n{"".join(phase_cards)}\n</div>'
 
+    # --- v3: Chart data ---
+    import datetime as _dt
+
+    phase_start = _dt.date(2026, 5, 5)
+    phase_launch = _dt.date(2026, 9, 15)
+    today = _dt.date.today()
+    days_total = (phase_launch - phase_start).days
+    days_elapsed = max(0, min(days_total, (today - phase_start).days))
+    target_pct = round(days_elapsed / days_total * 100, 1) if days_total > 0 else 0.0
+    actual_pct_chart = mvp_pct
+
+    chart_section = f"""<div class="chart-section">
+  <p class="chart-title">MVP progress vs target ({days_elapsed}/{days_total} days elapsed · launch T9/2026)</p>
+  <canvas id="burndown" role="img" aria-label="Line chart comparing actual MVP completion to target trajectory"></canvas>
+</div>"""
+
+    # --- v3: Filter + search toolbar ---
+    toolbar_html = """<div class="toolbar">
+  <input type="search" id="dashboard-search" class="search-input" placeholder="🔍 Search PR by ID or name...">
+  <button class="filter-btn active" data-filter="all">All</button>
+  <button class="filter-btn" data-filter="in-review">In review</button>
+  <button class="filter-btn" data-filter="in-progress">In progress</button>
+  <button class="filter-btn" data-filter="blocked">Blocked</button>
+  <button class="filter-btn" data-filter="not-started">Not started</button>
+</div>"""
+
+    # --- v3: JS — Chart.js + filter/search + click-through ---
+    js_snippet = f"""<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+<script>
+const REPO = "maingocanh1702/MyMoneyWent";
+
+// Burndown chart
+const ctx = document.getElementById("burndown");
+if (ctx && window.Chart) {{
+  new Chart(ctx, {{
+    type: "line",
+    data: {{
+      labels: ["Start", "Today", "Launch"],
+      datasets: [
+        {{
+          label: "Actual",
+          data: [0, {actual_pct_chart}, null],
+          borderColor: "#185fa5",
+          backgroundColor: "rgba(24,95,165,0.1)",
+          tension: 0.3,
+          pointRadius: 5,
+          fill: false,
+        }},
+        {{
+          label: "Target",
+          data: [0, {target_pct}, 100],
+          borderColor: "#888780",
+          borderDash: [5, 5],
+          tension: 0,
+          pointRadius: 3,
+          fill: false,
+        }},
+      ],
+    }},
+    options: {{
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {{
+        y: {{ beginAtZero: true, max: 100, ticks: {{ callback: v => v + "%", font: {{ size: 10 }} }} }},
+        x: {{ ticks: {{ font: {{ size: 10 }} }} }},
+      }},
+      plugins: {{
+        legend: {{ position: "bottom", labels: {{ font: {{ size: 11 }}, boxWidth: 12, padding: 8 }} }},
+      }},
+    }},
+  }});
+}}
+
+// Filter + search
+let activeFilter = "all";
+let searchQuery = "";
+const searchInput = document.getElementById("dashboard-search");
+const filterBtns = document.querySelectorAll(".filter-btn");
+
+function applyFilters() {{
+  document.querySelectorAll(".pr-row").forEach(row => {{
+    const matchesFilter = activeFilter === "all" || row.classList.contains(activeFilter);
+    const matchesSearch = !searchQuery || row.textContent.toLowerCase().includes(searchQuery);
+    row.classList.toggle("hidden", !(matchesFilter && matchesSearch));
+  }});
+  document.querySelectorAll(".phase-card").forEach(card => {{
+    const visiblePRs = card.querySelectorAll(".pr-row:not(.hidden)").length;
+    card.style.display = visiblePRs === 0 && (activeFilter !== "all" || searchQuery) ? "none" : "";
+  }});
+}}
+
+if (searchInput) {{
+  searchInput.addEventListener("input", e => {{ searchQuery = e.target.value.toLowerCase(); applyFilters(); }});
+}}
+filterBtns.forEach(btn => btn.addEventListener("click", () => {{
+  filterBtns.forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  activeFilter = btn.dataset.filter;
+  applyFilters();
+}}));
+
+// Click PR → open GitHub branch
+document.querySelectorAll(".pr-row").forEach(row => {{
+  const m = row.title.match(/(?:feat|infra|chore|fix)\\/[\\w.-]+/);
+  if (m) {{
+    row.addEventListener("click", () => window.open(`https://github.com/${{REPO}}/tree/${{m[0]}}`, "_blank"));
+  }}
+}});
+document.querySelectorAll(".next-chip").forEach(chip => {{
+  chip.style.cursor = "pointer";
+  chip.addEventListener("click", () => {{
+    const id = chip.querySelector(".pr-id")?.textContent;
+    if (id) window.open(`https://github.com/${{REPO}}/issues?q=${{id}}`, "_blank");
+  }});
+}});
+</script>"""
+
     return f"""<!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="utf-8">
 <title>MyMoneyWent — progress dashboard</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="60">
 <style>{HTML_CSS}</style>
 </head>
 <body>
@@ -917,7 +1072,7 @@ def render_html(prs, stats, mvp, active, in_flight, upcoming, branch) -> str:
   <h1>MyMoneyWent — progress dashboard</h1>
   <div class="head-meta">
     <span id="live-indicator" class="live-indicator init">⚪ initializing…</span>
-    <p class="meta">Updated {now}{branch_tag}</p>
+    <p class="meta">Updated {now}{branch_tag} · auto-refresh 60s</p>
   </div>
 </div>
 
@@ -926,7 +1081,11 @@ def render_html(prs, stats, mvp, active, in_flight, upcoming, branch) -> str:
 {hero_kpis}
 </div>
 
+{chart_section}
+
 {next_strip}
+
+{toolbar_html}
 
 {board_html}
 
@@ -944,11 +1103,12 @@ def render_html(prs, stats, mvp, active, in_flight, upcoming, branch) -> str:
   <span class="item"><span class="dot blocked"></span> Blocked</span>
   <span class="item"><span class="dot not-started"></span> Not started</span>
   <span class="item"><span class="dot deferred"></span> Deferred</span>
-  <span class="item" style="margin-left:auto;color:var(--text-tertiary);">Rebuild: <code>python scripts/build-dashboard.py</code></span>
+  <span class="item" style="margin-left:auto;color:var(--text-tertiary);">Click PR → GitHub · Rebuild: <code>python scripts/build-dashboard.py</code></span>
 </div>
 
 </div>
 <script>{live_js}</script>
+{js_snippet}
 </body>
 </html>
 """

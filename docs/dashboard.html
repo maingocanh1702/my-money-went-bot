@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <title>MyMoneyWent — progress dashboard</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="60">
 <style>
 :root {
   --bg-page: #f6f4ef;
@@ -145,6 +146,43 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   .pr-row { grid-template-columns: 12px 56px minmax(0, 1fr); gap: 6px; }
   .sync-badge { font-size: 9px; padding: 1px 4px; }
 }
+
+/* === v3: animations + filter/search + chart === */
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+@keyframes ring-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(24, 95, 165, 0.4); }
+  100% { box-shadow: 0 0 0 8px rgba(24, 95, 165, 0); }
+}
+.phase-card { animation: fade-in 0.3s ease-out; }
+.phase-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06); transition: transform 0.2s, box-shadow 0.2s; }
+.pr-row { cursor: pointer; transition: background 0.15s, transform 0.1s; }
+.pr-row:hover { transform: translateX(2px); }
+.pr-row.hidden { display: none; }
+.sync-badge { animation: pulse 2s infinite; }
+.dot.in-review { animation: ring-pulse 2s infinite; }
+.toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+.search-input {
+  flex: 1; min-width: 180px; padding: 6px 10px; font-size: 13px;
+  border: 0.5px solid var(--border-tertiary); border-radius: var(--radius-md);
+  background: var(--bg-surface); color: var(--text-primary); font-family: var(--font-sans);
+}
+.search-input:focus { outline: none; border-color: var(--text-info); }
+.filter-btn {
+  padding: 5px 12px; font-size: 12px; cursor: pointer;
+  border: 0.5px solid var(--border-tertiary); border-radius: var(--radius-md);
+  background: var(--bg-surface); color: var(--text-secondary); font-family: var(--font-sans);
+}
+.filter-btn:hover { background: var(--bg-hover); }
+.filter-btn.active { background: var(--text-info); color: white; border-color: var(--text-info); }
+.chart-section {
+  background: var(--bg-surface); border: 0.5px solid var(--border-tertiary);
+  border-radius: var(--radius-lg); padding: 14px 16px; margin-bottom: 14px;
+}
+.chart-title { font-size: 11px; color: var(--text-tertiary); margin: 0 0 10px;
+  text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500;
+}
+.chart-section canvas { max-height: 140px; }
 </style>
 </head>
 <body>
@@ -154,7 +192,7 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <h1>MyMoneyWent — progress dashboard</h1>
   <div class="head-meta">
     <span id="live-indicator" class="live-indicator init">⚪ initializing…</span>
-    <p class="meta">Updated 2026-05-13 10:13 · <code>main</code></p>
+    <p class="meta">Updated 2026-05-13 18:42 · <code>main</code> · auto-refresh 60s</p>
   </div>
 </div>
 
@@ -173,8 +211,13 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <div class="kpi"><p class="kpi-val">1</p><p class="kpi-lbl">In flight</p></div>
   <div class="kpi"><p class="kpi-val">0</p><p class="kpi-lbl">Blocked</p></div>
   <div class="kpi"><p class="kpi-val">↑0</p><p class="kpi-lbl">Unpushed</p><p class="kpi-sub">0 PR</p></div>
-  <div class="kpi"><p class="kpi-val">↓39</p><p class="kpi-lbl">Unpulled</p><p class="kpi-sub">2 PR</p></div>
+  <div class="kpi"><p class="kpi-val">↓23</p><p class="kpi-lbl">Unpulled</p><p class="kpi-sub">1 PR</p></div>
 </div>
+</div>
+
+<div class="chart-section">
+  <p class="chart-title">MVP progress vs target (8/133 days elapsed · launch T9/2026)</p>
+  <canvas id="burndown" role="img" aria-label="Line chart comparing actual MVP completion to target trajectory"></canvas>
 </div>
 
 <div class="next-strip">
@@ -198,6 +241,15 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
 </span>
 </div>
 
+<div class="toolbar">
+  <input type="search" id="dashboard-search" class="search-input" placeholder="🔍 Search PR by ID or name...">
+  <button class="filter-btn active" data-filter="all">All</button>
+  <button class="filter-btn" data-filter="in-review">In review</button>
+  <button class="filter-btn" data-filter="in-progress">In progress</button>
+  <button class="filter-btn" data-filter="blocked">Blocked</button>
+  <button class="filter-btn" data-filter="not-started">Not started</button>
+</div>
+
 <div class="board">
 <div class="phase-card active">
   <div class="phase-card-head">
@@ -205,10 +257,10 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
     <span class="phase-card-meta">3/7 · 43%</span>
   </div>
   <div class="phase-card-bar"><div class="" style="width:43%;"></div></div>
-  <div class="phase-prs"><div class="pr-row in-review" title="In review · feat/dashboard-v3-rich · remote: in-review">
+  <div class="phase-prs"><div class="pr-row in-review" title="In review · feat/dashboard-v3-rich · local: in-review · remote: in-review">
   <span class="dot in-review"></span>
   <span class="pr-id">W0.10</span>
-  <span class="pr-name"><span class="pr-name-text">Dashboard v3 rich UI + FastAPI serve</span><span class="sync-badge unpulled" title="16 commits trên origin chưa pull về local">↓16</span></span>
+  <span class="pr-name"><span class="pr-name-text">Dashboard v3 rich UI + FastAPI serve</span></span>
 </div><div class="pr-row not-started" title="Not started · infra/W1.1-docker-compose">
   <span class="dot not-started"></span>
   <span class="pr-id">W1.1</span>
@@ -229,7 +281,7 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <span class="dot merged"></span>
   <span class="pr-id">W0.8</span>
   <span class="pr-name"><span class="pr-name-text">Webhook `display_suffix VARCHAR(8)` migration (G3 option b)</span></span>
-</div><div class="pr-row merged" title="Merged · feat/dashboard-realtime">
+</div><div class="pr-row merged" title="Merged · feat/dashboard-realtime · remote: not-started">
   <span class="dot merged"></span>
   <span class="pr-id">W0.9</span>
   <span class="pr-name"><span class="pr-name-text">Dashboard realtime — auto-rebuild + git-state detect + reconcile</span></span>
@@ -260,7 +312,7 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <span class="dot not-started"></span>
   <span class="pr-id">F05</span>
   <span class="pr-name"><span class="pr-name-text">Reports `/status`, `/today`, `/weekly`</span></span>
-</div><div class="pr-row not-started" title="Not started · feat/F08-funding-sources">
+</div><div class="pr-row not-started" title="Not started · feat/F08-funding-sources · local: not-started">
   <span class="dot not-started"></span>
   <span class="pr-id">F08</span>
   <span class="pr-name"><span class="pr-name-text">Funding sources resolver + handlers</span></span>
@@ -414,7 +466,7 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <span class="item"><span class="dot blocked"></span> Blocked</span>
   <span class="item"><span class="dot not-started"></span> Not started</span>
   <span class="item"><span class="dot deferred"></span> Deferred</span>
-  <span class="item" style="margin-left:auto;color:var(--text-tertiary);">Rebuild: <code>python scripts/build-dashboard.py</code></span>
+  <span class="item" style="margin-left:auto;color:var(--text-tertiary);">Click PR → GitHub · Rebuild: <code>python scripts/build-dashboard.py</code></span>
 </div>
 
 </div>
@@ -579,6 +631,95 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   setIndicator('init');
   check();
 })();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+<script>
+const REPO = "maingocanh1702/MyMoneyWent";
+
+// Burndown chart
+const ctx = document.getElementById("burndown");
+if (ctx && window.Chart) {
+  new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: ["Start", "Today", "Launch"],
+      datasets: [
+        {
+          label: "Actual",
+          data: [0, 14, null],
+          borderColor: "#185fa5",
+          backgroundColor: "rgba(24,95,165,0.1)",
+          tension: 0.3,
+          pointRadius: 5,
+          fill: false,
+        },
+        {
+          label: "Target",
+          data: [0, 6.0, 100],
+          borderColor: "#888780",
+          borderDash: [5, 5],
+          tension: 0,
+          pointRadius: 3,
+          fill: false,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: { beginAtZero: true, max: 100, ticks: { callback: v => v + "%", font: { size: 10 } } },
+        x: { ticks: { font: { size: 10 } } },
+      },
+      plugins: {
+        legend: { position: "bottom", labels: { font: { size: 11 }, boxWidth: 12, padding: 8 } },
+      },
+    },
+  });
+}
+
+// Filter + search
+let activeFilter = "all";
+let searchQuery = "";
+const searchInput = document.getElementById("dashboard-search");
+const filterBtns = document.querySelectorAll(".filter-btn");
+
+function applyFilters() {
+  document.querySelectorAll(".pr-row").forEach(row => {
+    const matchesFilter = activeFilter === "all" || row.classList.contains(activeFilter);
+    const matchesSearch = !searchQuery || row.textContent.toLowerCase().includes(searchQuery);
+    row.classList.toggle("hidden", !(matchesFilter && matchesSearch));
+  });
+  document.querySelectorAll(".phase-card").forEach(card => {
+    const visiblePRs = card.querySelectorAll(".pr-row:not(.hidden)").length;
+    card.style.display = visiblePRs === 0 && (activeFilter !== "all" || searchQuery) ? "none" : "";
+  });
+}
+
+if (searchInput) {
+  searchInput.addEventListener("input", e => { searchQuery = e.target.value.toLowerCase(); applyFilters(); });
+}
+filterBtns.forEach(btn => btn.addEventListener("click", () => {
+  filterBtns.forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  activeFilter = btn.dataset.filter;
+  applyFilters();
+}));
+
+// Click PR → open GitHub branch
+document.querySelectorAll(".pr-row").forEach(row => {
+  const m = row.title.match(/(?:feat|infra|chore|fix)\/[\w.-]+/);
+  if (m) {
+    row.addEventListener("click", () => window.open(`https://github.com/${REPO}/tree/${m[0]}`, "_blank"));
+  }
+});
+document.querySelectorAll(".next-chip").forEach(chip => {
+  chip.style.cursor = "pointer";
+  chip.addEventListener("click", () => {
+    const id = chip.querySelector(".pr-id")?.textContent;
+    if (id) window.open(`https://github.com/${REPO}/issues?q=${id}`, "_blank");
+  });
+});
 </script>
 </body>
 </html>
