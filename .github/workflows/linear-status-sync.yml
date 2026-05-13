@@ -1,0 +1,117 @@
+name: linear-status-sync
+on:
+  check_run:
+    types: [completed]
+  pull_request:
+    types: [opened, ready_for_review, closed]
+  pull_request_review:
+    types: [submitted]
+concurrency:
+  group: linear-sync-${{ github.event.pull_request.number || github.event.check_run.pull_requests[0].number || github.run_id }}
+  cancel-in-progress: false
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request != null || github.event.check_run.pull_requests[0] != null
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install httpx
+      - name: Resolve PR number
+        id: pr
+        env:
+          PR_NUM_EVENT: "${{ github.event.pull_request.number }}"
+          PR_NUM_CHECK: "${{ github.event.check_run.pull_requests[0].number }}"
+        run: |
+          NUM="${PR_NUM_EVENT:-$PR_NUM_CHECK}"
+          if [ -z "$NUM" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "number=$NUM" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Fetch PR body
+        if: steps.pr.outputs.skip != 'true'
+        id: body
+        env:
+          GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          REPO: "${{ github.repository }}"
+          NUM: "${{ steps.pr.outputs.number }}"
+        run: |
+          BODY=$(gh api "repos/$REPO/pulls/$NUM" --jq '.body // ""')
+          {
+            echo 'pr_body<<__EOF__'
+            echo "$BODY"
+            echo '__EOF__'
+          } >> "$GITHUB_OUTPUT"
+      - name: Extract Linear ID
+        if: steps.pr.outputs.skip != 'true'
+        id: extract
+        env:
+          PR_BODY: "${{ steps.body.outputs.pr_body }}"
+        run: |
+          ID=$(echo "$PR_BODY" | grep -Eo '(Closes|Fixes|Ref) MMW-[0-9]+' | head -1 | grep -Eo 'MMW-[0-9]+' || true)
+          if [ -z "$ID" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "issue_id=$ID" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Determine action
+        if: steps.extract.outputs.skip != 'true' && steps.pr.outputs.skip != 'true'
+        id: action
+        env:
+          EVENT: "${{ github.event_name }}"
+          CHECK: "${{ github.event.check_run.conclusion }}"
+          REVIEW: "${{ github.event.review.state }}"
+          GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          REPO: "${{ github.repository }}"
+          NUM: "${{ steps.pr.outputs.number }}"
+        run: |
+          case "$EVENT" in
+            check_run)
+              if [ "$CHECK" = "failure" ]; then
+                echo "label=ci-failing" >> "$GITHUB_OUTPUT"
+                echo "act=add" >> "$GITHUB_OUTPUT"
+              elif [ "$CHECK" = "success" ]; then
+                # Aggregate: only remove ci-failing if ALL check runs on the PR head succeeded
+                SHA=$(gh api "repos/$REPO/pulls/$NUM" --jq '.head.sha')
+                FAILED=$(gh api "repos/$REPO/commits/$SHA/check-runs" --paginate \
+                  --jq '[.check_runs[] | select(.status=="completed" and .conclusion!="success" and .conclusion!="skipped" and .conclusion!="neutral")] | length')
+                if [ "$FAILED" = "0" ]; then
+                  echo "label=ci-failing" >> "$GITHUB_OUTPUT"
+                  echo "act=remove" >> "$GITHUB_OUTPUT"
+                else
+                  echo "Aggregate check still failing ($FAILED failed) — keep ci-failing label"
+                fi
+              fi
+              ;;
+            pull_request_review)
+              if [ "$REVIEW" = "changes_requested" ]; then
+                echo "label=changes-requested" >> "$GITHUB_OUTPUT"
+                echo "act=add" >> "$GITHUB_OUTPUT"
+              elif [ "$REVIEW" = "approved" ]; then
+                # Aggregate: only remove changes-requested if no reviewer's LATEST review is CHANGES_REQUESTED
+                OUTSTANDING=$(gh api "repos/$REPO/pulls/$NUM/reviews" --paginate \
+                  --jq '[.[] | select(.state=="APPROVED" or .state=="CHANGES_REQUESTED" or .state=="DISMISSED")]
+                        | sort_by(.user.login)
+                        | group_by(.user.login)
+                        | map(sort_by(.submitted_at) | last | select(.state=="CHANGES_REQUESTED"))
+                        | length')
+                if [ "$OUTSTANDING" = "0" ]; then
+                  echo "label=changes-requested" >> "$GITHUB_OUTPUT"
+                  echo "act=remove" >> "$GITHUB_OUTPUT"
+                else
+                  echo "Outstanding change requests from $OUTSTANDING reviewer(s) — keep changes-requested label"
+                fi
+              fi
+              ;;
+          esac
+      - name: Linear GraphQL
+        if: steps.action.outputs.label != ''
+        env:
+          LINEAR_API_KEY: "${{ secrets.LINEAR_API_KEY }}"
+          ISSUE: "${{ steps.extract.outputs.issue_id }}"
+          LABEL: "${{ steps.action.outputs.label }}"
+          ACT: "${{ steps.action.outputs.act }}"
+        run: python .github/scripts/linear-sync.py --issue "$ISSUE" --label "$LABEL" --action "$ACT"
