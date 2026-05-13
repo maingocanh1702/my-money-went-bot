@@ -1,0 +1,25 @@
+name: pr-validate
+on:
+  pull_request:
+    types: [opened, edited, synchronize, ready_for_review]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Branch naming
+        env:
+          BRANCH: "${{ github.head_ref }}"
+        run: |
+          case "$BRANCH" in W0.*|Wave-*|hotfix/*|release/*) exit 0 ;; esac
+          if ! echo "$BRANCH" | grep -Eq '^[a-z0-9-]+/MMW-[0-9]+-[a-z0-9-]+$'; then
+            echo "::error::Branch '$BRANCH' must match <dev>/MMW-<id>-<slug>"
+            exit 1
+          fi
+      - name: PR body magic word
+        env:
+          PR_BODY: "${{ github.event.pull_request.body }}"
+        run: |
+          if echo "$PR_BODY" | grep -Eq '(Closes|Fixes|Ref) MMW-[0-9]+'; then exit 0; fi
+          if echo "$PR_BODY" | grep -q 'Linear: N/A'; then exit 0; fi
+          echo "::error::PR body missing 'Closes/Fixes/Ref MMW-NNN' or 'Linear: N/A'"
+          exit 1
