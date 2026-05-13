@@ -18,10 +18,21 @@ EN: dict[str, str] = {
     "onboard.path_quick": "⚡ Quick start (3 sample categories)",
     "onboard.path_custom": "✏️ Pick my own categories",
     "onboard.done": "All set! Type /help for instructions.",
+    "onboard.welcome_new": (
+        "👋 Welcome to MyMoneyWent!\n\n"
+        "🎁 You have free Pro until {trial_end}.\n\n"
+        "Type /help to see what I can do."
+    ),
+    "onboard.welcome_back": "👋 Welcome back!",
+    "onboard.trial_expired_info": "⏰ Pro trial expired. You're on the Free tier.",
+    "onboard.create_fail": "⚠️ Couldn't create your account. Please try again in a minute.",
     # ── categories ───────────────────────────────────────────────
     "cat.pick_prompt": "📂 Pick a category for this transaction:",
     "cat.confirm_tracking": "Logged to {name}: {amount}.",
     "cat.created": "✅ Created category “{name}”.",
+    "cat.default.daily_spending": "🛒 Daily Spending",
+    "cat.default.saving": "🏦 Saving",
+    "cat.default.subscription": "📱 Subscription",
     # ── manage ───────────────────────────────────────────────────
     "manage.list_header": "Your categories:",
     "manage.deleted": "🗑️ Deleted category “{name}”.",
