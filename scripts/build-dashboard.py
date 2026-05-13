@@ -241,6 +241,32 @@ _TERMINAL_TRACKER_STATES = {"merged", "deferred", "blocked", "ready"}
 _GIT_RANK = {"not-started": 0, "in-progress": 1, "in-review": 2}
 
 
+def _detect_repo_slug() -> str | None:
+    """Parse `git remote get-url origin` → `owner/repo` slug.
+
+    Returns None if not a git repo, no origin, or non-GitHub URL. Used by the
+    live-poll JS to know which repo to query against the GitHub API.
+    """
+    rc, out = _git("remote", "get-url", "origin")
+    if rc != 0 or not out:
+        return None
+    # Handle both SSH (git@github.com:owner/repo.git) and HTTPS (https://github.com/owner/repo[.git])
+    url = out.strip()
+    if url.startswith("git@github.com:"):
+        slug = url.split(":", 1)[1]
+    elif "github.com/" in url:
+        slug = url.split("github.com/", 1)[1]
+    else:
+        return None
+    if slug.endswith(".git"):
+        slug = slug[:-4]
+    # Sanity check shape `owner/repo`
+    parts = slug.split("/")
+    if len(parts) != 2 or not all(parts):
+        return None
+    return slug
+
+
 def _git(*args: str) -> tuple[int, str]:
     """Run git command, return (returncode, stdout). Never raises."""
     try:
@@ -469,6 +495,17 @@ body { margin: 0; padding: 1.25rem 1rem 2rem; font-family: var(--font-sans); bac
 h1 { font-size: 18px; font-weight: 500; margin: 0; }
 .meta { font-size: 11px; color: var(--text-tertiary); margin: 0; font-family: var(--font-mono); }
 .meta code { font-family: var(--font-mono); }
+.head-meta { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.live-indicator { font-size: 11px; font-family: var(--font-mono); cursor: pointer; padding: 3px 9px; border-radius: 12px; user-select: none; border: 1px solid transparent; transition: filter 0.15s ease; }
+.live-indicator.init { background: var(--bg-secondary); color: var(--text-tertiary); }
+.live-indicator.ok { background: var(--bg-success); color: var(--text-success); border-color: rgba(59,109,17,0.2); }
+.live-indicator.syncing { background: var(--bg-info); color: var(--text-info); border-color: rgba(24,95,165,0.2); }
+.live-indicator.err { background: var(--bg-danger); color: var(--text-danger); border-color: rgba(163,45,45,0.2); }
+.live-indicator.warn { background: var(--bg-warning); color: var(--text-warning); border-color: rgba(133,79,11,0.2); }
+.live-indicator.paused { background: var(--bg-secondary); color: var(--text-secondary); }
+.live-indicator:hover { filter: brightness(0.95); }
+@keyframes live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+.live-indicator.ok::before { content: "●"; margin-right: 4px; color: #3b6d11; animation: live-pulse 2s ease-in-out infinite; }
 
 /* Status dots — shared visual language */
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; box-sizing: border-box; }
@@ -550,9 +587,181 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
 """
 
 
+# Phase 3 dashboard live-poll — browser-side JS that polls GitHub API every 30s for
+# new commits affecting tracker/dashboard, then re-fetches docs/dashboard.html from
+# raw.githubusercontent and swaps .container innerHTML (preserves scroll position).
+# Click the live-indicator to force-refresh. Optional PAT in localStorage key
+# `github_pat` for 5000/hr rate limit (vs 60/hr unauth).
+HTML_LIVE_JS = """
+(function() {
+  var REPO = '__REPO__';
+  var POLL_INTERVAL_MS = 30000;
+  // Polling docs/dashboard.html alone catches all updates: tracker.md changes
+  // are downstream via the pre-commit build-dashboard hook (regen + auto-stage)
+  // and the GH Action dashboard.yml workflow. Polling both paths would double
+  // API calls (240/hr) and exceed the 60/hr unauth rate limit at 30s interval.
+  // Edge case: tracker committed with `--no-verify` bypasses the hook and would
+  // be missed — but that's user error, not a feature target.
+  var TRACK_PATH = 'docs/dashboard.html';
+
+  var lastKnownSha = null;
+  var lastSyncAt = Date.now();
+  var lastError = null;
+  var paused = false;
+
+  function getIndicator() { return document.getElementById('live-indicator'); }
+
+  function fmtAge(ms) {
+    var s = Math.floor(ms / 1000);
+    if (s < 60) return s + 's';
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + 'm';
+    return Math.floor(m / 60) + 'h';
+  }
+
+  function setIndicator(state, message) {
+    var el = getIndicator();
+    if (!el) return;
+    var age = fmtAge(Date.now() - lastSyncAt);
+    if (state === 'live') {
+      el.textContent = 'Live · last sync ' + age + ' ago';
+      el.className = 'live-indicator ok';
+      el.title = 'Polls GitHub every ' + (POLL_INTERVAL_MS/1000) + 's. Click to refresh now. Pause: Esc.';
+    } else if (state === 'syncing') {
+      el.textContent = '🔵 Syncing…';
+      el.className = 'live-indicator syncing';
+    } else if (state === 'error') {
+      el.textContent = '🔴 ' + (message || 'sync error');
+      el.className = 'live-indicator err';
+      el.title = message || '';
+    } else if (state === 'rate-limit') {
+      el.textContent = '🟡 Rate limit · waiting (set localStorage.github_pat for 5000/hr)';
+      el.className = 'live-indicator warn';
+    } else if (state === 'paused') {
+      el.textContent = '⏸ Paused (click to resume)';
+      el.className = 'live-indicator paused';
+    } else if (state === 'init') {
+      el.textContent = '⚪ initializing…';
+      el.className = 'live-indicator init';
+    }
+  }
+
+  function authHeaders() {
+    var h = { 'Accept': 'application/vnd.github.v3+json' };
+    try {
+      var pat = localStorage.getItem('github_pat');
+      if (pat) h['Authorization'] = 'Bearer ' + pat;
+    } catch (e) { /* SecurityError in some sandboxes */ }
+    return h;
+  }
+
+  function fetchLatestSha() {
+    var url = 'https://api.github.com/repos/' + REPO + '/commits?path=' + TRACK_PATH + '&per_page=1';
+    return fetch(url, { headers: authHeaders() }).then(function(resp) {
+      if (resp.status === 403) {
+        var remaining = resp.headers.get('X-RateLimit-Remaining');
+        if (remaining === '0') {
+          setIndicator('rate-limit');
+          return null;
+        }
+      }
+      if (!resp.ok) throw new Error('GitHub API ' + resp.status);
+      return resp.json();
+    }).then(function(data) {
+      if (!data || !data.length) return null;
+      return data[0].sha;
+    });
+  }
+
+  function refreshDashboardDOM() {
+    setIndicator('syncing');
+    var url = 'https://raw.githubusercontent.com/' + REPO + '/main/docs/dashboard.html?_t=' + Date.now();
+    return fetch(url, { cache: 'no-store' }).then(function(resp) {
+      if (!resp.ok) throw new Error('Fetch raw ' + resp.status);
+      return resp.text();
+    }).then(function(text) {
+      var parser = new DOMParser();
+      var newDoc = parser.parseFromString(text, 'text/html');
+      var newContainer = newDoc.querySelector('.container');
+      var oldContainer = document.querySelector('.container');
+      if (newContainer && oldContainer) {
+        var scrollY = window.scrollY;
+        // Preserve our live-indicator element (template doesn't have current state)
+        var indicator = oldContainer.querySelector('#live-indicator');
+        var indicatorHtml = indicator ? indicator.outerHTML : '';
+        oldContainer.innerHTML = newContainer.innerHTML;
+        // Re-inject indicator if new content doesn't already have it
+        if (indicatorHtml && !oldContainer.querySelector('#live-indicator')) {
+          var meta = oldContainer.querySelector('.head-meta') || oldContainer.querySelector('.page-head');
+          if (meta) meta.insertAdjacentHTML('afterbegin', indicatorHtml);
+        }
+        window.scrollTo(0, scrollY);
+      }
+    });
+  }
+
+  function check() {
+    if (paused) return;
+    fetchLatestSha().then(function(latestSha) {
+      // null = fetchLatestSha already set a non-live state (rate-limit, etc).
+      // Thread a sentinel through the promise chain so the next .then() does
+      // NOT overwrite the warning with 'live'.
+      if (latestSha === null) return 'skipped';
+      if (lastKnownSha === null) {
+        lastKnownSha = latestSha;
+      } else if (latestSha !== lastKnownSha) {
+        return refreshDashboardDOM().then(function() {
+          lastKnownSha = latestSha;
+        });
+      }
+    }).then(function(outcome) {
+      if (outcome === 'skipped') return;  // preserve rate-limit indicator
+      lastSyncAt = Date.now();
+      lastError = null;
+      if (!paused) setIndicator('live');
+    }).catch(function(e) {
+      lastError = e.message;
+      setIndicator('error', e.message);
+    });
+  }
+
+
+  // Update age text every second
+  setInterval(function() {
+    if (paused) { setIndicator('paused'); return; }
+    if (lastError) setIndicator('error', lastError);
+    else if (lastKnownSha !== null) setIndicator('live');
+  }, 1000);
+
+  // Poll loop
+  setInterval(check, POLL_INTERVAL_MS);
+
+  // Click indicator → toggle pause OR force refresh
+  document.addEventListener('click', function(e) {
+    var t = e.target.closest && e.target.closest('#live-indicator');
+    if (!t) return;
+    if (paused) { paused = false; check(); }
+    else { check(); }
+  });
+
+  // Esc → toggle pause
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') { paused = !paused; setIndicator(paused ? 'paused' : 'live'); }
+  });
+
+  // Initial state + first check
+  setIndicator('init');
+  check();
+})();
+"""
+
+
 def render_html(prs, stats, mvp, active, in_flight, upcoming, branch) -> str:
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     branch_tag = f" · <code>{html.escape(branch)}</code>" if branch else ""
+    # Bind repo slug for live-poll JS. Detect via `git remote get-url origin` fallback to default.
+    repo_slug = _detect_repo_slug() or "maingocanh1702/MyMoneyWent"
+    live_js = HTML_LIVE_JS.replace("__REPO__", repo_slug)
 
     phase1 = next((s for s in stats if s.label.startswith("1")), None)
     p1_pct = phase1.percent if phase1 else 0
@@ -706,7 +915,10 @@ def render_html(prs, stats, mvp, active, in_flight, upcoming, branch) -> str:
 
 <div class="page-head">
   <h1>MyMoneyWent — progress dashboard</h1>
-  <p class="meta">Updated {now}{branch_tag}</p>
+  <div class="head-meta">
+    <span id="live-indicator" class="live-indicator init">⚪ initializing…</span>
+    <p class="meta">Updated {now}{branch_tag}</p>
+  </div>
 </div>
 
 <div class="hero">
@@ -736,6 +948,7 @@ def render_html(prs, stats, mvp, active, in_flight, upcoming, branch) -> str:
 </div>
 
 </div>
+<script>{live_js}</script>
 </body>
 </html>
 """
