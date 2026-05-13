@@ -3,9 +3,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-BOT_TOKEN   = os.environ["BOT_TOKEN"]
-CHAT_ID     = os.environ["CHAT_ID"]
-SHEET_ID    = os.environ["SHEET_ID"]
+# Required-at-runtime but tolerant-at-import (Phase 1-5): empty defaults let
+# the app boot on Railway without prod secrets so healthcheck passes. Code
+# paths that actually call Telegram / Sheets will fail at the API call site
+# with a clearer error than KeyError at module load. Phase 6 W6.2 will add
+# `APP_ENV=prod` strict-check + `/health/strict` endpoint.
+BOT_TOKEN   = os.environ.get("BOT_TOKEN", "")
+CHAT_ID     = os.environ.get("CHAT_ID", "")
+SHEET_ID    = os.environ.get("SHEET_ID", "")
 TIMEZONE    = "Asia/Ho_Chi_Minh"
 DAILY_BUCKET_ID = "daily_spending"
 
