@@ -4,7 +4,7 @@
 > `feedback_autopilot_prompt_scope` (single-phase), `feedback_prefer_autopilot_prompts`,
 > `feedback_autopilot_prompt_template`.
 >
-> Lockdown source: `docs/operations/F01-F08-lockdown.md` §2.
+> Lockdown source: `docs/operations/feature-lockdown-decisions.md` §2.
 > 5 decisions previously locked via memory `project_f08_funding_sources`.
 
 ---
@@ -59,7 +59,7 @@ F02 transaction capture cutover (next big PR) depends on `resolve_funding_source
 
 ## Required reading (READ FIRST, in this order, before any code)
 
-1. `docs/operations/F01-F08-lockdown.md` §2 — full F08 lockdown, scope, test plan, acceptance criteria
+1. `docs/operations/feature-lockdown-decisions.md` §2 — full F08 lockdown, scope, test plan, acceptance criteria
 2. `docs/implementation-plans/phase-2-handlers.md` §5 — F08 scope + 18-test plan baseline + risk notes
 3. `docs/features/feature-funding-sources.md` §1-4 — canonical schema, use cases, edge cases, embed-in-picker UX. **Critical:** §2.1 #1 (auto-discovery), §2.1 #5 (hide), §2.2 #2b (kind disambiguation), §3.1 (picker embed format)
 4. `docs/features/BE/feature-funding-sources-tech.md` — query patterns + unique constraint shape

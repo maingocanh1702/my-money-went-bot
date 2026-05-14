@@ -27,7 +27,7 @@
 | Phase 7: Closed Beta | ⬜ Not Started | 0% | — (create plan when Phase 6 ships) |
 | Phase 8: Public Soft Launch | ⬜ Not Started | 0% | ↑ same file |
 | Phase 9-10: Growth + Business Tier | ⬜ Not Started | 0% | — (create when Phase 8 ships) |
-| Phase 11: Family Plan | ⬜ Not Started | 0% | — (create when F06 addendum merged) |
+| Phase 11: Family Plan | ⬜ Not Started | 0% | — (create when pricing-tiers addendum merged) |
 
 
 ---
@@ -38,35 +38,35 @@
 
 | Module | Feature | Spec | BE Tech | BE Code | Bot Code | Phase |
 |--------|---------|:----:|:-------:|:-------:|:--------:|:-----:|
-| F01 | 3-Path Onboarding | ✅ | ✅ | 🟡 W0 infra | ⬜ | 1,4 |
-| F02 | Transaction Capture (SePay + Email) | ✅ | ✅ | 🟡 webhook_tokens + parsers shell | ⬜ | 1,5 |
-| F03 | Transaction Categorization | ✅ | ✅ | ⬜ | ⬜ | 2 |
-| F04 | Category Management (/manage) | ✅ | ✅ | ⬜ | ⬜ | 2 |
-| F05 | Reports (/status, /today, /weekly) | ✅ | ✅ | ⬜ | ⬜ | 2 |
-| F06 | Pricing, Tier Limits & Trial | ✅ | ✅ | ⬜ | ⬜ | 3 |
-| F07 | Settings (/settings) | ✅ | ✅ | ⬜ | ⬜ | 2 |
-| F08 | Funding Sources | ✅ | ✅ | 🟡 DDL landed W0.2 | ⬜ | 2 |
-| F09 | Scheduled Jobs | ✅ | ✅ | ⬜ | ⬜ | 6 |
+| onboarding-start | 3-Path Onboarding | ✅ | ✅ | 🟡 W0 infra | ⬜ | 1,4 |
+| transaction-capture | Transaction Capture (SePay + Email) | ✅ | ✅ | 🟡 webhook_tokens + parsers shell | ⬜ | 1,5 |
+| categorization | Transaction Categorization | ✅ | ✅ | ⬜ | ⬜ | 2 |
+| category-management | Category Management (/manage) | ✅ | ✅ | ⬜ | ⬜ | 2 |
+| reports | Reports (/status, /today, /weekly) | ✅ | ✅ | ⬜ | ⬜ | 2 |
+| pricing-tiers | Pricing, Tier Limits & Trial | ✅ | ✅ | ⬜ | ⬜ | 3 |
+| settings | Settings (/settings) | ✅ | ✅ | ⬜ | ⬜ | 2 |
+| funding-sources | Funding Sources | ✅ | ✅ | 🟡 DDL landed W0.2 | ⬜ | 2 |
+| scheduled-jobs | Scheduled Jobs | ✅ | ✅ | ⬜ | ⬜ | 6 |
 | F10 | Payment (Bank Transfer Auto-Detect) | ✅ | ✅ | ⬜ | ⬜ | 6 |
 | F11 | Admin Tools & Audit | ✅ | ✅ | 🟡 audit_log table W0.2 | ⬜ | 6 |
 | F12 | Multi-User Data Isolation | ✅ (PRD) | — | ✅ tenant_context W0.3 | — | 1 |
-| F13 | Messenger Channel | ✅ | ✅ | ⬜ | ⬜ | 6 |
+| messenger-channel | Messenger Channel | ✅ | ✅ | ⬜ | ⬜ | 6 |
 | F14 | Discord Channel | ✅ | ✅ | ⬜ | ⬜ | 1 |
 | F15 | Personal vs Business Toggle | ✅ | ✅ | ⬜ | ⬜ | 9 |
 | F16 | P&L View | ⬜ | ⬜ | ⬜ | ⬜ | 9 |
 | F17 | Income Source Attribution | ⬜ | ⬜ | ⬜ | ⬜ | 9 |
-| F-i18n | Internationalization | ✅ | ✅ | 🟡 stub W0.4 | — | 1 |
+| i18n-locale-switcher | Internationalization | ✅ | ✅ | 🟡 stub W0.4 | — | 1 |
 | F-saas | SaaS Refactor | ✅ | ✅ | 🟡 foundation W0.1-W0.6 | — | 1 |
 | FAM | Family Plan | ✅ v1.2.0 | ✅ v1.1.0 | ⬜ | ⬜ | 11 |
 
-> **Numbering note:** F08 = Funding Sources (entity model, DDL landed W0.2). F12 = Multi-User Data Isolation (tenant_context, not a standalone service). Aligned with PRD convention post W0.2.
+> **Numbering note:** funding-sources = Funding Sources (entity model, DDL landed W0.2). F12 = Multi-User Data Isolation (tenant_context, not a standalone service). Aligned with PRD convention post W0.2.
 
 ---
 
 ## 3. Timeline
 
 **Target launch:** Tháng 9/2026 (tuần 15-16 from dev start)
-**Wave 0 complete:** 2026-05-11 (6 PRs: W0.1-W0.6 merged, 112 tests passing) + 2026-05-12 W0.7 cleanup (public `request_id` API + F02 contract pin)
+**Wave 0 complete:** 2026-05-11 (6 PRs: W0.1-W0.6 merged, 112 tests passing) + 2026-05-12 W0.7 cleanup (public `request_id` API + transaction-capture contract pin)
 **Phase 1 remaining:** ~1 tuần (Docker Compose + Discord adapter + remaining integration)
 
 ```
@@ -100,7 +100,7 @@
 | ADR-0002 (Onboarding UI) | ✅ | [0002-onboarding-ui.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/adr/0002-onboarding-ui-strategy.md) |
 | Market Strategy Overview | ✅ | [market-strategy-overview.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/market-strategy-overview.md) |
 | Development Workflow | ✅ | [development-workflow.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/operations/development-workflow.md) |
-| Feature Specs (F01-F14, FAM) | ✅ | [docs/features/](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features) |
+| Feature Specs (onboarding-start-F14, FAM) | ✅ | [docs/features/](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features) |
 | BE Tech Docs (17 files) | ✅ | [docs/features/BE/](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/BE) |
 | Feature: Family Plan — Product | ✅ v1.2.0 | [feature-family-plan.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-family-plan.md) |
 | Feature: Family Plan — BE Tech | ✅ v1.1.0 | [feature-family-plan-tech.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/BE/feature-family-plan-tech.md) |
@@ -124,7 +124,7 @@
 | W0.4 | `core/messenger/` (BaseSender ABC + SendPayload + TelegramSender + i18n stub) | 25 | ✅ Merged |
 | W0.5 | `core/logging.py` structlog + `core/observability.py` Sentry + `/health` endpoints | 14 | ✅ Merged |
 | W0.6 | Plugin email parsers (6 bank shells) + SePay webhook handler + founder seed scaffold + `parsers-are-pure` contract | 34 | ✅ Merged |
-| W0.7 | Public `request_id` helpers in `core/tenant_context` + F02 funding-source `xfail(strict=True)` contract pin | +3 (1 round-trip, 1 empty-reject, 1 xfail) | 🟢 Code done 2026-05-12 |
+| W0.7 | Public `request_id` helpers in `core/tenant_context` + transaction-capture funding-source `xfail(strict=True)` contract pin | +3 (1 round-trip, 1 empty-reject, 1 xfail) | 🟢 Code done 2026-05-12 |
 | **Total** | | **109 explicit + 3 cross-cutting + 3 W0.7 = 118 passed, 1 skipped, 1 xfail** | **5 import-linter contracts** |
 
 > **Test count note:** Per-PR numbers (4+20+12+25+14+34=109) are PR-scoped counts. Final aggregate `112 passed, 1 skipped` (per CHANGELOG) reflects 3 extra cases from parametrize expansions / cross-PR fixtures collected at full-suite run.
@@ -156,18 +156,18 @@
 |------|:------:|-------|
 | Refactor handlers → multi-user | ⬜ | Via messenger interface (Telegram + Discord adapters) |
 | Auth flow | ⬜ | `/start` → create user → assign trial |
-| Category CRUD handlers | ⬜ | F03 + F04 |
-| Report handlers | ⬜ | F05: `/status`, `/today` |
-| Settings handlers | ⬜ | F07: `/settings` |
-| Funding sources handlers | ⬜ | F08 (DDL landed, service logic pending) |
+| Category CRUD handlers | ⬜ | categorization + category-management |
+| Report handlers | ⬜ | reports: `/status`, `/today` |
+| Settings handlers | ⬜ | settings: `/settings` |
+| Funding sources handlers | ⬜ | funding-sources (DDL landed, service logic pending) |
 | Admin command authorization framework | ⬜ | `ADMIN_IDS` per platform |
-| Legacy handler migration (strangler fig) | ⬜ | Deferred from W0.6 → F02 scope. Each handler = own PR |
+| Legacy handler migration (strangler fig) | ⬜ | Deferred from W0.6 → transaction-capture scope. Each handler = own PR |
 
 ### Phase 3: Pricing Logic (Tuần 5)
 
 | Task | Status | Notes |
 |------|:------:|-------|
-| Free tier limits (45 tx, 1 bank, 30d history, 5 cat) | ⬜ | F06 |
+| Free tier limits (45 tx, 1 bank, 30d history, 5 cat) | ⬜ | pricing-tiers |
 | 14-day Pro trial logic | ⬜ | Auto-assign on signup, auto-downgrade |
 | Upgrade triggers | ⬜ | Max 1/tuần/user |
 | Tier gating middleware | ⬜ | Check tier before feature access |
@@ -211,7 +211,7 @@
 | Admin tools: `/admin_user` | ⬜ | F11 |
 | Admin tools: `/admin_resolve` | ⬜ | F11 |
 | Observability: Sentry + alerts | 🟡 | Sentry init done (W0.5), 7 critical alerts pending |
-| Messenger adapter (feature-flagged) | ⬜ | F13, `ENABLE_MESSENGER_CHANNEL` |
+| Messenger adapter (feature-flagged) | ⬜ | messenger-channel, `ENABLE_MESSENGER_CHANNEL` |
 | Railway production deploy + domain | ⬜ | `tienvenoidau.com` |
 | Backup automation (B2 + pg_dump) | ⬜ | Daily, SSE-B2 encryption |
 | DR runbook validation | ⬜ | Test backup restore |
@@ -252,11 +252,11 @@
 
 ### Phase 11: Family Plan (Post Business launch — 2026 Q3+)
 
-> **Blocked by:** F06 Pricing Addendum merge (decisions locked 2026-05-11, doc merge pending)
+> **Blocked by:** pricing-tiers Pricing Addendum merge (decisions locked 2026-05-11, doc merge pending)
 
 | Task | Status | Notes |
 |------|:------:|-------|
-| Merge F06 Pricing Addendum | ⬜ | Decisions locked: Pro 99k, Family 169k, Business 299k, grandfather 6mo. Doc merge pending. |
+| Merge pricing-tiers Pricing Addendum | ⬜ | Decisions locked: Pro 99k, Family 169k, Business 299k, grandfather 6mo. Doc merge pending. |
 | Migration: 7 tables DDL | ⬜ | BE tech doc v1.1.0 |
 | Family service: purchase, invite, accept, leave, remove | ⬜ | |
 | Consent gate middleware | ⬜ | Disclosure versioned |
@@ -292,11 +292,11 @@
 
 | Blocker | Affects | Status | Notes |
 |---------|---------|:------:|-------|
-| F06 Pricing Addendum doc merge | Phase 11 (Family Plan) | 🟡 Decisions locked, merge pending | Pro 99k, Family 169k, Business 299k — locked 2026-05-11 |
+| pricing-tiers Pricing Addendum doc merge | Phase 11 (Family Plan) | 🟡 Decisions locked, merge pending | Pro 99k, Family 169k, Business 299k — locked 2026-05-11 |
 | Meta App Review (`pages_messaging`) | Phase 6 (Messenger flip ON) | 🔲 Pending | External dependency |
 | Hộ kinh doanh registration | Phase 6 (Payment) | 🔲 Pending | Lead time 1-2 tuần |
 | Hùng+ customer interviews (5-7) | Phase 9 (Business go/no-go) | 🔲 Pending | Validate hypothesis |
-| ~~Bot Finance → SaaS migration~~ | ~~Phase 1~~ | ✅ Resolved | Strangler fig pattern. W0.6 ships invariants. Legacy cutover deferred to F02 handler refactor. |
+| ~~Bot Finance → SaaS migration~~ | ~~Phase 1~~ | ✅ Resolved | Strangler fig pattern. W0.6 ships invariants. Legacy cutover deferred to transaction-capture handler refactor. |
 | Discord adapter | Phase 1 completion | 🔲 Pending | Last major Phase 1 item |
 
 ---
@@ -309,7 +309,7 @@
 | Low conversion Free→Pro | 8+ | Medium | Monitor hit-limit-rate, adjust 45→60-75 if churn > upgrade |
 | Business tier validation fail | 9 | High | Reposition as personal+freelancer tracker |
 | Railway cost > $50/mo | 8+ | Medium | Trigger Hetzner migration |
-| Family Plan pricing conflict | 11 | Low (decisions locked) | Merge F06 addendum doc — decision work done |
+| Family Plan pricing conflict | 11 | Low (decisions locked) | Merge pricing-tiers addendum doc — decision work done |
 | Legacy handler migration drag | 2 | Medium | Each handler = focused PR with isolation tests |
 
 ---
@@ -334,5 +334,5 @@
 | Version | Ngày | Thay đổi |
 |---------|------|----------|
 | v1.0.0 | 2026-05-11 | Initial roadmap. 11 phases. Phase 0 at 75%. Chat-based UI, no .pen needed. |
-| v1.1.0 | 2026-05-12 | **Major accuracy fix:** Phase 0 → COMPLETE (specs/ADRs/ops docs locked). Phase 1 → 75% (W0.1-W0.6 PRs shipped, 112 cases / 14 files, 4 contracts; Discord + Docker pending). F08 = Funding Sources (corrected from "Data Isolation"). BE Tech Docs → ✅ (17 files exist). Added F-i18n, F-saas to module table. F15 spec status → ✅. Blocker "Bot Finance migration" → ✅ resolved (strangler fig W0.6). Family blocker reworded: decisions locked, doc merge pending. Timeline baseline updated (W0 done = potential compression). Wave 0 PR detail table moved from Phase 0 → Phase 1 (Phase 0 = specs only, code is Phase 1). Family Plan canonical link → `docs/features/feature-family-plan.md` (drafts/ stale v1.0.0 superseded). Email parser slip risk impact: High → Medium (shells exist). |
+| v1.1.0 | 2026-05-12 | **Major accuracy fix:** Phase 0 → COMPLETE (specs/ADRs/ops docs locked). Phase 1 → 75% (W0.1-W0.6 PRs shipped, 112 cases / 14 files, 4 contracts; Discord + Docker pending). funding-sources = Funding Sources (corrected from "Data Isolation"). BE Tech Docs → ✅ (17 files exist). Added i18n-locale-switcher, F-saas to module table. F15 spec status → ✅. Blocker "Bot Finance migration" → ✅ resolved (strangler fig W0.6). Family blocker reworded: decisions locked, doc merge pending. Timeline baseline updated (W0 done = potential compression). Wave 0 PR detail table moved from Phase 0 → Phase 1 (Phase 0 = specs only, code is Phase 1). Family Plan canonical link → `docs/features/feature-family-plan.md` (drafts/ stale v1.0.0 superseded). Email parser slip risk impact: High → Medium (shells exist). |
 | v1.2.0 | 2026-05-13 | **Structure cleanup:** Import-linter contracts 4→5 (added `i18n-is-pure`, missed in v1.1.0). Task links → `implementation-plans/` (source of truth). `docs/tasks/` archived → `docs/archive/tasks/`. Added START_HERE.md entry point link. Autopilot files → `docs/autopilot/`. |

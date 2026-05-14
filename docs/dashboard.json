@@ -2,7 +2,7 @@
   "blockers": [
     {
       "affects": "Phase 11 (Family Plan)",
-      "name": "F06 Pricing Addendum doc merge",
+      "name": "pricing-tiers Pricing Addendum doc merge",
       "notes": "Pro 99k, Family 169k, Business 299k \u2014 locked 2026-05-11",
       "status": "\ud83d\udfe1 Decisions locked, merge pending",
       "status_slug": "partial"
@@ -31,7 +31,7 @@
     {
       "affects": "~~Phase 1~~",
       "name": "~~Bot Finance \u2192 SaaS migration~~",
-      "notes": "Strangler fig pattern. W0.6 ships invariants. Legacy cutover deferred to F02 handler refactor.",
+      "notes": "Strangler fig pattern. W0.6 ships invariants. Legacy cutover deferred to transaction-capture handler refactor.",
       "status": "\u2705 Resolved",
       "status_slug": "done"
     },
@@ -46,25 +46,25 @@
   "docs": [
     {
       "name": "brd-vi.md",
-      "stale_days": 4,
+      "stale_days": 5,
       "updated": "2026-05-10",
       "version": "v3.1.0"
     },
     {
       "name": "prd-vi.md",
-      "stale_days": 4,
+      "stale_days": 5,
       "updated": "2026-05-10",
       "version": "v1.7.1"
     },
     {
       "name": "tdd-vi.md",
-      "stale_days": 4,
+      "stale_days": 5,
       "updated": "2026-05-10",
       "version": "v1.8.1"
     },
     {
       "name": "mymoneywent-roadmap.md",
-      "stale_days": 2,
+      "stale_days": 3,
       "updated": "2026-05-12",
       "version": "v1.1.0"
     }
@@ -74,7 +74,7 @@
       "be_code": "partial",
       "be_tech": "done",
       "bot_code": "not_started",
-      "id": "F01",
+      "id": "onboarding-start",
       "name": "3-Path Onboarding",
       "phase": "1,4",
       "spec": "done"
@@ -83,7 +83,7 @@
       "be_code": "partial",
       "be_tech": "done",
       "bot_code": "not_started",
-      "id": "F02",
+      "id": "transaction-capture",
       "name": "Transaction Capture (SePay + Email)",
       "phase": "1,5",
       "spec": "done"
@@ -92,7 +92,7 @@
       "be_code": "not_started",
       "be_tech": "done",
       "bot_code": "not_started",
-      "id": "F03",
+      "id": "categorization",
       "name": "Transaction Categorization",
       "phase": "2",
       "spec": "done"
@@ -101,7 +101,7 @@
       "be_code": "not_started",
       "be_tech": "done",
       "bot_code": "not_started",
-      "id": "F04",
+      "id": "category-management",
       "name": "Category Management (/manage)",
       "phase": "2",
       "spec": "done"
@@ -110,7 +110,7 @@
       "be_code": "not_started",
       "be_tech": "done",
       "bot_code": "not_started",
-      "id": "F05",
+      "id": "reports",
       "name": "Reports (/status, /today, /weekly)",
       "phase": "2",
       "spec": "done"
@@ -119,7 +119,7 @@
       "be_code": "not_started",
       "be_tech": "done",
       "bot_code": "not_started",
-      "id": "F06",
+      "id": "pricing-tiers",
       "name": "Pricing, Tier Limits & Trial",
       "phase": "3",
       "spec": "done"
@@ -128,7 +128,7 @@
       "be_code": "not_started",
       "be_tech": "done",
       "bot_code": "not_started",
-      "id": "F07",
+      "id": "settings",
       "name": "Settings (/settings)",
       "phase": "2",
       "spec": "done"
@@ -137,7 +137,7 @@
       "be_code": "partial",
       "be_tech": "done",
       "bot_code": "not_started",
-      "id": "F08",
+      "id": "funding-sources",
       "name": "Funding Sources",
       "phase": "2",
       "spec": "done"
@@ -146,7 +146,7 @@
       "be_code": "not_started",
       "be_tech": "done",
       "bot_code": "not_started",
-      "id": "F09",
+      "id": "scheduled-jobs",
       "name": "Scheduled Jobs",
       "phase": "6",
       "spec": "done"
@@ -182,7 +182,7 @@
       "be_code": "not_started",
       "be_tech": "done",
       "bot_code": "not_started",
-      "id": "F13",
+      "id": "messenger-channel",
       "name": "Messenger Channel",
       "phase": "6",
       "spec": "done"
@@ -227,7 +227,7 @@
       "be_code": "partial",
       "be_tech": "done",
       "bot_code": "not_started",
-      "id": "F-i18n",
+      "id": "i18n-locale-switcher",
       "name": "Internationalization",
       "phase": "1",
       "spec": "done"
@@ -251,11 +251,11 @@
       "spec": "done"
     }
   ],
-  "generated_at": "2026-05-14T05:08:12+00:00",
+  "generated_at": "2026-05-14T21:03:10+00:00",
   "overall": {
     "mvp_merged": 6,
     "mvp_percent": 17,
-    "mvp_total": 35,
+    "mvp_total": 36,
     "overall_progress": 30
   },
   "phases": [
@@ -334,7 +334,7 @@
       "progress": 0,
       "status": "not_started",
       "status_label": "\u2b1c Not Started",
-      "tasks": "\u2014 (create when F06 addendum merged)"
+      "tasks": "\u2014 (create when pricing-tiers addendum merged)"
     }
   ],
   "risks": [
@@ -364,7 +364,7 @@
     },
     {
       "impact": "Low",
-      "mitigation": "Merge F06 addendum doc \u2014 decision work done",
+      "mitigation": "Merge pricing-tiers addendum doc \u2014 decision work done",
       "name": "Family Plan pricing conflict",
       "phase": "11"
     },

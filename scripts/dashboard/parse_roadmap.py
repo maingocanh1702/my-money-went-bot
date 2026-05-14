@@ -84,8 +84,11 @@ def parse_roadmap_features(text: str) -> list[dict[str, Any]]:
         # Header / divider filter
         if cells[0].lower() in ("module", ""):
             continue
-        # Feature row: first cell is module id like F01, FAM, F-i18n
-        if not re.match(r"^F[-\w]+$", cells[0]):
+        # Feature row: first cell is module id. Accepts:
+        # - Legacy F-codes: F01, FAM, F-i18n (pre-2026-05-15 convention)
+        # - Kebab-case feature names (single or multi-segment):
+        #   `settings`, `reports`, `transaction-capture`, `funding-sources` (post-2026-05-15)
+        if not re.match(r"^(F[-\w]+|[a-z][a-z0-9]*(?:-[a-z0-9]+)*)$", cells[0]):
             continue
         out.append(
             {

@@ -181,7 +181,7 @@ def _find_emoji(cell: str) -> str | None:
 
 
 def _strip_id_prefix(feature: str, pr_id: str) -> str:
-    """Strip `F07 — ` or `F07 -` prefix from feature when it duplicates pr_id."""
+    """Strip `<pr_id> — ` or `<pr_id> -` prefix from feature when it duplicates pr_id."""
     for sep in (" — ", " - ", "—", "-"):
         candidate = f"{pr_id}{sep}"
         if feature.startswith(candidate):
@@ -1202,7 +1202,7 @@ document.querySelectorAll(".next-chip").forEach(chip => {{
 <div class="callout warn">
   <div>
     <strong>Risk còn active</strong>
-    Legacy handler migration drag (F02 strangler fig) · F06 Family Plan addendum chờ merge · Meta App Review pages_messaging (F13 flip ON pending)
+    Legacy handler migration drag (transaction-capture strangler fig) · pricing-tiers Family Plan addendum chờ merge · Meta App Review pages_messaging (messenger-channel flip ON pending)
   </div>
 </div>
 

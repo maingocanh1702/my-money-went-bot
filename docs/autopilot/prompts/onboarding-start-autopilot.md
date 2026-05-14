@@ -5,7 +5,7 @@
 > `feedback_prefer_autopilot_prompts` (≥2-file change → autopilot, không manual),
 > `feedback_autopilot_prompt_template` (đọc template trước khi reinvent).
 >
-> Lockdown source: `docs/operations/F01-F08-lockdown.md` §1.
+> Lockdown source: `docs/operations/feature-lockdown-decisions.md` §1.
 
 ---
 
@@ -57,7 +57,7 @@ Legacy `main.py` + `handlers/*.py` is single-tenant founder-only. This PR introd
 
 ## Required reading (READ FIRST, in this order, before any code)
 
-1. `docs/operations/F01-F08-lockdown.md` §1 — full lockdown decisions, scope, test plan, acceptance criteria
+1. `docs/operations/feature-lockdown-decisions.md` §1 — full lockdown decisions, scope, test plan, acceptance criteria
 2. `docs/implementation-plans/phase-2-handlers.md` §1 — F-onboarding scope + 12-test plan baseline
 3. `docs/features/feature-onboarding.md` §4 (domain model — default categories) + §6 (error codes) ONLY. Ignore Path A/B/C/D screens.
 4. `docs/features/BE/feature-onboarding-tech.md` §2.2 (key queries — INSERT users idempotent) + §4.2 (token format)
