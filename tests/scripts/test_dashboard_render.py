@@ -147,6 +147,57 @@ def test_no_xss_in_feature_name() -> None:
     assert "&lt;script&gt;" in html
 
 
+def test_render_features_tab_includes_progress_column() -> None:
+    """Each feature row should include a CSS progress bar with the % value."""
+    html = render_features_tab(
+        [
+            {
+                "id": "F01",
+                "name": "Test",
+                "spec": "done",
+                "be_tech": "done",
+                "be_code": "partial",
+                "bot_code": "not_started",
+                "phase": "1",
+            }
+        ]
+    )
+    assert "progress-bar" in html
+    assert "progress-fill" in html
+    # F01-like → 63%
+    assert "63%" in html
+
+
+def test_render_features_tab_summary_header() -> None:
+    """Summary header should render overall % + per-axis % + feature count."""
+    html = render_features_tab(
+        [
+            {
+                "id": "F01",
+                "name": "A",
+                "spec": "done",
+                "be_tech": "done",
+                "be_code": "done",
+                "bot_code": "done",
+                "phase": "1",
+            }
+        ]
+    )
+    assert "features-summary" in html
+    assert "Overall 100%" in html
+    assert "(1 features)" in html
+
+
+def test_render_features_tab_progress_column_header() -> None:
+    html = render_features_tab([])
+    # New Progress column between Feature and Spec.
+    assert "<th>Progress</th>" in html
+    feat_idx = html.index("<th>Feature</th>")
+    prog_idx = html.index("<th>Progress</th>")
+    spec_idx = html.index("<th>Spec</th>")
+    assert feat_idx < prog_idx < spec_idx
+
+
 def test_localstorage_tab_init_js_present() -> None:
     assert "localStorage" in TAB_SWITCHER_JS
     assert "activeTab" in TAB_SWITCHER_JS

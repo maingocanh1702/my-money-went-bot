@@ -5,7 +5,12 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from scripts.dashboard.polish import compute_readiness, render_gantt
+from scripts.dashboard.polish import (
+    compute_feature_progress,
+    compute_features_summary,
+    compute_readiness,
+    render_gantt,
+)
 from scripts.dashboard.render import _staleness_class
 
 
@@ -99,6 +104,74 @@ def test_readiness_bar_lives_inside_features_panel() -> None:
     panel_close = html.rindex("</section>")
     readiness_pos = html.index("readiness-bar")
     assert panel_open < readiness_pos < panel_close, "readiness must be inside tab-features panel"
+
+
+def test_feature_progress_all_done() -> None:
+    f = {"spec": "done", "be_tech": "done", "be_code": "done", "bot_code": "done"}
+    assert compute_feature_progress(f) == 100
+
+
+def test_feature_progress_all_not_started() -> None:
+    f = {
+        "spec": "not_started",
+        "be_tech": "not_started",
+        "be_code": "not_started",
+        "bot_code": "not_started",
+    }
+    assert compute_feature_progress(f) == 0
+
+
+def test_feature_progress_mixed_f01_like() -> None:
+    # F01: spec=done, be_tech=done, be_code=partial, bot_code=not_started
+    # → (1 + 1 + 0.5 + 0) / 4 = 0.625 → 63%
+    f = {"spec": "done", "be_tech": "done", "be_code": "partial", "bot_code": "not_started"}
+    assert compute_feature_progress(f) == 63
+
+
+def test_feature_progress_missing_axes_treated_as_not_started() -> None:
+    f = {"spec": "done"}  # other axes missing → 25%
+    assert compute_feature_progress(f) == 25
+
+
+def test_feature_progress_deferred_counts_as_zero() -> None:
+    f = {"spec": "deferred", "be_tech": "done", "be_code": "not_started", "bot_code": "not_started"}
+    # deferred=0, done=1, rest=0 → 25%
+    assert compute_feature_progress(f) == 25
+
+
+def test_features_summary_empty() -> None:
+    s = compute_features_summary([])
+    assert s == {"overall": 0, "spec": 0, "be_tech": 0, "be_code": 0, "bot_code": 0, "count": 0}
+
+
+def test_features_summary_aggregates_per_axis() -> None:
+    fs = [
+        {"spec": "done", "be_tech": "done", "be_code": "done", "bot_code": "done"},  # 100
+        {
+            "spec": "done",
+            "be_tech": "done",
+            "be_code": "partial",
+            "bot_code": "not_started",
+        },  # 63
+        {
+            "spec": "not_started",
+            "be_tech": "not_started",
+            "be_code": "not_started",
+            "bot_code": "not_started",
+        },  # 0
+    ]
+    s = compute_features_summary(fs)
+    assert s["count"] == 3
+    # Spec: (1+1+0)/3 = 67%
+    assert s["spec"] == 67
+    # BE Tech: (1+1+0)/3 = 67%
+    assert s["be_tech"] == 67
+    # BE Code: (1+0.5+0)/3 = 50%
+    assert s["be_code"] == 50
+    # Bot Code: (1+0+0)/3 = 33%
+    assert s["bot_code"] == 33
+    # Overall: avg of feature-level percentages = (100+63+0)/3 = 54%
+    assert s["overall"] == 54
 
 
 def test_division_by_zero_guarded() -> None:

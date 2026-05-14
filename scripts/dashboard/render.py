@@ -71,12 +71,24 @@ def render_overview_tab(
 
 
 def render_features_tab(features: list[dict[str, Any]], prefix_html: str = "") -> str:
+    # Local import to keep polish/render module ordering one-directional
+    # (polish never imports render — render may import polish helpers).
+    from scripts.dashboard.polish import (
+        compute_feature_progress,
+        compute_features_summary,
+        render_features_summary_header,
+        render_progress_bar,
+    )
+
+    summary_html = render_features_summary_header(compute_features_summary(features))
     rows: list[str] = []
     for f in features:
+        bar = render_progress_bar(compute_feature_progress(f))
         rows.append(
             "<tr>"
             f'<td class="feature-id">{escape_html(f.get("id", ""))}</td>'
             f'<td class="feature-name">{escape_html(f.get("name", ""))}</td>'
+            f'<td class="progress-cell">{bar}</td>'
             f'<td class="status-cell status-{escape_html(f.get("spec", "not_started"))}">{escape_html(f.get("spec", ""))}</td>'
             f'<td class="status-cell status-{escape_html(f.get("be_tech", "not_started"))}">{escape_html(f.get("be_tech", ""))}</td>'
             f'<td class="status-cell status-{escape_html(f.get("be_code", "not_started"))}">{escape_html(f.get("be_code", ""))}</td>'
@@ -87,9 +99,10 @@ def render_features_tab(features: list[dict[str, Any]], prefix_html: str = "") -
     return (
         '<section id="tab-features" class="tab-panel" role="tabpanel">'
         f"{prefix_html}"
+        f"{summary_html}"
         '<table class="features-matrix">'
         "<thead><tr>"
-        "<th>ID</th><th>Feature</th><th>Spec</th><th>BE Tech</th>"
+        "<th>ID</th><th>Feature</th><th>Progress</th><th>Spec</th><th>BE Tech</th>"
         "<th>BE Code</th><th>Bot Code</th><th>Phase</th>"
         "</tr></thead>"
         f'<tbody>{"".join(rows)}</tbody>'

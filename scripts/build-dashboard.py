@@ -38,9 +38,7 @@ from scripts.dashboard.parse_roadmap import (  # noqa: E402
 )
 from scripts.dashboard.polish import (  # noqa: E402
     POLISH_CSS,
-    compute_readiness,
     render_gantt,
-    render_readiness_bar,
 )
 from scripts.dashboard.render import (  # noqa: E402
     TAB_CSS,
@@ -1153,8 +1151,6 @@ document.querySelectorAll(".next-chip").forEach(chip => {{
                 continue
         enriched_phases.append(ph)
     gantt_html = render_gantt(enriched_phases, date.today())
-    readiness = compute_readiness(rd.get("features", []))
-    readiness_html = render_readiness_bar(readiness)
 
     legacy_overview_inner = f"""<div class="hero">
 {hero_current}
@@ -1165,7 +1161,7 @@ document.querySelectorAll(".next-chip").forEach(chip => {{
 <h3 class="section-h">Timeline (Gantt)</h3>
 {gantt_html}"""
     overview_tab = render_overview_tab(overall, overall.get("phases", []), legacy_overview_inner)
-    features_tab = render_features_tab(rd.get("features", []), prefix_html=readiness_html)
+    features_tab = render_features_tab(rd.get("features", []))
     prs_tab = render_prs_tab(f"{toolbar_html}\n{board_html}")
     risks_tab = render_risks_tab(rd.get("risks", []))
     docs_tab = render_docs_tab(doc_versions or [])

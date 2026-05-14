@@ -83,6 +83,92 @@ def compute_readiness(features: list[dict[str, Any]]) -> dict[str, int]:
     return out
 
 
+_PROGRESS_AXES = ("spec", "be_tech", "be_code", "bot_code")
+
+
+def _half_up(value: float) -> int:
+    # Python's built-in round() uses banker's rounding (round-half-to-even),
+    # so 62.5 → 62 instead of the intuitive 63. We always want half-away-from-
+    # zero for percentages so a "0.5 partial" axis tips the bucket upward.
+    return int(value + 0.5) if value >= 0 else -int(-value + 0.5)
+
+
+def compute_feature_progress(feature: dict[str, Any]) -> int:
+    """Aggregate the four status axes into a 0-100 progress percentage.
+
+    done=1.0, partial=0.5, anything else (not_started/deferred/missing)=0.0.
+    Equal-weighted across spec/be_tech/be_code/bot_code.
+    """
+    score = sum(_READINESS_WEIGHTS.get(str(feature.get(a, "")), 0.0) for a in _PROGRESS_AXES)
+    return _half_up(score / len(_PROGRESS_AXES) * 100)
+
+
+def compute_features_summary(features: list[dict[str, Any]]) -> dict[str, int]:
+    """Overall % + per-axis % + feature count across all features.
+
+    ``overall`` is the average of per-feature progress, not the average of
+    raw axis scores — so adding a fully-blocked feature drops overall by
+    the right amount even if its axes are all "not_started".
+    """
+    if not features:
+        return {"overall": 0, **{a: 0 for a in _PROGRESS_AXES}, "count": 0}
+    per_axis: dict[str, float] = {a: 0.0 for a in _PROGRESS_AXES}
+    overall = 0.0
+    for f in features:
+        feat_score = 0.0
+        for a in _PROGRESS_AXES:
+            s = _READINESS_WEIGHTS.get(str(f.get(a, "")), 0.0)
+            per_axis[a] += s
+            feat_score += s
+        overall += feat_score / len(_PROGRESS_AXES)
+    n = len(features)
+    return {
+        "overall": _half_up(overall / n * 100),
+        **{a: _half_up(v / n * 100) for a, v in per_axis.items()},
+        "count": n,
+    }
+
+
+def _progress_class(pct: int) -> str:
+    if pct >= 100:
+        return "done"
+    if pct >= 80:
+        return "high"
+    if pct >= 40:
+        return "mid"
+    if pct > 0:
+        return "low"
+    return "none"
+
+
+def render_progress_bar(pct: int) -> str:
+    """Reusable inline CSS progress bar — color-coded by completion bucket."""
+    pct = max(0, min(100, int(pct)))
+    cls = _progress_class(pct)
+    return (
+        f'<div class="progress-bar"><div class="progress-fill progress-{cls}" '
+        f'style="width:{pct}%"></div><span class="progress-label">{pct}%</span></div>'
+    )
+
+
+def render_features_summary_header(summary: dict[str, int]) -> str:
+    """Summary header for the Features tab: overall + per-axis + count."""
+    return (
+        '<div class="features-summary">'
+        '<div class="features-summary-overall">'
+        f'<strong>Overall {summary.get("overall", 0)}%</strong>'
+        f'<span class="features-count">({summary.get("count", 0)} features)</span>'
+        "</div>"
+        '<div class="features-summary-axes">'
+        f'<span>Spec <strong>{summary.get("spec", 0)}%</strong></span>'
+        f'<span>BE Tech <strong>{summary.get("be_tech", 0)}%</strong></span>'
+        f'<span>BE Code <strong>{summary.get("be_code", 0)}%</strong></span>'
+        f'<span>Bot Code <strong>{summary.get("bot_code", 0)}%</strong></span>'
+        "</div>"
+        "</div>"
+    )
+
+
 def render_readiness_bar(readiness: dict[str, int]) -> str:
     """Inline readiness summary — sits above the features matrix."""
     cells = []
@@ -119,8 +205,25 @@ POLISH_CSS = """
 .readiness-cell { font-size: 13px; color: #444; }
 .readiness-label { color: #777; }
 .readiness-pct { font-weight: 600; color: #1976d2; }
+.features-summary { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #f8f9fa; border-radius: 6px; margin: 12px 0; flex-wrap: wrap; gap: 12px; }
+.features-summary-overall strong { font-size: 18px; color: #1976d2; }
+.features-summary-overall .features-count { font-size: 13px; color: #666; margin-left: 8px; }
+.features-summary-axes { display: flex; gap: 20px; font-size: 14px; }
+.features-summary-axes strong { color: #333; }
+.progress-cell { min-width: 120px; padding: 6px 8px; }
+.progress-bar { position: relative; height: 18px; background: #f0f0f0; border-radius: 9px; overflow: hidden; }
+.progress-fill { height: 100%; transition: width 0.3s; }
+.progress-done { background: #4caf50; }
+.progress-high { background: #66bb6a; }
+.progress-mid  { background: #2196f3; }
+.progress-low  { background: #ff9800; }
+.progress-none { background: #e0e0e0; }
+.progress-label { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 11px; font-weight: 600; color: #333; pointer-events: none; }
 @media (max-width: 640px) {
   .gantt-row { grid-template-columns: 90px 1fr; }
   .gantt-today { margin-left: 98px; }
+  .features-summary { flex-direction: column; align-items: flex-start; }
+  .features-summary-axes { flex-wrap: wrap; gap: 8px 16px; }
+  .progress-cell { min-width: 80px; }
 }
 """
