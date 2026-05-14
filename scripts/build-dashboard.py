@@ -41,7 +41,6 @@ from scripts.dashboard.polish import (  # noqa: E402
     render_gantt,
 )
 from scripts.dashboard.render import (  # noqa: E402
-    MULTI_VIEW_CSS,
     TAB_CSS,
     TAB_SWITCHER_JS,
     render_docs_tab,
@@ -51,6 +50,7 @@ from scripts.dashboard.render import (  # noqa: E402
     render_risks_tab,
     render_tab_bar,
 )
+from scripts.dashboard.render_features_multi_view import MULTI_VIEW_CSS  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 TRACKER = ROOT / "docs" / "implementation-tracker.md"
