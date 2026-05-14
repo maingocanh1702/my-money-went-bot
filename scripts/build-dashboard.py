@@ -41,6 +41,7 @@ from scripts.dashboard.polish import (  # noqa: E402
     render_gantt,
 )
 from scripts.dashboard.render import (  # noqa: E402
+    MULTI_VIEW_CSS,
     TAB_CSS,
     TAB_SWITCHER_JS,
     render_docs_tab,
@@ -1176,7 +1177,8 @@ document.querySelectorAll(".next-chip").forEach(chip => {{
 <meta http-equiv="refresh" content="60">
 <style>{HTML_CSS}
 {TAB_CSS}
-{POLISH_CSS}</style>
+{POLISH_CSS}
+{MULTI_VIEW_CSS}</style>
 </head>
 <body>
 <div class="container">

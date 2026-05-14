@@ -10,6 +10,15 @@ from __future__ import annotations
 import html
 from typing import Any
 
+from scripts.dashboard.render_features_multi_view import (  # noqa: E402, F401
+    MULTI_VIEW_CSS,
+    _segment_class,
+    group_features_by_phase,
+    render_features_cards,
+    render_features_kanban,
+    render_features_table_view,
+)
+
 TAB_DEFS = [
     ("overview", "Overview"),
     ("features", "Features"),
@@ -71,42 +80,33 @@ def render_overview_tab(
 
 
 def render_features_tab(features: list[dict[str, Any]], prefix_html: str = "") -> str:
-    # Local import to keep polish/render module ordering one-directional
-    # (polish never imports render — render may import polish helpers).
     from scripts.dashboard.polish import (
-        compute_feature_progress,
         compute_features_summary,
         render_features_summary_header,
-        render_progress_bar,
     )
+    from scripts.dashboard.render_features_multi_view import FEATURES_VIEW_SWITCHER_JS
 
     summary_html = render_features_summary_header(compute_features_summary(features))
-    rows: list[str] = []
-    for f in features:
-        bar = render_progress_bar(compute_feature_progress(f))
-        rows.append(
-            "<tr>"
-            f'<td class="feature-id">{escape_html(f.get("id", ""))}</td>'
-            f'<td class="feature-name">{escape_html(f.get("name", ""))}</td>'
-            f'<td class="progress-cell">{bar}</td>'
-            f'<td class="status-cell status-{escape_html(f.get("spec", "not_started"))}">{escape_html(f.get("spec", ""))}</td>'
-            f'<td class="status-cell status-{escape_html(f.get("be_tech", "not_started"))}">{escape_html(f.get("be_tech", ""))}</td>'
-            f'<td class="status-cell status-{escape_html(f.get("be_code", "not_started"))}">{escape_html(f.get("be_code", ""))}</td>'
-            f'<td class="status-cell status-{escape_html(f.get("bot_code", "not_started"))}">{escape_html(f.get("bot_code", ""))}</td>'
-            f'<td class="phase-cell">{escape_html(f.get("phase", ""))}</td>'
-            "</tr>"
-        )
+    switcher_html = (
+        '<div class="features-view-switcher" role="tablist" aria-label="Features view">'
+        '<button type="button" data-view="cards" class="features-view-btn" role="tab">Cards</button>'
+        '<button type="button" data-view="kanban" class="features-view-btn" role="tab">Kanban</button>'
+        '<button type="button" data-view="table" class="features-view-btn" role="tab">Table</button>'
+        "</div>"
+    )
+    cards_html = render_features_cards(features)
+    kanban_html = render_features_kanban(features)
+    table_html = render_features_table_view(features)
+    switcher_js = f"<script>\n{FEATURES_VIEW_SWITCHER_JS}</script>"
     return (
         '<section id="tab-features" class="tab-panel" role="tabpanel">'
         f"{prefix_html}"
         f"{summary_html}"
-        '<table class="features-matrix">'
-        "<thead><tr>"
-        "<th>ID</th><th>Feature</th><th>Progress</th><th>Spec</th><th>BE Tech</th>"
-        "<th>BE Code</th><th>Bot Code</th><th>Phase</th>"
-        "</tr></thead>"
-        f'<tbody>{"".join(rows)}</tbody>'
-        "</table>"
+        f"{switcher_html}"
+        f'<div id="features-view-cards" class="features-view-panel">{cards_html}</div>'
+        f'<div id="features-view-kanban" class="features-view-panel">{kanban_html}</div>'
+        f'<div id="features-view-table" class="features-view-panel">{table_html}</div>'
+        f"{switcher_js}"
         "</section>"
     )
 
