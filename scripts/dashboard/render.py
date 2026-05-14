@@ -10,10 +10,7 @@ from __future__ import annotations
 import html
 from typing import Any
 
-from scripts.dashboard.render_features_multi_view import (  # noqa: E402, F401
-    MULTI_VIEW_CSS,
-    _segment_class,
-    group_features_by_phase,
+from scripts.dashboard.render_features_multi_view import (
     render_features_cards,
     render_features_kanban,
     render_features_table_view,
