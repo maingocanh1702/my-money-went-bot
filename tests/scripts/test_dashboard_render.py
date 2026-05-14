@@ -6,7 +6,6 @@ XSS-safe interpolation.
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from scripts.dashboard.render import (
@@ -18,6 +17,13 @@ from scripts.dashboard.render import (
     render_prs_tab,
     render_risks_tab,
     render_tab_bar,
+)
+from scripts.dashboard.render_features_multi_view import (
+    _segment_class,
+    group_features_by_phase,
+    render_features_cards,
+    render_features_kanban,
+    render_features_table_view,
 )
 
 
@@ -43,7 +49,7 @@ def test_render_overview_progress_bars() -> None:
     assert 'id="tab-overview"' in html
 
 
-def test_render_features_matrix() -> None:
+def test_render_features_multi_view_contains_all_features() -> None:
     features = [
         {
             "id": "F01",
@@ -65,13 +71,12 @@ def test_render_features_matrix() -> None:
         },
     ]
     html = render_features_tab(features)
-    assert "<tbody>" in html
-    rows = re.findall(r"<tr>", html)
-    # One thead row + two body rows. Thead row uses <thead><tr>...
-    assert len(rows) >= 2
     assert "F01" in html
     assert "F02" in html
     assert "Onboarding" in html
+    assert "features-view-cards" in html
+    assert "features-view-kanban" in html
+    assert "features-view-table" in html
 
 
 def test_render_prs_tab_wraps_legacy_markup() -> None:
@@ -147,8 +152,8 @@ def test_no_xss_in_feature_name() -> None:
     assert "&lt;script&gt;" in html
 
 
-def test_render_features_tab_includes_progress_column() -> None:
-    """Each feature row should include a CSS progress bar with the % value."""
+def test_render_features_tab_includes_progress_display() -> None:
+    """Each feature should show a progress value in the multi-view cards."""
     html = render_features_tab(
         [
             {
@@ -162,9 +167,6 @@ def test_render_features_tab_includes_progress_column() -> None:
             }
         ]
     )
-    assert "progress-bar" in html
-    assert "progress-fill" in html
-    # F01-like → 63%
     assert "63%" in html
 
 
@@ -188,14 +190,11 @@ def test_render_features_tab_summary_header() -> None:
     assert "(1 features)" in html
 
 
-def test_render_features_tab_progress_column_header() -> None:
+def test_render_features_tab_has_view_switcher_buttons() -> None:
     html = render_features_tab([])
-    # New Progress column between Feature and Spec.
-    assert "<th>Progress</th>" in html
-    feat_idx = html.index("<th>Feature</th>")
-    prog_idx = html.index("<th>Progress</th>")
-    spec_idx = html.index("<th>Spec</th>")
-    assert feat_idx < prog_idx < spec_idx
+    assert 'data-view="cards"' in html
+    assert 'data-view="kanban"' in html
+    assert 'data-view="table"' in html
 
 
 def test_localstorage_tab_init_js_present() -> None:
@@ -221,3 +220,131 @@ def test_tab_switcher_lives_inside_container_in_dashboard_html() -> None:
     c_close = html.rindex("</div>\n<script")
     sw = html.index('class="tab-switcher"')
     assert c_open < sw < c_close, "tab-switcher script must live inside .container"
+
+
+# ---------- Multi-view Features tests (mega-prompt #4) ----------
+
+
+SAMPLE_FEATURES_MV = [
+    {
+        "id": "F01",
+        "name": "3-Path Onboarding",
+        "spec": "done",
+        "be_tech": "done",
+        "be_code": "partial",
+        "bot_code": "not_started",
+        "phase": "1,4",
+    },
+    {
+        "id": "F12",
+        "name": "Multi-User Data Isolation",
+        "spec": "done",
+        "be_tech": "not_started",
+        "be_code": "done",
+        "bot_code": "not_started",
+        "phase": "1",
+    },
+    {
+        "id": "F16",
+        "name": "P&L View",
+        "spec": "not_started",
+        "be_tech": "not_started",
+        "be_code": "not_started",
+        "bot_code": "not_started",
+        "phase": "9",
+    },
+]
+
+
+def test_group_features_by_phase_uses_first_phase() -> None:
+    grouped = group_features_by_phase(SAMPLE_FEATURES_MV)
+    assert 1 in grouped and 9 in grouped
+    assert len(grouped[1]) == 2
+    assert len(grouped[9]) == 1
+    assert list(grouped.keys()) == sorted(grouped.keys())
+
+
+def test_group_features_by_phase_handles_missing_phase() -> None:
+    fs = [
+        {
+            "id": "FX",
+            "name": "x",
+            "spec": "done",
+            "be_tech": "done",
+            "be_code": "done",
+            "bot_code": "done",
+            "phase": "",
+        }
+    ]
+    grouped = group_features_by_phase(fs)
+    assert len(grouped) >= 1
+
+
+def test_render_features_cards_includes_progress_ring() -> None:
+    import html as html_mod
+
+    rendered = render_features_cards(SAMPLE_FEATURES_MV)
+    assert "<svg" in rendered
+    assert "stroke-dasharray" in rendered
+    for f in SAMPLE_FEATURES_MV:
+        assert f["id"] in rendered
+        assert html_mod.escape(f["name"]) in rendered
+
+
+def test_render_features_cards_escapes_xss() -> None:
+    fs: list[dict[str, Any]] = [
+        {
+            "id": "FXSS",
+            "name": "<script>alert(1)</script>",
+            "spec": "done",
+            "be_tech": "done",
+            "be_code": "done",
+            "bot_code": "done",
+            "phase": "1",
+        }
+    ]
+    html = render_features_cards(fs)
+    assert "<script>alert(1)</script>" not in html
+    assert "&lt;script&gt;" in html
+
+
+def test_render_features_kanban_groups_by_phase() -> None:
+    html = render_features_kanban(SAMPLE_FEATURES_MV)
+    assert "Phase 1" in html
+    assert "Phase 9" in html
+    assert "F01" in html and "F12" in html and "F16" in html
+    assert "kanban-bar-fill" in html
+
+
+def test_render_features_table_view_has_4_segment_bar() -> None:
+    html = render_features_table_view(SAMPLE_FEATURES_MV)
+    assert "seg-spec" in html
+    assert "seg-be_tech" in html or "seg-be-tech" in html
+    assert "seg-be_code" in html or "seg-be-code" in html
+    assert "seg-bot_code" in html or "seg-bot-code" in html
+    for f in SAMPLE_FEATURES_MV:
+        assert f["id"] in html
+
+
+def test_render_features_tab_includes_view_switcher() -> None:
+    html = render_features_tab(SAMPLE_FEATURES_MV)
+    assert 'data-view="cards"' in html
+    assert 'data-view="kanban"' in html
+    assert 'data-view="table"' in html
+    assert "featuresView" in html
+    assert "localStorage" in html
+
+
+def test_render_features_tab_renders_all_3_panels() -> None:
+    html = render_features_tab(SAMPLE_FEATURES_MV)
+    assert "features-view-cards" in html
+    assert "features-view-kanban" in html
+    assert "features-view-table" in html
+
+
+def test_segment_color_class_done_partial_not_started() -> None:
+    assert _segment_class("done") == "seg-done"
+    assert _segment_class("partial") == "seg-partial"
+    assert _segment_class("not_started") == "seg-none"
+    assert _segment_class("deferred") == "seg-none"
+    assert _segment_class("unknown") == "seg-none"
