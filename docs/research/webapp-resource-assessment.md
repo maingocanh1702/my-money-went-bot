@@ -95,9 +95,9 @@ Dashboard không thay đổi headline pricing. Nó là value packaging theo tier
 | Pro | Full history, charts/trends, CSV export, more filters, multi-bank view |
 | Business | P&L style views, source attribution. Scheduled export/report deferred to Phase W2 |
 
-### F06 Entitlement Integration
+### pricing-tiers Entitlement Integration
 
-Khi implement F06 Pricing, thêm entitlement cho dashboard — align với generic entitlement model:
+Khi implement pricing-tiers Pricing, thêm entitlement cho dashboard — align với generic entitlement model:
 
 WEB_DASHBOARD = {
     access: none|basic|full,
@@ -146,7 +146,7 @@ Start Phase W only if one or more of:
 | Build now? | No — solo founder, mất 3-6 tuần delay core |
 | Prepare now? | Yes — architecture query layer reusable |
 | Build when? | Post-launch, trigger-based |
-| Pricing change? | No — giữ giá, thêm entitlement awareness trong F06 |
+| Pricing change? | No — giữ giá, thêm entitlement awareness trong pricing-tiers |
 
 ---
 

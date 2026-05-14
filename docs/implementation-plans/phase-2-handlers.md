@@ -4,7 +4,7 @@
 > **Ngày tạo:** 2026-05-12
 > **Trạng thái:** Active
 > **Owner:** Founder (dev)
-> **Mục đích:** Refactor monolithic legacy handlers/ thành multi-tenant feature handlers, strangler-fig legacy cutover, ship 9 features (F01 start, F03, F04, F05, F07, F08, F11a auth, F-i18n, F02 expanded).
+> **Mục đích:** Refactor monolithic legacy handlers/ thành multi-tenant feature handlers, strangler-fig legacy cutover, ship 9 features (onboarding-start start, categorization, category-management, reports, settings, funding-sources, admin-auth auth, i18n-locale-switcher, transaction-capture expanded).
 > **Tham chiếu:**
 > - [Implementation Tracker](../implementation-tracker.md)
 > - [Dev Workflow §4 Wave 1-4](../operations/development-workflow.md)
@@ -16,24 +16,24 @@
 
 | # | PR | Wave | Feature | Order | Est. days | Tests |
 |---|----|------|---------|:-----:|:---------:|:-----:|
-| 1 | F-onboarding | 1 | F01 `/start` + user create + trial | 1 | 1.5 | 12 |
-| 2 | F07 | 1 | Settings `/settings` | 1 (parallel with #1) | 1.0 | 10 |
-| 3 | F-i18n | 1 | VI/EN switcher full | 2 (parallel) | 1.5 | 14 |
-| 4 | F11a | 1 | Admin auth framework only | 2 (parallel) | 0.5 | 6 |
-| 5 | F08 | 2 | Funding sources service+handlers | 3 | 2.0 | 18 |
-| 6 | F02 | 2 | TX capture EXPANDED + legacy cutover | 4 | 4.0 | 25 |
-| 7 | F04 | 3 | Category management `/manage` | 5 | 1.5 | 14 |
-| 8 | F03 | 3 | Categorization auto+manual | 6 (after #7) | 2.0 | 16 |
-| 9 | F05 | 4 | Reports `/status`, `/today`, `/weekly` | 7 | 1.5 | 12 |
+| 1 | onboarding-start | 1 | onboarding-start `/start` + user create + trial | 1 | 1.5 | 12 |
+| 2 | settings | 1 | Settings `/settings` | 1 (parallel with #1) | 1.0 | 10 |
+| 3 | i18n-locale-switcher | 1 | VI/EN switcher full | 2 (parallel) | 1.5 | 14 |
+| 4 | admin-auth | 1 | Admin auth framework only | 2 (parallel) | 0.5 | 6 |
+| 5 | funding-sources | 2 | Funding sources service+handlers | 3 | 2.0 | 18 |
+| 6 | transaction-capture | 2 | TX capture EXPANDED + legacy cutover | 4 | 4.0 | 25 |
+| 7 | category-management | 3 | Category management `/manage` | 5 | 1.5 | 14 |
+| 8 | categorization | 3 | Categorization auto+manual | 6 (after #7) | 2.0 | 16 |
+| 9 | reports | 4 | Reports `/status`, `/today`, `/weekly` | 7 | 1.5 | 12 |
 | **Total** | | | | | **~15 days** | **127** |
 
 **Parallel slots (max 2 active):**
-- Slot 1: F-onboarding → F08 → F02 → F04 → F03 → F05 (main critical path)
-- Slot 2: F07 || F-i18n || F11a (filler when slot 1 blocked on review)
+- Slot 1: onboarding-start → funding-sources → transaction-capture → category-management → categorization → reports (main critical path)
+- Slot 2: settings || i18n-locale-switcher || admin-auth (filler when slot 1 blocked on review)
 
 ---
 
-## #1 — F-onboarding (F01 `/start` only)
+## #1 — onboarding-start (onboarding-start `/start` only)
 
 > Full Path A/B/C onboarding ships in Phase 4. Here chỉ ship `/start` skeleton + user create + trial assign.
 
@@ -83,7 +83,7 @@ M main.py  (wire start handler to messenger dispatch)
 
 ---
 
-## #2 — F07 Settings `/settings`
+## #2 — settings Settings `/settings`
 
 ### Scope
 
@@ -120,7 +120,7 @@ Contract (1): inline keyboard callback parses correctly
 
 ---
 
-## #3 — F-i18n expansion
+## #3 — i18n-locale-switcher expansion
 
 ### Scope
 
@@ -146,7 +146,7 @@ Completeness (3): every vi key has en counterpart; no orphan en keys; no dynamic
 
 ### Acceptance criteria
 
-- All Phase 2 features (F01, F07, settings) use `t()` — no hardcoded strings
+- All Phase 2 features (onboarding-start, settings, settings) use `t()` — no hardcoded strings
 - Completeness test pass (vi ⟷ en keys equal)
 - Plural forms: VN "1 giao dịch" vs "5 giao dịch" handled
 
@@ -158,7 +158,7 @@ Completeness (3): every vi key has en counterpart; no orphan en keys; no dynamic
 
 ---
 
-## #4 — F11a Admin auth framework only
+## #4 — admin-auth Admin auth framework only
 
 > Actual `/admin_*` commands defer Phase 6. Just authz scaffolding here.
 
@@ -199,7 +199,7 @@ Completeness (3): every vi key has en counterpart; no orphan en keys; no dynamic
 
 ---
 
-## #5 — F08 Funding Sources service+handlers
+## #5 — funding-sources Funding Sources service+handlers
 
 > DDL landed W0.2. This PR: service logic + handlers.
 
@@ -224,11 +224,11 @@ Positive (6): create, list, archive, restore, resolve hit, resolve miss → disc
 Edge (5): duplicate canonical identity → return existing; archived not in active list; cross-user resolve isolation; bank rename preserves resolve; last4 mask format
 Error (3): invalid last4 (not 4 digits); kind/bank mismatch; archive root-account with active funding
 Isolation (2): User A funding never appears in User B picker
-Contract (2): F02 `resolve_funding_source()` called correct args
+Contract (2): transaction-capture `resolve_funding_source()` called correct args
 
 ### Acceptance criteria
 
-- F02 contract: any `INSERT INTO transactions` MUST call `resolve_funding_source()` first (enforced via integration test)
+- transaction-capture contract: any `INSERT INTO transactions` MUST call `resolve_funding_source()` first (enforced via integration test)
 - Embed-in-picker discovery flow works (new bank → inline prompt)
 - Archive ≠ delete (FK preserved, history queryable)
 
@@ -236,29 +236,29 @@ Contract (2): F02 `resolve_funding_source()` called correct args
 
 - [x] Canonical identity: `(user_id, kind, bank, last4)` — locked 2026-05-11
 - [x] Status enum: `active`, `archived` (no `deleted`) — soft archive only
-- [x] F02 requires resolve before INSERT — locked
+- [x] transaction-capture requires resolve before INSERT — locked
 
 ### Risk
 
-- F02 may discover edge cases that need F08 schema tweak → backport to W0.2 migration via new migration (no rewrite)
+- transaction-capture may discover edge cases that need funding-sources schema tweak → backport to W0.2 migration via new migration (no rewrite)
 
 ---
 
-## #6 — F02 Transaction Capture EXPANDED (legacy cutover)
+## #6 — transaction-capture Transaction Capture EXPANDED (legacy cutover)
 
 > **The big one.** Inherits W0.6 deferred scope. Strangler-fig: each legacy handler = own commit, then squash.
 
 ### Scope (per W0.6 scope split summary in Development Workflow + Wave 0 Retrospective)
 
 1. Rewrite `handlers/transaction.py` → `core/handlers/transaction.py` multi-tenant
-2. Rewrite `handlers/manage.py` → `core/handlers/manage.py` (note: overlaps F04 — coordinate)
-3. Rewrite `handlers/reports.py` → `core/handlers/reports.py` (overlaps F05 — placeholder, F05 expands)
+2. Rewrite `handlers/manage.py` → `core/handlers/manage.py` (note: overlaps category-management — coordinate)
+3. Rewrite `handlers/reports.py` → `core/handlers/reports.py` (overlaps reports — placeholder, reports expands)
 4. Rewrite `handlers/allocation.py` → `core/handlers/allocation.py`
 5. Delete `sheets.py` (Google Sheets layer obsolete)
 6. Refactor `main.py` — remove legacy imports, wire new core handlers
 7. Execute `scripts/migrate_sheets.py` — founder data migration (Sheets → Postgres)
 8. Remove `handlers` from import-linter `root_packages`
-9. Wire F08 `resolve_funding_source()` into transaction INSERT path
+9. Wire funding-sources `resolve_funding_source()` into transaction INSERT path
 
 ### Files touched
 
@@ -270,8 +270,8 @@ Contract (2): F02 `resolve_funding_source()` called correct args
 - handlers/scheduled.py
 - sheets.py
 + core/handlers/transaction.py
-+ core/handlers/manage.py        (skeleton, F04 expands)
-+ core/handlers/reports.py        (skeleton, F05 expands)
++ core/handlers/manage.py        (skeleton, category-management expands)
++ core/handlers/reports.py        (skeleton, reports expands)
 + core/handlers/allocation.py
 M main.py
 M .importlinter  (remove 'handlers' from root_packages)
@@ -286,7 +286,7 @@ M scripts/migrate_sheets.py  (remove NotImplementedError, real impl)
 **TX capture E2E (8):**
 1. SePay webhook → tx inserted với funding_source resolved
 2. Email parser → tx inserted same path
-3. Cross-source dedup placeholder (full dedup F02-dedup PR)
+3. Cross-source dedup placeholder (full dedup cross-source-dedup PR)
 4. Tx with unknown bank → funding discovery prompt
 5. Tx with archived funding → silently re-resolve to active
 6. Negative amount handled
@@ -305,18 +305,18 @@ M scripts/migrate_sheets.py  (remove NotImplementedError, real impl)
 17. Import-linter: no `handlers` package reference
 18. Multi-tenant: legacy founder data isolated under user_id=1
 
-**F08 wire-in (4):**
+**funding-sources wire-in (4):**
 19. INSERT without resolve_funding_source call → integration test fails (assertion)
 20. New bank discovery flow end-to-end
 21. Resolver result cached per-request (no N+1)
 22. Resolver miss → graceful prompt, tx queued
 
-> **Pre-existing F02 contract pin (added post-W0, 2026-05-12):**
+> **Pre-existing transaction-capture contract pin (added post-W0, 2026-05-12):**
 > `tests/integration/test_sepay_webhook.py::test_persisted_tx_has_resolved_funding_source_id`
-> is marked `@pytest.mark.xfail(strict=True, reason="F02: funding source resolve required ...")`.
+> is marked `@pytest.mark.xfail(strict=True, reason="transaction-capture: funding source resolve required ...")`.
 > When this PR wires resolution into `_persist()`, the assertion flips to passing
 > and `xfail(strict=True)` will RAISE on the unexpected pass — you MUST remove
-> the `@pytest.mark.xfail` decorator as part of the F02 commit. Do not silence
+> the `@pytest.mark.xfail` decorator as part of the transaction-capture commit. Do not silence
 > the marker (strict=False) to make CI green; that defeats the contract pin.
 
 **Tenant isolation (3):**
@@ -329,7 +329,7 @@ M scripts/migrate_sheets.py  (remove NotImplementedError, real impl)
 - All legacy code paths deleted from main
 - Founder Sheets data 100% migrated, counts verified
 - No regression: bot answers same as pre-cutover for founder
-- F08 wire-in enforced via integration assert
+- funding-sources wire-in enforced via integration assert
 - **`test_persisted_tx_has_resolved_funding_source_id` xfail marker removed** (test now passes naturally — see test plan note above)
 - Legacy formatter policy resolved: either commit the W0.6-era black/ruff drift on legacy files as a `style:` commit in this PR, or revert and reformat as part of the move into `core/handlers/`. Default: reformat-on-move (cleaner blame).
 
@@ -347,12 +347,12 @@ M scripts/migrate_sheets.py  (remove NotImplementedError, real impl)
 
 ---
 
-## #7 — F04 Category Management `/manage`
+## #7 — category-management Category Management `/manage`
 
 ### Scope
 
 - `core/services/categories.py` — CRUD + parent/sub tree
-- `core/handlers/manage.py` (expand skeleton from F02) — `/manage` command + inline keyboard
+- `core/handlers/manage.py` (expand skeleton from transaction-capture) — `/manage` command + inline keyboard
 - Free tier limit: 5 categories (enforced in service)
 
 ### Files touched
@@ -379,7 +379,7 @@ Tier (1): Pro user no limit
 
 ---
 
-## #8 — F03 Categorization (after F04)
+## #8 — categorization Categorization (after category-management)
 
 ### Scope
 
@@ -419,12 +419,12 @@ Tier (1): free user limited rule count
 
 ---
 
-## #9 — F05 Reports `/status`, `/today`, `/weekly`
+## #9 — reports Reports `/status`, `/today`, `/weekly`
 
 ### Scope
 
 - `core/services/reports.py` — query layer (read-only, aggregate)
-- `core/handlers/reports.py` (expand skeleton from F02) — 3 commands
+- `core/handlers/reports.py` (expand skeleton from transaction-capture) — 3 commands
 - Format: text-only (no charts/images for MVP)
 
 ### Files touched
@@ -465,7 +465,7 @@ Isolation (2): User A reports never include User B txs
 - [ ] All features work cross-channel (TG + Discord)
 - [ ] i18n VI/EN both pass
 - [ ] Admin auth framework tested
-- [ ] F08 resolver enforced via integration assert
+- [ ] funding-sources resolver enforced via integration assert
 - [ ] Roadmap Phase 2 → 100%, tracker updated
 - [ ] No new tech debt > P3
 
@@ -475,5 +475,5 @@ Isolation (2): User A reports never include User B txs
 
 | Version | Ngày | Thay đổi |
 |---------|------|----------|
-| v1.0.0 | 2026-05-12 | Initial plan. 9 PRs across Wave 1-4. ~15 days est. F02 is high-risk (legacy cutover) — strangler-fig commits. F08 → F02 ordering locked (F08 first per memory). |
-| v1.0.1 | 2026-05-12 | Post-W0 follow-ups added: F02 must remove `xfail` marker on `test_persisted_tx_has_resolved_funding_source_id` (contract pin from 2026-05-12); legacy formatter drift decision lockdown item added. |
+| v1.0.0 | 2026-05-12 | Initial plan. 9 PRs across Wave 1-4. ~15 days est. transaction-capture is high-risk (legacy cutover) — strangler-fig commits. funding-sources → transaction-capture ordering locked (funding-sources first per memory). |
+| v1.0.1 | 2026-05-12 | Post-W0 follow-ups added: transaction-capture must remove `xfail` marker on `test_persisted_tx_has_resolved_funding_source_id` (contract pin from 2026-05-12); legacy formatter drift decision lockdown item added. |

@@ -1,23 +1,23 @@
-# F01 + F08 Lockdown — Pre-autopilot decisions
+# onboarding-start + funding-sources Lockdown — Pre-autopilot decisions
 
 > **Version:** v1.0.0
 > **Ngày tạo:** 2026-05-13
 > **Status:** Active — feeds into autopilot prompt generation
 > **Owner:** Founder (dev)
-> **Mục đích:** Single source of truth cho lockdown decisions của F01 + F08 trước khi generate autopilot prompts. Per memory `feedback_f07_lessons` rule "lock decisions before autopilot."
+> **Mục đích:** Single source of truth cho lockdown decisions của onboarding-start + funding-sources trước khi generate autopilot prompts. Per memory `feedback_f07_lessons` rule "lock decisions before autopilot."
 >
 > **Tham chiếu:**
-> - [Implementation Plan Phase 2 §1 (F01) + §5 (F08)](../implementation-plans/phase-2-handlers.md)
-> - [FE spec F01](../features/feature-onboarding.md) (v1.2.0)
-> - [BE tech F01](../features/BE/feature-onboarding-tech.md) (v1.0.0, stale vs FE — see §1.5)
-> - [FE spec F08](../features/feature-funding-sources.md) (v1.0.0)
-> - [BE tech F08](../features/BE/feature-funding-sources-tech.md)
+> - [Implementation Plan Phase 2 §1 (onboarding-start) + §5 (funding-sources)](../implementation-plans/phase-2-handlers.md)
+> - [FE spec onboarding-start](../features/feature-onboarding.md) (v1.2.0)
+> - [BE tech onboarding-start](../features/BE/feature-onboarding-tech.md) (v1.0.0, stale vs FE — see §1.5)
+> - [FE spec funding-sources](../features/feature-funding-sources.md) (v1.0.0)
+> - [BE tech funding-sources](../features/BE/feature-funding-sources-tech.md)
 > - [Autopilot prompt template](../autopilot/autopilot-prompt-template.md) (15-section skeleton)
 > - Memory: `project_f08_funding_sources`, `feedback_f07_lessons`, `project_autopilot_risk_tier_policy`, `feedback_concurrency_one_session`
 
 ---
 
-## 1. F01 — `/start` + user create + trial assign
+## 1. onboarding-start — `/start` + user create + trial assign
 
 ### 1.1 Branch + risk header
 
@@ -25,7 +25,7 @@
 Branch:             feat/F01-onboarding-start
 Risk tier:          P1
 Merge policy:       manual_only
-Autopilot maturity: mature (post-F07 6-session pilot validated v0.2.3 orchestrator)
+Autopilot maturity: mature (post-settings 6-session pilot validated v0.2.3 orchestrator)
 Codex review:       2x_consecutive_clean (P1 always)
 ```
 
@@ -40,15 +40,15 @@ Codex review:       2x_consecutive_clean (P1 always)
 - 12 integration tests (per plan §1 test plan)
 
 **Negative scope (do NOT touch):**
-- Path A/B/C onboarding flows — Phase 4 (F01b/c/d)
+- Path A/B/C onboarding flows — Phase 4 (sepay-onboarding-paths/first-tx-celebration/email-forwarding-onboarding)
 - Path D Family invite accept — Phase 4 + family plan ship
-- Language confirm UI (`[✅ vi] [🌐 en]` buttons) — defer to F-i18n PR
-- EN locale strings — defer to F-i18n PR
-- `bank_connections` INSERT — F08/F02 own
-- `scheduled_jobs` INSERT — F09 owns (note: BE spec §2.1 says auto-create here but plan §1 doesn't list — clarified: F09 will backfill later)
+- Language confirm UI (`[✅ vi] [🌐 en]` buttons) — defer to i18n-locale-switcher PR
+- EN locale strings — defer to i18n-locale-switcher PR
+- `bank_connections` INSERT — funding-sources/transaction-capture own
+- `scheduled_jobs` INSERT — scheduled-jobs owns (note: BE spec §2.1 says auto-create here but plan §1 doesn't list — clarified: scheduled-jobs will backfill later)
 
 **Out-of-scope but documented:**
-- Auto-detect locale from Telegram `language_code` — defer to F-i18n PR (would require language confirm UI)
+- Auto-detect locale from Telegram `language_code` — defer to i18n-locale-switcher PR (would require language confirm UI)
 
 ### 1.3 Decision lockdown (confirmed 2026-05-13)
 
@@ -56,7 +56,7 @@ Codex review:       2x_consecutive_clean (P1 always)
 |---|---|---|---|
 | 1 | `chat_id` nullable until first message? | ✅ **NULLABLE** | Discord webhook context không cung cấp chat_id ngay; Messenger PSID khác structure. Allow late bind. |
 | 2 | Trial 14d FROM signup hay first activity? | ✅ **FROM signup** | Per BRD market positioning. Simpler logic, no trial state machine. |
-| 3 | Locale default | ✅ **`vi`** | Per BRD VN-first. EN added later via F-i18n. |
+| 3 | Locale default | ✅ **`vi`** | Per BRD VN-first. EN added later via i18n-locale-switcher. |
 
 ### 1.4 Files touched (estimate)
 
@@ -72,9 +72,9 @@ Estimated diff: ~500 LOC added, ~10 LOC modified.
 
 ### 1.5 Spec drift notes
 
-- **FE spec v1.2.0** has Path D Family invite + i18n language confirm UI. **NOT in Phase 2 F01 scope** — plan §1 explicit: "Path A/B/C onboarding logic in Phase 4; chỉ ship `/start` here." Path D ships with F01b in Phase 4.
-- **BE tech v1.0.0 stale** vs FE — covers Path A/B/C plus `bank_connections` + `scheduled_jobs`. Phase 2 F01 ignores those (deferred per plan).
-- **No spec update required for F01 PR** — implementation follows plan §1 minimal scope. Spec versioning can update post-F01b/c/d/F09.
+- **FE spec v1.2.0** has Path D Family invite + i18n language confirm UI. **NOT in Phase 2 onboarding-start scope** — plan §1 explicit: "Path A/B/C onboarding logic in Phase 4; chỉ ship `/start` here." Path D ships with sepay-onboarding-paths in Phase 4.
+- **BE tech v1.0.0 stale** vs FE — covers Path A/B/C plus `bank_connections` + `scheduled_jobs`. Phase 2 onboarding-start ignores those (deferred per plan).
+- **No spec update required for onboarding-start PR** — implementation follows plan §1 minimal scope. Spec versioning can update post-sepay-onboarding-paths/first-tx-celebration/email-forwarding-onboarding/scheduled-jobs.
 
 ### 1.6 Test plan (5-category, expanded from plan §1's 12 tests)
 
@@ -92,7 +92,7 @@ Estimated diff: ~500 LOC added, ~10 LOC modified.
 
 - [ ] New TG/Discord user `/start` → DB row created with correct defaults (channel_type, plan='free', trial_ends_at = now+14d, locale='vi', webhook_token uniq, inbound_email = `u{id}@in.tienvenoidau.com`)
 - [ ] Repeat `/start` idempotent (no duplicate row)
-- [ ] Welcome message localized to user's locale (VI default; EN strings ship in F-i18n)
+- [ ] Welcome message localized to user's locale (VI default; EN strings ship in i18n-locale-switcher)
 - [ ] Default 3 categories auto-created with `daily_cap` per spec §4 domain model
 - [ ] No tenant leak: User A action doesn't surface in User B query
 - [ ] `webhook_token` is 24-char URL-safe, unique across users
@@ -101,7 +101,7 @@ Estimated diff: ~500 LOC added, ~10 LOC modified.
 ### 1.8 Risk profile
 
 - **High-touch surface:** Multi-tenant user creation + token generation + trial state.
-- **Cascade impact:** F08, F02, F04, F05 all depend on user records existing → schema correctness critical.
+- **Cascade impact:** funding-sources, transaction-capture, category-management, reports all depend on user records existing → schema correctness critical.
 - **Mitigation per memory `feedback_f07_lessons`:**
   - 5-category test plan locked upfront (§1.6)
   - Single-phase scope (no multi-phase batch — `feedback_autopilot_prompt_scope`)
@@ -110,7 +110,7 @@ Estimated diff: ~500 LOC added, ~10 LOC modified.
 
 ---
 
-## 2. F08 — Funding sources resolver + handlers
+## 2. funding-sources — Funding sources resolver + handlers
 
 ### 2.1 Branch + risk header
 
@@ -133,14 +133,14 @@ Codex review:       2x_consecutive_clean (P1 always)
 - 18 tests (6 positive + 5 edge + 3 error + 2 isolation + 2 contract)
 
 **Negative scope (do NOT touch):**
-- F02 transaction capture INSERT path — F02 wires the `resolve_funding_source` call later
+- transaction-capture transaction capture INSERT path — transaction-capture wires the `resolve_funding_source` call later
 - DDL changes — table created in W0.2, no schema modification
-- Auto-archive cron after 180d silent — F09 owns (scheduled jobs)
-- Email parser inference logic — handled in P-TCB/P-Cake/P-MB parsers (Phase 5)
-- VI message strings only — EN defers to F-i18n
+- Auto-archive cron after 180d silent — scheduled-jobs owns (scheduled jobs)
+- Email parser inference logic — handled in parser-techcombank/parser-cake-vpbank/parser-mbbank parsers (Phase 5)
+- VI message strings only — EN defers to i18n-locale-switcher
 
 **Out-of-scope but documented:**
-- One-off backfill script for founder's legacy tx → funding_sources (per FE §2.2 case #12) — runs once in F02 cutover, not part of F08
+- One-off backfill script for founder's legacy tx → funding_sources (per FE §2.2 case #12) — runs once in transaction-capture cutover, not part of funding-sources
 
 ### 2.3 Decision lockdown (already locked per memory + plan)
 
@@ -148,7 +148,7 @@ Codex review:       2x_consecutive_clean (P1 always)
 |---|---|---|---|
 | 1 | Canonical identity `(user_id, kind, bank, last4)` | 🔒 Locked 2026-05-11 | memory `project_f08_funding_sources` |
 | 2 | Status enum `active` / `hidden` / `archived` (no `deleted`) | 🔒 Locked 2026-05-11 | memory |
-| 3 | F02 requires `resolve_funding_source` before INSERT | 🔒 Locked 2026-05-11 | memory + W0.7 xfail pin (`tests/integration/test_sepay_webhook.py::test_persisted_tx_has_resolved_funding_source_id`) |
+| 3 | transaction-capture requires `resolve_funding_source` before INSERT | 🔒 Locked 2026-05-11 | memory + W0.7 xfail pin (`tests/integration/test_sepay_webhook.py::test_persisted_tx_has_resolved_funding_source_id`) |
 | 4 | Free tier limit on # funding sources | 🔒 **NO LIMIT** | FE spec §2.2 #11 — discovery passive, không tự thêm hàng loạt |
 | 5 | last4 NULL handling | 🔒 Empty string `''` not NULL | FE spec §2.2 #3 — unique constraint comparable |
 
@@ -177,7 +177,7 @@ Estimated diff: ~1150 LOC added, ~15 LOC modified.
 | Edge | 5 | Duplicate canonical identity → return existing · Archived not in active list · Cross-user resolve isolation · Bank rename preserves resolve via canonical identity · last4 empty-string format ('') vs 4-digit ('1234') |
 | Error | 3 | Invalid last4 (5 digits, alphabetic) → reject · kind/bank mismatch (e_wallet bank='TCB') → reject · Archive funding source with active txs → reassign-to-NULL flow per FE §2.1 #5 |
 | Isolation | 2 | User A funding source NEVER appears in User B picker · User A `/accounts` returns User A rows only |
-| Contract | 2 | F02 wire: `resolve_funding_source` returns same `id` for canonical-equivalent inputs · W0.7 xfail pin remains xfail (F02 still owns flip) |
+| Contract | 2 | transaction-capture wire: `resolve_funding_source` returns same `id` for canonical-equivalent inputs · W0.7 xfail pin remains xfail (transaction-capture still owns flip) |
 
 **Total: 18 tests** (matches plan).
 
@@ -189,16 +189,16 @@ Estimated diff: ~1150 LOC added, ~15 LOC modified.
 - [ ] `/accounts` lists active sources sorted by `last_tx_at desc` with spent/income tháng này
 - [ ] Rename `nickname` updates display everywhere (reports, picker, /accounts)
 - [ ] Cross-user isolation: User A funding sources NEVER in User B queries (integration assert)
-- [ ] W0.7 xfail contract pin `test_persisted_tx_has_resolved_funding_source_id` remains xfail (F02 owns the flip — F08 doesn't enforce yet)
+- [ ] W0.7 xfail contract pin `test_persisted_tx_has_resolved_funding_source_id` remains xfail (transaction-capture owns the flip — funding-sources doesn't enforce yet)
 - [ ] All 18 tests green; multi-tenant isolation tests pass
 
 ### 2.7 Risk profile
 
-- **Schema dependency:** DDL landed W0.2 (per memory). If F02 surfaces edge case needing column tweak → new migration, NOT rewrite of W0.2.
-- **Cascade impact:** F02 cutover depends on F08 resolver working. Resolver bug = F02 blocker.
+- **Schema dependency:** DDL landed W0.2 (per memory). If transaction-capture surfaces edge case needing column tweak → new migration, NOT rewrite of W0.2.
+- **Cascade impact:** transaction-capture cutover depends on funding-sources resolver working. Resolver bug = transaction-capture blocker.
 - **Mitigation:**
   - Test plan covers cross-user isolation (memory rule)
-  - Integration test exercises `resolve` from F02's perspective (mocked, but contract-shaped)
+  - Integration test exercises `resolve` from transaction-capture's perspective (mocked, but contract-shaped)
   - Codex 2× clean for P1
 
 ---
@@ -207,16 +207,16 @@ Estimated diff: ~1150 LOC added, ~15 LOC modified.
 
 ### 3.1 i18n strategy (locked 2026-05-13)
 
-- F01 + F08 use `i18n/vi.py` stub from W0.4 — **VI-only** for all user-facing strings
-- F-i18n PR (tracker row, currently ❌) will:
+- onboarding-start + funding-sources use `i18n/vi.py` stub from W0.4 — **VI-only** for all user-facing strings
+- i18n-locale-switcher PR (tracker row, currently ❌) will:
   - Add `i18n/en.py` with key parity
   - Expand stub `t(locale, key)` → full module with fallback rules
-  - Update F01/F08 handlers to call `t(user.locale, ...)` instead of `t('vi', ...)`
-- F01 + F08 must NOT add EN keys themselves — single owner for EN parity = F-i18n PR
+  - Update onboarding-start/funding-sources handlers to call `t(user.locale, ...)` instead of `t('vi', ...)`
+- onboarding-start + funding-sources must NOT add EN keys themselves — single owner for EN parity = i18n-locale-switcher PR
 
 ### 3.2 Parallel execution rule
 
-Memory `feedback_concurrency_one_session` — STRICT 1 Claude Code session per `.git/`. F07 saga had 3 ref-clobber incidents. **Solution: git worktree.**
+Memory `feedback_concurrency_one_session` — STRICT 1 Claude Code session per `.git/`. settings saga had 3 ref-clobber incidents. **Solution: git worktree.**
 
 ```bash
 cd ~/Projects/MyMoneyWent
@@ -228,21 +228,21 @@ Each worktree shares `.git/objects` but has independent index + HEAD. Run Claude
 
 ### 3.3 Kickoff order (staggered)
 
-1. **F01 kickoff first.** Stable for 1-2 hours (lockdown verified by autopilot's pre-flight gate, first commits land cleanly).
-2. **F08 kickoff after F01 stable.** Rationale: F01 lockdown may surface design conflict in users table that affects F08 FK. Staggered start avoids re-lockdown F08.
+1. **onboarding-start kickoff first.** Stable for 1-2 hours (lockdown verified by autopilot's pre-flight gate, first commits land cleanly).
+2. **funding-sources kickoff after onboarding-start stable.** Rationale: onboarding-start lockdown may surface design conflict in users table that affects funding-sources FK. Staggered start avoids re-lockdown funding-sources.
 3. Cowork session (this conversation) stays in repo root for orchestration + tracker updates.
 
 ### 3.4 Merge order
 
-F01 and F08 are independent (no overlapping files). Either can merge first. Recommend:
-- F01 merge first if both READY (smaller, simpler, lower risk)
-- F08 rebases onto post-F01 main before merge (handles any minor `i18n/vi.py` or `core/handlers/__init__.py` conflict)
+onboarding-start and funding-sources are independent (no overlapping files). Either can merge first. Recommend:
+- onboarding-start merge first if both READY (smaller, simpler, lower risk)
+- funding-sources rebases onto post-onboarding-start main before merge (handles any minor `i18n/vi.py` or `core/handlers/__init__.py` conflict)
 
 ### 3.5 Post-merge tracker updates
 
 When PR merges, update `docs/implementation-tracker.md`:
-- F01 row: ⬜ → ✅
-- F08 row: ⬜ → ✅
+- onboarding-start row: ⬜ → ✅
+- funding-sources row: ⬜ → ✅
 - Phase 2 progress summary section 5
 - Changelog entry
 
@@ -256,20 +256,20 @@ Pre-commit hook (W0.9) will auto-rebuild dashboard.{html,md} when tracker.md is 
 
 This lockdown doc + autopilot prompt template = enough input for Claude Code to generate full autopilot prompts WITHOUT additional founder input. Cowork session stays light (orchestration); Claude Code in worktree does the heavy prompt drafting.
 
-### 4.2 In F01 worktree (`~/Projects/MyMoneyWent-F01`)
+### 4.2 In onboarding-start worktree (`~/Projects/MyMoneyWent-F01`)
 
 Paste to Claude Code:
 
 ```
-Generate `docs/autopilot/prompts/F01-onboarding-autopilot.md` following the 15-section
+Generate `docs/autopilot/prompts/onboarding-start-autopilot.md` following the 15-section
 template in `docs/autopilot/autopilot-prompt-template.md` STRICTLY.
 
-Source of truth for F01-specific content:
-- Lockdown doc: docs/operations/F01-F08-lockdown.md §1 (Branch, risk header, scope,
+Source of truth for onboarding-start-specific content:
+- Lockdown doc: docs/operations/feature-lockdown-decisions.md §1 (Branch, risk header, scope,
   decision lockdown, files touched, test plan, acceptance criteria, risk profile)
 - Implementation plan: docs/implementation-plans/phase-2-handlers.md §1
 - FE spec: docs/features/feature-onboarding.md (only §4 domain model + §6 error codes
-  apply to F01 minimal scope — ignore Path A/B/C/D)
+  apply to onboarding-start minimal scope — ignore Path A/B/C/D)
 - BE tech: docs/features/BE/feature-onboarding-tech.md (stale vs FE; use §2.2 queries
   + §4.1 state machine + §4.2 token format; ignore Path A/B/C bot_state steps)
 
@@ -282,33 +282,33 @@ Constraints:
 - 13+ circuit breakers (incl. memory feedback_autopilot_prompt_template universal 12)
 - TDD gate: 12 tests must fail on main pre-impl, pass post-impl
 
-Output: full prompt at `docs/autopilot/prompts/F01-onboarding-autopilot.md`. Verify
+Output: full prompt at `docs/autopilot/prompts/onboarding-start-autopilot.md`. Verify
 locally builds cleanly (no broken refs to non-existent files). Commit on branch
-feat/F01-onboarding-start: `docs(autopilot): F01 onboarding-start prompt`.
+feat/F01-onboarding-start: `docs(autopilot): onboarding-start prompt`.
 
 Do NOT begin execution yet — just generate the prompt. Founder will review then say
-'kick off F01' to start autopilot.
+'kick off onboarding-start' to start autopilot.
 ```
 
-### 4.3 In F08 worktree (`~/Projects/MyMoneyWent-F08`)
+### 4.3 In funding-sources worktree (`~/Projects/MyMoneyWent-F08`)
 
-Same pattern, swap F01 → F08:
+Same pattern, swap onboarding-start → funding-sources:
 
 ```
-Generate `docs/autopilot/prompts/F08-funding-sources-autopilot.md` following the
+Generate `docs/autopilot/prompts/funding-sources-autopilot.md` following the
 15-section template.
 
 Source of truth: lockdown doc §2 + plan §5 + FE spec feature-funding-sources.md +
 BE tech feature-funding-sources-tech.md + memory project_f08_funding_sources.
 
-Constraints (same shape as F01): Risk P1 manual_only, Codex 2×, single-phase, VI-only,
-no W0.7 xfail flip (F02 owns), 18 tests TDD-first.
+Constraints (same shape as onboarding-start): Risk P1 manual_only, Codex 2×, single-phase, VI-only,
+no W0.7 xfail flip (transaction-capture owns), 18 tests TDD-first.
 
-Output: docs/autopilot/prompts/F08-funding-sources-autopilot.md. Commit on
-feat/F08-funding-sources: `docs(autopilot): F08 funding-sources prompt`.
+Output: docs/autopilot/prompts/funding-sources-autopilot.md. Commit on
+feat/F08-funding-sources: `docs(autopilot): funding-sources prompt`.
 
-Wait for founder review before execution. Do NOT begin F08 until F01 is stable
-(1-2 hours post-F01 kickoff).
+Wait for founder review before execution. Do NOT begin funding-sources until onboarding-start is stable
+(1-2 hours post-onboarding-start kickoff).
 ```
 
 ### 4.4 Anti-patterns Claude Code must avoid (per memory)
@@ -325,4 +325,4 @@ Wait for founder review before execution. Do NOT begin F08 until F01 is stable
 
 | Version | Ngày | Thay đổi |
 |---------|------|----------|
-| v1.0.0 | 2026-05-13 | Initial lockdown doc for F01 + F08 parallel execution. 3 F01 decisions confirmed by founder; 5 F08 decisions previously locked via memory. i18n strategy: VI-only via stub, defer EN to F-i18n PR. Worktree-based parallelism per memory feedback_concurrency_one_session. Staggered kickoff: F01 first, F08 after 1-2hr stable. |
+| v1.0.0 | 2026-05-13 | Initial lockdown doc for onboarding-start + funding-sources parallel execution. 3 onboarding-start decisions confirmed by founder; 5 funding-sources decisions previously locked via memory. i18n strategy: VI-only via stub, defer EN to i18n-locale-switcher PR. Worktree-based parallelism per memory feedback_concurrency_one_session. Staggered kickoff: onboarding-start first, funding-sources after 1-2hr stable. |

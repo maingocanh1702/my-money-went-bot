@@ -239,8 +239,8 @@ Dashboard chỉ parse `implementation-tracker.md`. Thiếu data từ roadmap:
 +----------------------------------------------------------------+
 | Module | Feature              | Spec | BE  | Code | Bot | Phase|
 |--------|----------------------|:----:|:---:|:----:|:---:|:----:|
-| F01    | 3-Path Onboarding    |  ✅  | ✅  |  🟡  | ⬜  | 1,4 |
-| F02    | Transaction Capture  |  ✅  | ✅  |  🟡  | ⬜  | 1,5 |
+| onboarding-start    | 3-Path Onboarding    |  ✅  | ✅  |  🟡  | ⬜  | 1,4 |
+| transaction-capture    | Transaction Capture  |  ✅  | ✅  |  🟡  | ⬜  | 1,5 |
 | ...                                                            |
 +----------------------------------------------------------------+
 | Readiness:  Spec 85% | BE Tech 75% | Code 15% | Bot 5%        |
@@ -333,7 +333,7 @@ Build script outputs `dashboard.json` trước rồi render HTML từ đó. Lợ
     { "id": "P1", "name": "Foundation", "status": "in_progress", "progress": 75, "merged": 4, "total": 7 }
   ],
   "features": [
-    { "id": "F01", "name": "3-Path Onboarding", "spec": "done", "be_tech": "done", "be_code": "partial", "bot_code": "not_started", "phase": [1, 4] }
+    { "id": "onboarding-start", "name": "3-Path Onboarding", "spec": "done", "be_tech": "done", "be_code": "partial", "bot_code": "not_started", "phase": [1, 4] }
   ],
   "blockers": [
     { "description": "Docker Compose", "pr": "W1.1", "severity": "medium" }
@@ -476,7 +476,7 @@ Workspace: MyMoneyWent
 | Field | Type | Values | Required to leave Backlog? |
 |-------|------|--------|:---:|
 | Phase | Select | P0-Docs, P1-Foundation, P2-Handlers, P3-Pricing, P4-SePay, P5-Email, P6-Deploy, P7-Beta, P8-Launch, PW-Dashboard | ✅ |
-| Feature | Select | F01-F17, FAM, F-i18n, F-saas, WD-01-07, (none) | ✅ |
+| Feature | Select | onboarding-start-F17, FAM, i18n-locale-switcher, F-saas, WD-01-07, (none) | ✅ |
 | Priority | Select | Urgent / High / Medium / Low | ✅ |
 | Risk Tier | Select | P0-critical / P1-elevated / P2-standard | ✅ if touches DB/security/payment |
 | Spec link | URL | URL to `docs/features/feature-*.md` or BRD/PRD section | ✅ for `feature` label |
@@ -523,7 +523,7 @@ Linear free tier limits change. Before committing to setup, verify in current Li
 
 | Capability | Need | Free tier? | Fallback if not free |
 |-----------|------|:---:|----------------------|
-| Custom fields (Phase, Feature, Priority, Risk Tier, Spec link, Acceptance criteria) | 6 fields | ❓ Verify | Use labels: `phase:P1`, `feature:F02`, `pri:high`, `risk:P0` |
+| Custom fields (Phase, Feature, Priority, Risk Tier, Spec link, Acceptance criteria) | 6 fields | ❓ Verify | Use labels: `phase:P1`, `feature:transaction-capture`, `pri:high`, `risk:P0` |
 | Cycles (2-week sprints) | Yes | ❓ Verify | Manual cycle tracking via labels `cycle:2026-W21` |
 | Automations / Workflow rules | ≥4 rules | ❓ Verify | Move logic to GitHub Actions (call Linear API) |
 | GitHub integration | Built-in | ✅ Free | — |
@@ -915,7 +915,7 @@ Sections:
 
 | Template | Required fields |
 |----------|-----------------|
-| **Feature** | Phase, Feature ID (F01-F17), spec link, acceptance criteria |
+| **Feature** | Phase, Feature ID (onboarding-start-F17), spec link, acceptance criteria |
 | **Bug** | Repro steps, expected vs actual, severity, affected version |
 | **Chore** | Scope, why now, impact if not done |
 | **Docs** | Which doc, what changes, audience |

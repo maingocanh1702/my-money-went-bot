@@ -1,9 +1,9 @@
-# F07 (Settings) Pilot Retrospective — 10 Lessons for F02-F08+
+# settings (Settings) Pilot Retrospective — 10 Lessons for transaction-capture / funding-sources and beyond
 
 > **Date:** 2026-05-13
 > **Author:** Founder (dev)
 > **Status:** Locked
-> **Scope:** Reflections after shipping F07 (Settings — locale + TZ + daily recap toggle) over 6 autopilot pilot sessions, surfacing 3 orchestrator hardening releases (v0.2.1 + v0.2.2 + v0.2.3) and 9 cumulative tooling issues.
+> **Scope:** Reflections after shipping settings (Settings — locale + TZ + daily recap toggle) over 6 autopilot pilot sessions, surfacing 3 orchestrator hardening releases (v0.2.1 + v0.2.2 + v0.2.3) and 9 cumulative tooling issues.
 > **Cross-refs:**
 > - [wave0-retrospective.md](./wave0-retrospective.md) — Wave 0 lessons (foundation)
 > - [development-workflow.md](./development-workflow.md) — 10-step workflow
@@ -23,12 +23,12 @@ Cascade is real (budget 5-8 rounds, not 2-3). Lock spec invariants AGAINST thems
 | Duration (founder time) | ~10-15 hours across 6 sessions |
 | Calendar duration | 1 day (2026-05-12 → 2026-05-13) |
 | Sessions | 6 (codegen → refactor → markdown → i18n → resume → re-resume) |
-| F07 final commits | 25 (squashed to `f232b63` on main) |
-| F07 tests added | 30+ (settings_svc, handlers, i18n, migration, tenant isolation) |
+| settings final commits | 25 (squashed to `f232b63` on main) |
+| settings tests added | 30+ (settings_svc, handlers, i18n, migration, tenant isolation) |
 | Final test count post-merge | 376 passed, 1 skipped, 1 xfailed |
 | Orchestrator releases shipped | 3 (v0.2.1 `533e9fd was 395027d`, v0.2.2 `533e9fd`, v0.2.3 `9a00be6`) |
 | Cumulative tooling issues identified | 9 (3 fixed, 6 deferred to v0.2.4) |
-| Cumulative Codex rounds across F07 + tool fixes | ~30+ |
+| Cumulative Codex rounds across settings + tool fixes | ~30+ |
 | Concurrency incidents (parallel session ref-clobber) | 3 |
 | Total stash entries accumulated | 9 (mix of WIP + orphan) |
 
@@ -36,7 +36,7 @@ Cascade is real (budget 5-8 rounds, not 2-3). Lock spec invariants AGAINST thems
 
 ## 1. Cascade pattern is empirically real — budget 5-8 codex rounds, not 2-3
 
-**Observed:** Every fix grows the diff → Codex's next review may surface a new adjacent micro-finding in the new code. F07 R1 (emit_analytics) → fix → R2 finds tz validation pattern → fix → R3 finds callback dispatch pattern (same root cause as R2 → triggers refactor) → ...
+**Observed:** Every fix grows the diff → Codex's next review may surface a new adjacent micro-finding in the new code. settings R1 (emit_analytics) → fix → R2 finds tz validation pattern → fix → R3 finds callback dispatch pattern (same root cause as R2 → triggers refactor) → ...
 
 v0.2.1 fix run (orchestrator self-fix): 8 rounds to converge. v0.2.2: 8 rounds. v0.2.3: 4 rounds (2 fix + 2 confirm). Pattern: median ~4-6 rounds, max ~8.
 
@@ -50,10 +50,10 @@ Original orchestrator config `max_review_rounds=3 + required_clean_rounds_before
 
 ## 2. Concurrency hazard between Claude Code sessions is real — 1 session per repo
 
-**Observed:** 3 ref-clobber incidents during F07 saga:
+**Observed:** 3 ref-clobber incidents during settings saga:
 - A parallel `feat/dashboard-realtime` agent reset `feat/F07-settings` ref via shared `.git/`. Recovered via `git reflog` + `git update-ref`.
 - v0.2.2 finish run had `git stash + checkout main + pull` interrupted mid-flight by parallel session.
-- Webapp session continuously created/edited `docs/research/webapp-resource-assessment.md` + `docs/features/feature-web-dashboard.md` + `docs/brd-vi.md` + `docs/prd-vi.md` + `docs/mymoneywent-roadmap.md` + `docs/implementation-tracker.md` while F07 session was running git ops.
+- Webapp session continuously created/edited `docs/research/webapp-resource-assessment.md` + `docs/features/feature-web-dashboard.md` + `docs/brd-vi.md` + `docs/prd-vi.md` + `docs/mymoneywent-roadmap.md` + `docs/implementation-tracker.md` while settings session was running git ops.
 
 Result: stash cycle confusion ("file biến mất rồi appear lại"), accidental commit leak (webapp file landed in tracker commit `5a1dc14` until rebase abort).
 
@@ -71,7 +71,7 @@ Result: stash cycle confusion ("file biến mất rồi appear lại"), accident
 
 ## 3. Lock spec invariants against THEMSELVES, not just gap closure
 
-**Observed:** F07 spec G4 was "closed" with decision: "Stored in users.inbound_email... F07 reads only; renders as-is. If row is NULL (legacy users), F07 backfills via f"u{user_id}@in.mymoneywent.com" on read and writes back."
+**Observed:** settings spec G4 was "closed" with decision: "Stored in users.inbound_email... settings reads only; renders as-is. If row is NULL (legacy users), settings backfills via f"u{user_id}@in.mymoneywent.com" on read and writes back."
 
 This decision contradicts itself: "reads only" but "backfills on read and writes back" — backfill IS write. Codex caught the resulting bug in 2 different handlers (R2 + R3 of session 1), each "validate-before-`get_overview`" band-aid surfacing the next.
 
@@ -92,9 +92,9 @@ Root-cause refactor (session 2): `get_overview` made pure-read; `ensure_inbound_
 
 **Observed:** 2-phase `land-v0.2.0-and-migration-autopilot.md` prompt: agent completed Phase 1 squash + push, then SILENTLY STOPPED before Phase 2. No halt-report, no error — just stopped.
 
-Comprehensive 3-phase prompt (Phase A v0.2.2 ship + Phase B F07 resume + Phase C tracker): completed Phase A fully, hit halt in Phase B mid-cascade, never reached Phase C. Founder had to drive Phase C tracker manually.
+Comprehensive 3-phase prompt (Phase A v0.2.2 ship + Phase B settings resume + Phase C tracker): completed Phase A fully, hit halt in Phase B mid-cascade, never reached Phase C. Founder had to drive Phase C tracker manually.
 
-Single-phase prompts (W0.8 migration, v0.2.1 fix, v0.2.2 finish-after-r4, v0.2.2 finish-after-r7, v0.2.3 keyword fix, F07 resume) all completed cleanly OR halted with explicit halt-report.
+Single-phase prompts (W0.8 migration, v0.2.1 fix, v0.2.2 finish-after-r4, v0.2.2 finish-after-r7, v0.2.3 keyword fix, settings resume) all completed cleanly OR halted with explicit halt-report.
 
 **Apply:**
 - Default: 1 prompt = 1 phase = 1 branch = 1 squash. ~200-500 lines.
@@ -107,9 +107,9 @@ Single-phase prompts (W0.8 migration, v0.2.1 fix, v0.2.2 finish-after-r4, v0.2.2
 
 **Observed pattern across 4 decision points:**
 
-- **Path A vs B for orchestrator parser bug** → chose B (fix tool). Saved future F02-F08 from repeating same FIX_FAILED halt.
+- **Path A vs B for orchestrator parser bug** → chose B (fix tool). Saved future transaction-capture-funding-sources from repeating same FIX_FAILED halt.
 - **Override vs R8 manual round in v0.2.1** → chose R8. Found legitimate P2; protocol justified itself.
-- **Band-aid handlers vs root-cause `get_overview` refactor** → chose root-cause. Spec G4 contradiction would have surfaced in F-i18n + F11a too.
+- **Band-aid handlers vs root-cause `get_overview` refactor** → chose root-cause. Spec G4 contradiction would have surfaced in i18n-locale-switcher + admin-auth too.
 - **Solo word-boundary fix vs batched v0.2.3** → chose solo. Smaller PR converged in 4 rounds vs batched would have hit cascade.
 
 8-axis comparison framework (memory `feedback_project_level_effectiveness.md`):
@@ -126,16 +126,16 @@ Single-phase prompts (W0.8 migration, v0.2.1 fix, v0.2.2 finish-after-r4, v0.2.2
 - For each A vs B option: explicitly run 8-axis comparison. 6/8 trục thắng → choose, even if 2-3× initial time.
 - ROI tính theo MVP-scale (33+ PRs remaining), not single-PR-scale.
 - Discount short-term convenience. Especially when scope is foundation/tool/spec.
-- Past examples confirming: F07 saga's 4 chose-B decisions paid off — F02-F08 inherit fixed orchestrator.
+- Past examples confirming: settings saga's 4 chose-B decisions paid off — transaction-capture-funding-sources inherit fixed orchestrator.
 
 ## 6. Codex stochasticity: same diff, different reviews. Don't ship on 1 clean
 
-**Observed:** Multiple times during F07 + v0.2.x fixes — Codex reviewed the same git diff and surfaced different findings (or none) across rounds.
+**Observed:** Multiple times during settings + v0.2.x fixes — Codex reviewed the same git diff and surfaced different findings (or none) across rounds.
 
 Examples:
 - v0.2.1 R3 clean → R4 P2 (against same diff)
 - v0.2.1 R5 clean → R6 P2 (against same diff)
-- F07 Phase B re-resume R1 + R2 both clean (after v0.2.3 word-boundary fix) — but pre-existing P2 in `emit_analytics` json.dumps would have surfaced in some other run
+- settings Phase B re-resume R1 + R2 both clean (after v0.2.3 word-boundary fix) — but pre-existing P2 in `emit_analytics` json.dumps would have surfaced in some other run
 
 The `2× consecutive clean` rule exists exactly for this. Single clean review = stochastic noise. Two consecutive = real signal.
 
@@ -155,7 +155,7 @@ Lesson: tracker / changelog / plan-doc updates are docs commits — they don't n
 - Autopilot stages + commits tracker/docs locally on main.
 - Founder reviews `git log -1 --format=%B` + `git diff origin/main..main` + pushes manually.
 - 1 extra command (`git push origin main`), but consistent with founder direct-push-to-main flow + avoids classifier overhead.
-- Mirror pattern for F07 squash itself (P1 manual merge per plan §6.5): autopilot ends at READY, founder squashes.
+- Mirror pattern for settings squash itself (P1 manual merge per plan §6.5): autopilot ends at READY, founder squashes.
 
 ## 8. NEVER auto-delete docs files (BRD/PRD/spec/tracker/research/.md)
 
@@ -187,11 +187,11 @@ Founder authorized one-time path-restricted override (treat breaker triggers as 
 - For PRs that touch the breaker logic itself, expect self-dogfood paradox.
 - Default: founder authorizes one-time path-restricted override per such PR. Document in commit message.
 - v0.2.4 backlog: if pattern recurs ≥3 times → code-level "self-review relaxation policy" rule (treat findings located in same module as the fix as advisory).
-- Sample size = 1 (v0.2.3 only, in F07 saga). Wait for 2-3 more occurrences before generalizing.
+- Sample size = 1 (v0.2.3 only, in settings saga). Wait for 2-3 more occurrences before generalizing.
 
 ## 10. Word-boundary regex everywhere keywords are matched
 
-**Observed:** v0.2.2 R2 caught `\brce\b` substring matching "force" — fixed `SECURITY_KEYWORDS_SEVERE` with regex word-boundary. But the same fix was NOT propagated to `CONCURRENCY_KEYWORDS`, `ARCH_KEYWORDS`, `SECURITY_KEYWORDS_SOFT`. Result: F07 Phase B halted on substring `lock` matching `block` (in "guarded block").
+**Observed:** v0.2.2 R2 caught `\brce\b` substring matching "force" — fixed `SECURITY_KEYWORDS_SEVERE` with regex word-boundary. But the same fix was NOT propagated to `CONCURRENCY_KEYWORDS`, `ARCH_KEYWORDS`, `SECURITY_KEYWORDS_SOFT`. Result: settings Phase B halted on substring `lock` matching `block` (in "guarded block").
 
 v0.2.3 propagated word-boundary regex to all 4 categories. Plus special-case `lock` compound regex `\b(?:dead|live)?lock(?:s|ing|ed)?\b` so `block`/`padlock`/`lockstep` correctly excluded.
 
@@ -205,9 +205,9 @@ Founder Q1 lock: don't add plural `(?:s)?` to `design`/`scope`/`architecture`/`r
 
 ---
 
-## Concrete actions for F02-F08 pilots
+## Concrete actions for transaction-capture-funding-sources pilots
 
-| Pattern | F07 (this saga) | F02-F08 (apply) |
+| Pattern | settings (this saga) | transaction-capture-funding-sources (apply) |
 |---|---|---|
 | **Codex round budget** | Started max=3 (impossible), ended max=5 + post-fix-confirm=2 | Start with v0.2.2 default; expand only if PR scope warrants |
 | **Concurrency** | 3 ref-clobber incidents during saga | STRICT 1 session per repo; use `git worktree` if parallel needed |
@@ -220,7 +220,7 @@ Founder Q1 lock: don't add plural `(?:s)?` to `design`/`scope`/`architecture`/`r
 | **Self-dogfood** | v0.2.3 keyword PR tripped own keyword breakers | Founder one-time override per PR; track recurrences |
 | **Stash management** | 9 stashes accumulated | Avoid stash-everything-orthogonal pattern; use explicit `git add` |
 
-## Prep checklist per F02-F08 pilot
+## Prep checklist per transaction-capture-funding-sources pilot
 
 Before pasting autopilot prompt for any feature pilot:
 
@@ -263,25 +263,25 @@ Before pasting autopilot prompt for any feature pilot:
    - P0 (forbidden for autopilot codegen): payment, admin auth, schema-changing migrations
    - P1 (autopilot OK, manual squash): user state changes, side effects, cross-feature impact
    - P2 (autopilot + manual squash for first 3 pilots; auto-merge OK after pilot maturity): pure features, isolated scope
-   - F02-F08 default = P1 (touch user state) — manual squash per §6.5
+   - transaction-capture-funding-sources default = P1 (touch user state) — manual squash per §6.5
 
 **Time investment:** ~30-60 min prep per feature. **Net save:** ~2-4h via avoided cascade rounds + concurrency hazards.
 
-## Open questions for F02 retrospective
+## Open questions for transaction-capture retrospective
 
-After F02 ships → revisit:
+After transaction-capture ships → revisit:
 
-- Did v0.2.2 budget (`max=5 + confirm=2`) absorb F02's cascade? Or did we need v0.2.4 budget split?
+- Did v0.2.2 budget (`max=5 + confirm=2`) absorb transaction-capture's cascade? Or did we need v0.2.4 budget split?
 - Did 1-session-per-repo policy hold? Or did concurrency incidents recur?
 - Did invariant audit pre-flight catch any spec contradictions before they cascaded?
 - Self-dogfood paradox occurrences in v0.2.4+? At 3+ → consider code-level relaxation rule.
-- Cumulative tooling backlog at end of F02 — fewer than F07's 9?
+- Cumulative tooling backlog at end of transaction-capture — fewer than settings's 9?
 
 ---
 
-## Concrete v0.2.4 backlog (cumulative from F07 + v0.2.x)
+## Concrete v0.2.4 backlog (cumulative from settings + v0.2.x)
 
-Items deferred during F07 saga, scheduled for v0.2.4 batch:
+Items deferred during settings saga, scheduled for v0.2.4 batch:
 
 1. **R6 P2 halt-message label diagnostic** — MAX_ROUNDS halt always cites `confirmation_rounds_after_last_fix` even when legacy gate fired. Cosmetic.
 2. **Budget-semantics knob split** — currently `max_review_rounds` overloads "max fix rounds" + "max total rounds". Should split into explicit `max_fix_rounds + confirmation_rounds_after_last_fix`.
@@ -297,7 +297,7 @@ Items deferred during F07 saga, scheduled for v0.2.4 batch:
 
 ## Cross-references
 
-- [project_f07_pilot_saga.md memory](../README.md) — F07 saga summary + lessons
+- [project_f07_pilot_saga.md memory](../README.md) — settings saga summary + lessons
 - [feedback_project_level_effectiveness.md memory](../README.md) — 8-axis decision framework
 - [feedback_prefer_autopilot_prompts.md memory](../README.md) — autopilot prompt default
 - [feedback_autopilot_prompt_scope.md memory](../README.md) — single-phase scope rule

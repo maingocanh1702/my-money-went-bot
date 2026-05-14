@@ -480,7 +480,7 @@ Branch `feat/dashboard-v3-rich` có:
 - Click next-chip → search GitHub issues
 - Auto-refresh meta tag 60s (fallback nếu JS poll fail)
 
-**Blocker**: Base branch trước F07 merge → cần cherry-pick 2 commits qua main, resolve overlap với W0.9 detect_git_state ở `scripts/build-dashboard.py`. 1-2 giờ work.
+**Blocker**: Base branch trước settings merge → cần cherry-pick 2 commits qua main, resolve overlap với W0.9 detect_git_state ở `scripts/build-dashboard.py`. 1-2 giờ work.
 
 ### 9.2 Custom domain `tienvenoidau.com/dashboard`
 
@@ -514,7 +514,7 @@ Dashboard realtime hoạt động qua **defense-in-depth 3 tầng**:
 
 Mỗi tầng có **failure mode + fallback** rõ ràng → không có single point of failure.
 
-**Original goal đã shipped end-to-end 2026-05-13**: anh mở 1 tab browser → để chạy cả ngày → tự thấy progress của F08/F02/... khi anh push code từ worktree Claude Code.
+**Original goal đã shipped end-to-end 2026-05-13**: anh mở 1 tab browser → để chạy cả ngày → tự thấy progress của funding-sources/transaction-capture/... khi anh push code từ worktree Claude Code.
 
 ---
 

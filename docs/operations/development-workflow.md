@@ -84,8 +84,8 @@ tests/
 ```
 
 **Test layer rules:**
-- **Unit:** parsers (SePay payload, bank email regex), categorization rules, F08 canonical identity matcher, amount/currency formatter. Fast, no DB.
-- **Integration:** real Postgres. **Default: `testcontainers-python`** cho cả CI và local. **Fallback: `pytest-postgresql`** chỉ khi Docker không available trên môi trường local. Không hybrid — chọn 1 default cho consistency, foundation cần deterministic. F02 → F08 resolve → INSERT → query back.
+- **Unit:** parsers (SePay payload, bank email regex), categorization rules, funding-sources canonical identity matcher, amount/currency formatter. Fast, no DB.
+- **Integration:** real Postgres. **Default: `testcontainers-python`** cho cả CI và local. **Fallback: `pytest-postgresql`** chỉ khi Docker không available trên môi trường local. Không hybrid — chọn 1 default cho consistency, foundation cần deterministic. transaction-capture → funding-sources resolve → INSERT → query back.
 - **Contract tests** cho 2 plugin interface:
   - `messenger.send(user_id, payload)` — Telegram/Discord/Messenger phải pass cùng test suite (bảo vệ adapter pattern).
   - `bank_email_parser` plugin — TCB/MB/Cake/ACB/Sacom/BIDV phải pass cùng schema.
@@ -154,8 +154,8 @@ Per-commit review dễ hơn 1 PR 30 file.
 
 ### 2.7. Step 10 — PR + merge + tag
 
-**Branch:** `feat/F##-short-name` (vd `feat/F01-saas-refactor`, `feat/F02-transaction-capture`).
-**Bug fix branch (rebase vào feature):** `fix/F##-short-issue`.
+**Branch:** `feat/<feature-name>` (vd `feat/saas-refactor`, `feat/transaction-capture`). Kebab-case match feature spec filename. Legacy F-code branches still on origin (e.g., `feat/F01-onboarding-start`) preserved for history — see `docs/implementation-tracker.md` Changelog v1.3.0.
+**Bug fix branch (rebase vào feature):** `fix/<feature-name>-short-issue`.
 
 **PR template:**
 
@@ -189,7 +189,7 @@ Link BE tech: docs/features/BE/feature-X-tech.md
 **Tagging:**
 - **Feature merge: KHÔNG tag mặc định.** Trace bằng PR + CHANGELOG entry là đủ.
 - **Milestone deploy** (vd Wave 0 complete, MVP soft launch, MVP GA): tag semantic `v0.X.0` theo SemVer.
-- **Optional feature tag** chỉ cho major irreversible migrations: `feature/F08-funding-sources`. Đừng gọi đây là release version — đây là markers, không phải releases.
+- **Optional feature tag** chỉ cho major irreversible migrations: `feature/funding-sources`. Đừng gọi đây là release version — đây là markers, không phải releases.
 - Solo dev đừng tag spam. Mỗi tag phải có nghĩa.
 
 **Post-merge updates:**
@@ -228,13 +228,13 @@ Code phải pass hooks trước khi commit. Codex tập trung logic/perf/securit
 | **W0.3 DB access layer + tenant_context** | `core/db.py` asyncpg pool factory (min=2, max=10). `core/tenant_context.py` user_id+request_id propagation (contextvar). Sample CRUD ops + cross-tenant assertion helpers. | Sample query `WHERE user_id=$1` pass; cross-tenant test verify 2 user không thấy nhau |
 | **W0.4 Messenger adapter interface** | `core/messenger/__init__.py` `send()` entry point. `core/messenger/base.py` `BaseSender` ABC. `core/messenger/telegram.py` TelegramSender impl. Payload schema (TypedDict). Contract test suite (parametrize qua adapter). | Contract test pass với TelegramSender; mock adapter dispatch verify; locale resolution test |
 | **W0.5 Logging + health + Sentry** | `core/logging.py` structlog với `user_id`+`request_id` context binding. `core/observability.py` Sentry init + `AsyncioIntegration` + `/health` + `/health/detailed` + request ID middleware. | Structured log có user_id field; sample Sentry event captured với context; `/health` pass; `/health/detailed` report pool state |
-| **W0.6 Foundation invariants only (legacy cutover deferred to F02)** | **REVISED 2026-05-11 post-autopilot.** Ships: `email_parser.py` → plugin pattern `markets/vn/email_parsers/` (Gap 2 ABC+registry); 4th import-linter contract `parsers-are-pure` (parsers ↛ `core.db` / `core.messenger`); `webhook_tokens` hashed table (Gap 3, SHA-256 + constant-time compare + silent 200); `markets/vn/capture/sepay_webhook.py` token lookup; founder seed scaffold (Gap 5 — user_id=1 bootstrap-only documented); `scripts/migrate_sheets.py` ready (NOT executed). **Pushed to F02 Wave 2:** legacy `handlers/{transaction,manage,reports,allocation}.py` multi-tenant rewrite; `sheets.py` delete; `main.py` refactor; actual data migration run. See `project_w06_scope_split.md` memory. | Parser plugin works; parsers-are-pure contract enforced (4 contracts total); webhook_tokens + hash compare verified; founder seed documented bootstrap-only; legacy bot continues running production single-tenant until F02 cutover |
+| **W0.6 Foundation invariants only (legacy cutover deferred to transaction-capture)** | **REVISED 2026-05-11 post-autopilot.** Ships: `email_parser.py` → plugin pattern `markets/vn/email_parsers/` (Gap 2 ABC+registry); 4th import-linter contract `parsers-are-pure` (parsers ↛ `core.db` / `core.messenger`); `webhook_tokens` hashed table (Gap 3, SHA-256 + constant-time compare + silent 200); `markets/vn/capture/sepay_webhook.py` token lookup; founder seed scaffold (Gap 5 — user_id=1 bootstrap-only documented); `scripts/migrate_sheets.py` ready (NOT executed). **Pushed to transaction-capture Wave 2:** legacy `handlers/{transaction,manage,reports,allocation}.py` multi-tenant rewrite; `sheets.py` delete; `main.py` refactor; actual data migration run. See `project_w06_scope_split.md` memory. | Parser plugin works; parsers-are-pure contract enforced (4 contracts total); webhook_tokens + hash compare verified; founder seed documented bootstrap-only; legacy bot continues running production single-tenant until transaction-capture cutover |
 
 **Sequential rule:** W0.1 → W0.2 → W0.3 → W0.4 → W0.5 → W0.6. W0.3/W0.4/W0.5 về lý thuyết có thể parallel sau W0.2, nhưng solo dev recommend serial — context-switch nặng + Codex review queue.
 
 **Gap dependency per PR:**
 - W0.1, W0.3, W0.5: không depend gap nào → start ngay.
-- W0.2: depend **Gap 1** (F08 column từ Wave 0?).
+- W0.2: depend **Gap 1** (funding-sources column từ Wave 0?).
 - W0.4: depend **Gap 4** (messenger payload schema).
 - W0.6: depend **Gap 2** (email parser plugin), **Gap 3** (webhook token), **Gap 5** (migration data mapping).
 
@@ -253,25 +253,25 @@ Code phải pass hooks trước khi commit. Codex tập trung logic/perf/securit
 
 | Feature | Depend | Parallel với |
 |---|---|---|
-| F-onboarding | user model | all in wave |
+| onboarding-start | user model | all in wave |
 | F-admin-tools | admin schema (đã có ở W0) | all in wave |
-| F-i18n | locale storage | all in wave |
+| i18n-locale-switcher | locale storage | all in wave |
 | F-settings | user prefs storage | all in wave |
 
 4 cái này độc lập — có thể mở 4 branch song song. Solo dev recommend max 2 branch active để Codex review không queue.
 
-### Wave 2 — Core capture (F08 → F02 sequential)
+### Wave 2 — Core capture (funding-sources → transaction-capture sequential)
 
 | Feature | Order | Lý do |
 |---|---|---|
-| F-funding-sources (F08) | First | F02 phải call `resolve_funding_source()` trước INSERT (theo memory locked) |
-| F-transaction-capture (F02) — **EXPANDED scope** | After F08 | Wire-in F08 resolve function + **inherit W0.6 deferred legacy cutover**: rewrite `handlers/{transaction,manage,reports,allocation}.py` → `core/handlers/` multi-tenant; delete `sheets.py`; refactor `main.py` entrypoint; execute `scripts/migrate_sheets.py` founder data migration; remove `handlers` from import-linter `root_packages`. See `project_w06_scope_split.md` memory. |
+| F-funding-sources (funding-sources) | First | transaction-capture phải call `resolve_funding_source()` trước INSERT (theo memory locked) |
+| F-transaction-capture (transaction-capture) — **EXPANDED scope** | After funding-sources | Wire-in funding-sources resolve function + **inherit W0.6 deferred legacy cutover**: rewrite `handlers/{transaction,manage,reports,allocation}.py` → `core/handlers/` multi-tenant; delete `sheets.py`; refactor `main.py` entrypoint; execute `scripts/migrate_sheets.py` founder data migration; remove `handlers` from import-linter `root_packages`. See `project_w06_scope_split.md` memory. |
 
-**Wave 2 migration rule (F08 owns schema):**
-- F08 PR có thể land **service + schema trước**, contract test dùng **fake tx payload** (không cần F02 active). F02 wire-in sau.
-- Migration thêm column `transactions.funding_source_id` thuộc **F08 PR**, không phải F02. F02 chỉ thêm logic call resolver.
-- **Nếu W0.2 (Wave 0) đã add column** (per Gap 1 = YES): F08 PR chỉ ship `funding_sources` table + logic, KHÔNG migration thêm cho `transactions`. Cleaner.
-- **Nếu W0.2 không add column** (per Gap 1 = NO): F08 PR add cả `funding_sources` table + `ALTER TABLE transactions ADD COLUMN funding_source_id` cùng migration.
+**Wave 2 migration rule (funding-sources owns schema):**
+- funding-sources PR có thể land **service + schema trước**, contract test dùng **fake tx payload** (không cần transaction-capture active). transaction-capture wire-in sau.
+- Migration thêm column `transactions.funding_source_id` thuộc **funding-sources PR**, không phải transaction-capture. transaction-capture chỉ thêm logic call resolver.
+- **Nếu W0.2 (Wave 0) đã add column** (per Gap 1 = YES): funding-sources PR chỉ ship `funding_sources` table + logic, KHÔNG migration thêm cho `transactions`. Cleaner.
+- **Nếu W0.2 không add column** (per Gap 1 = NO): funding-sources PR add cả `funding_sources` table + `ALTER TABLE transactions ADD COLUMN funding_source_id` cùng migration.
 
 ### Wave 3 — Money management (parallel, sau Wave 2)
 
@@ -359,7 +359,7 @@ Có thể code parallel với bất kỳ feature Wave 3+ nào vì adapter đã s
 
 - **Doc conventions:** §3 follow `docs/operations/` placement, §9 CHANGELOG required, §1 kebab-case filename.
 - **ADR-0001 (Monorepo):** target structure `core/ + markets/vn/ + markets/global/` áp dụng từ Wave 0.
-- **F08 memory:** F02 phải call `resolve_funding_source()` trước INSERT — wire-in rule giữ ở Wave 2.
+- **funding-sources memory:** transaction-capture phải call `resolve_funding_source()` trước INSERT — wire-in rule giữ ở Wave 2.
 - **Feedback memory (spec versioning):** in-session iteration không bump — áp dụng ở Step 9.
 - **Implementation Plan 500 users §1.3:** foundation specs (admin tools, DR, observability) viết trước Wave 0 nếu chưa có.
 
