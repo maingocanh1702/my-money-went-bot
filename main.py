@@ -25,6 +25,7 @@ from core import db
 from core.logging import configure_logging, get_logger
 from core.observability import init_sentry, request_id_middleware
 from handlers.sepay        import handle_sepay_webhook
+from markets.vn.capture.sepay_webhook import handle_sepay_webhook as handle_sepay_v2
 from handlers.email_parser import parse_email
 from handlers.transaction import handle_parent_selected, handle_sub_selected, handle_freetext_sub, handle_recategorize, handle_inline_new_cat_name
 from handlers.allocation  import (
@@ -96,6 +97,21 @@ async def webhook(request: Request, bg: BackgroundTasks):
 
     bg.add_task(_process, body)
     return JSONResponse({"ok": True})          # ← 200 right away, no 302
+
+
+# ─── SePay webhook v2 (per-tenant via URL token) ─────────────
+# Phase 2 of C1 cutover: this is the new multi-tenant entry point.
+# Tokens are minted in /start (core/handlers/start.py) and resolved
+# in markets.vn.capture.sepay_webhook.handle_sepay_webhook. Legacy
+# /webhook below stays alive in parallel until Phase 5 retires it.
+@app.post("/webhooks/sepay/{token}")
+async def webhook_sepay_v2(token: str, request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        # Match handler's silent-200 contract — SePay never retries on 400.
+        return JSONResponse({"ok": True})
+    return JSONResponse(await handle_sepay_v2(token, body))
 
 
 # ─── Email webhook (Google Apps Script → bot) ────────────────
