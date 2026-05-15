@@ -14,4 +14,5 @@ sqlalchemy[asyncio]==2.0.36
 structlog==24.4.0
 sentry-sdk[fastapi]==2.18.0
 # jinja2 needed by sentry-sdk's StarletteIntegration template patch
-jinja2==3.1.4
+# Pinned to 3.1.6+ to address CVE-2024-56326, CVE-2024-56201, CVE-2025-27516
+jinja2==3.1.6

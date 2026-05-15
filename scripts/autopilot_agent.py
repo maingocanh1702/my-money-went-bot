@@ -66,7 +66,9 @@ def _preflight_claude_cli() -> str | None:
     try:
         proc = subprocess.run(  # noqa: S603,S607
             ["claude", "--version"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
     except FileNotFoundError:
         return "claude CLI not installed. Install: npm i -g @anthropic-ai/claude-code"
@@ -91,10 +93,14 @@ def run_autopilot_session(
 
     log_path = LOG_DIR / f"{item_id}-{int(time.time())}.json"
     cmd = [
-        "claude", "-p",
-        "--output-format", "json",
-        "--allowedTools", ALLOWED_TOOLS,
-        "--model", MODEL,
+        "claude",
+        "-p",
+        "--output-format",
+        "json",
+        "--allowedTools",
+        ALLOWED_TOOLS,
+        "--model",
+        MODEL,
     ]
     if extra_args:
         cmd += extra_args
@@ -115,13 +121,22 @@ def run_autopilot_session(
         )
     except subprocess.TimeoutExpired as e:
         elapsed_ms = int((time.monotonic() - start) * 1000)
-        partial = (e.stdout or b"").decode("utf-8", errors="replace") if isinstance(e.stdout, bytes) else (e.stdout or "")
-        log_path.write_text(json.dumps({
-            "item_id": item_id,
-            "status": "timeout",
-            "elapsed_ms": elapsed_ms,
-            "stdout_partial": partial[-4000:],
-        }, indent=2))
+        partial = (
+            (e.stdout or b"").decode("utf-8", errors="replace")
+            if isinstance(e.stdout, bytes)
+            else (e.stdout or "")
+        )
+        log_path.write_text(
+            json.dumps(
+                {
+                    "item_id": item_id,
+                    "status": "timeout",
+                    "elapsed_ms": elapsed_ms,
+                    "stdout_partial": partial[-4000:],
+                },
+                indent=2,
+            )
+        )
         return SessionResult(
             status="error",
             final_text="",
@@ -134,14 +149,19 @@ def run_autopilot_session(
     raw_stdout = proc.stdout or ""
     raw_stderr = proc.stderr or ""
 
-    log_path.write_text(json.dumps({
-        "item_id": item_id,
-        "cmd": cmd,
-        "exit_code": proc.returncode,
-        "duration_ms": duration_ms,
-        "stdout": raw_stdout,
-        "stderr": raw_stderr,
-    }, indent=2))
+    log_path.write_text(
+        json.dumps(
+            {
+                "item_id": item_id,
+                "cmd": cmd,
+                "exit_code": proc.returncode,
+                "duration_ms": duration_ms,
+                "stdout": raw_stdout,
+                "stderr": raw_stderr,
+            },
+            indent=2,
+        )
+    )
 
     if proc.returncode != 0:
         return SessionResult(
@@ -169,7 +189,9 @@ def run_autopilot_session(
         final_text = raw_stdout
 
     if on_progress:
-        on_progress(item_id, iterations, f"claude -p done in {duration_ms/1000:.1f}s, {iterations} turns")
+        on_progress(
+            item_id, iterations, f"claude -p done in {duration_ms/1000:.1f}s, {iterations} turns"
+        )
 
     sentinel = _scan_sentinel(final_text)
     if sentinel:
@@ -199,7 +221,10 @@ def run_autopilot_session(
 
 def main() -> int:
     import argparse
-    p = argparse.ArgumentParser(description="Run a single autopilot prompt via Claude Code headless mode")
+
+    p = argparse.ArgumentParser(
+        description="Run a single autopilot prompt via Claude Code headless mode"
+    )
     p.add_argument("prompt_file")
     p.add_argument("--item-id", default="adhoc")
     args = p.parse_args()

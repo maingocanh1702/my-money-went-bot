@@ -89,6 +89,12 @@ ignore = [
 "scripts/sync-tracker-from-gh.py" = ["N999", "S603", "S607"]
 "tests/**/*.py" = ["S101", "S603", "S607", "S106"]  # asserts + subprocess + fake tokens ok in tests
 "tools/autopilot/*.py" = ["S603", "S607"]  # orchestrator wraps trusted CLIs (git/codex/claude)
+# scripts/autopilot_*.py mirrors tools/autopilot/* — orchestrator scripts
+# wrapping trusted CLIs (git, codex, claude, gh). S110 in manual_automators
+# is intentional best-effort fallthrough on notifier failures.
+"scripts/autopilot_agent.py" = ["S603", "S607"]
+"scripts/autopilot_manual_automators.py" = ["S603", "S607", "S110"]
+"scripts/autopilot_runner.py" = ["S603", "S607", "S310"]  # urllib used for ops webhook notifier
 
 # ─────────────────────────────────────────────────────────────────────
 # Black — formatter

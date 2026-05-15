@@ -14,8 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event.pull_request != null || github.event.check_run.pull_requests[0] != null
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      # Pinned to full commit SHA (not floating tags) per supply-chain best practice.
+      # Same pin as ci.yml — keep in sync via Dependabot.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b  # v5.3.0
         with:
           python-version: '3.12'
       - run: pip install httpx

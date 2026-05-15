@@ -5,6 +5,7 @@ handlers/sepay.py — SePay webhook handler
 Triggered when a bank transaction arrives.
 """
 import hashlib
+import hmac
 import re
 from datetime import datetime
 import pytz
@@ -122,13 +123,16 @@ async def handle_sepay_webhook(payload: dict):
     # Optional: validate SePay webhook secret
     # Set SEPAY_SECRET in .env to match the token configured in SePay dashboard
     if SEPAY_SECRET:
+        # SePay docs specify `apikey`; accept legacy field names for backward compat
+        # but compare in constant time to avoid timing-side-channel leaks.
         incoming_secret = (
             payload.get("apikey")
             or payload.get("token")
             or payload.get("secret")
             or (payload.get("data") or {}).get("apikey")
+            or ""
         )
-        if incoming_secret != SEPAY_SECRET:
+        if not hmac.compare_digest(str(incoming_secret), SEPAY_SECRET):
             print(f"[sepay] rejected: invalid secret")
             return
 

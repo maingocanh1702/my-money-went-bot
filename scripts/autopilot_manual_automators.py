@@ -40,6 +40,7 @@ LINEAR_ENDPOINT = "https://api.linear.app/graphql"
 
 # ─── Linear helpers ───────────────────────────────────────────────────────
 
+
 def _linear_client() -> httpx.Client:
     key = os.environ.get("LINEAR_API_KEY")
     if not key:
@@ -98,7 +99,9 @@ def automate_c2_linear_setup() -> dict:
     try:
         with _linear_client() as c:
             # 1. Pick team
-            all_teams = _linear_gql(c, "query { teams { nodes { id name key } } }")["teams"]["nodes"]
+            all_teams = _linear_gql(c, "query { teams { nodes { id name key } } }")["teams"][
+                "nodes"
+            ]
             if not all_teams:
                 return {"status": "halted", "detail": "No teams in Linear workspace"}
 
@@ -118,42 +121,56 @@ def automate_c2_linear_setup() -> dict:
             print(f"  · Using team '{team['name']}' (key={team['key']}, id={team_id})")
 
             # 2. Projects (idempotent)
-            existing_projects = _linear_gql(c, f"""
+            existing_projects = _linear_gql(
+                c,
+                f"""
                 query {{ projects(filter: {{accessibleTeams: {{some: {{id: {{eq: "{team_id}"}}}}}}}}) {{
                     nodes {{ id name }}
                 }} }}
-            """)
+            """,
+            )
             existing_names = {p["name"] for p in existing_projects["projects"]["nodes"]}
             created = 0
             for name, desc in PHASES:
                 if name in existing_names:
                     print(f"  · Project '{name}' exists, skip")
                     continue
-                _linear_gql(c, """
+                _linear_gql(
+                    c,
+                    """
                     mutation Create($input: ProjectCreateInput!) {
                         projectCreate(input: $input) { success project { id name } }
                     }
-                """, {"input": {"name": name, "description": desc, "teamIds": [team_id]}})
+                """,
+                    {"input": {"name": name, "description": desc, "teamIds": [team_id]}},
+                )
                 created += 1
                 print(f"  · Created project '{name}'")
 
             # 3. Labels (handle workspace-wide uniqueness)
-            existing_labels = _linear_gql(c, f"""
+            existing_labels = _linear_gql(
+                c,
+                f"""
                 query {{ issueLabels(filter: {{team: {{id: {{eq: "{team_id}"}}}}}}) {{
                     nodes {{ id name }}
                 }} }}
-            """)
+            """,
+            )
             existing_label_names = {lbl["name"] for lbl in existing_labels["issueLabels"]["nodes"]}
             for label_name, color in LABELS:
                 if label_name in existing_label_names:
                     print(f"  · Label '{label_name}' exists, skip")
                     continue
                 try:
-                    _linear_gql(c, """
+                    _linear_gql(
+                        c,
+                        """
                         mutation Create($input: IssueLabelCreateInput!) {
                             issueLabelCreate(input: $input) { success }
                         }
-                    """, {"input": {"name": label_name, "color": color, "teamId": team_id}})
+                    """,
+                        {"input": {"name": label_name, "color": color, "teamId": team_id}},
+                    )
                     print(f"  · Created label '{label_name}'")
                 except RuntimeError as e:
                     msg = str(e).lower()
@@ -162,7 +179,9 @@ def automate_c2_linear_setup() -> dict:
                         continue
                     raise
 
-            print("  ⚠ Custom fields: free-tier may not allow; fallback to labels (phase:P1, feature:F02)")
+            print(
+                "  ⚠ Custom fields: free-tier may not allow; fallback to labels (phase:P1, feature:F02)"
+            )
             return {"status": "completed", "detail": f"team={team_id}, projects_created={created}"}
     except Exception as e:  # noqa: BLE001
         return {"status": "halted", "detail": f"Linear setup error: {e}"}
@@ -177,14 +196,20 @@ def automate_c3_execute() -> dict:
         print("  · --dry-run...")
         dry = subprocess.run(  # noqa: S603
             [sys.executable, str(script), "--dry-run"],
-            cwd=REPO_ROOT, capture_output=True, text=True, timeout=600,
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=600,
         )
         if dry.returncode != 0:
             return {"status": "halted", "detail": f"dry-run failed: {dry.stderr[-2000:]}"}
         print("  · --execute --confirm...")
         ex = subprocess.run(  # noqa: S603
             [sys.executable, str(script), "--execute", "--confirm"],
-            cwd=REPO_ROOT, capture_output=True, text=True, timeout=1800,
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=1800,
         )
         if ex.returncode != 0:
             return {"status": "halted", "detail": f"execute failed: {ex.stderr[-2000:]}"}
@@ -199,7 +224,10 @@ def automate_c4_deploy() -> dict:
     """Deploy ops_api/ to Railway via CLI."""
     try:
         whoami = subprocess.run(  # noqa: S603,S607
-            ["railway", "whoami"], capture_output=True, text=True, timeout=10,
+            ["railway", "whoami"],
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         if whoami.returncode != 0:
             return {"status": "halted", "detail": "railway CLI not authed. Run `railway login`"}
@@ -213,13 +241,20 @@ def automate_c4_deploy() -> dict:
         print("  · railway up...")
         deploy = subprocess.run(  # noqa: S603,S607
             ["railway", "up", "--detach"],
-            cwd=REPO_ROOT, capture_output=True, text=True, timeout=600,
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=600,
         )
         if deploy.returncode != 0:
             return {"status": "halted", "detail": f"railway up failed: {deploy.stderr[-2000:]}"}
 
         domain_proc = subprocess.run(  # noqa: S603,S607
-            ["railway", "domain"], cwd=REPO_ROOT, capture_output=True, text=True, timeout=15,
+            ["railway", "domain"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
         domain = domain_proc.stdout.strip()
         if domain:
@@ -246,7 +281,10 @@ def automate_d6_branch_protection() -> dict:
         else:
             r = subprocess.run(  # noqa: S603,S607
                 ["git", "config", "--get", "remote.origin.url"],
-                cwd=REPO_ROOT, capture_output=True, text=True, timeout=5,
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             m = re.search(r"[:/]([^/:]+/[^/]+?)(?:\.git)?$", r.stdout.strip())
             if not m:
@@ -254,7 +292,10 @@ def automate_d6_branch_protection() -> dict:
             repo = m.group(1)
 
         protection = {
-            "required_status_checks": {"strict": True, "contexts": ["ci/pytest", "ci/lint", "pr-validate"]},
+            "required_status_checks": {
+                "strict": True,
+                "contexts": ["ci/pytest", "ci/lint", "pr-validate"],
+            },
             "enforce_admins": False,
             "required_pull_request_reviews": {
                 "required_approving_review_count": 1,
@@ -268,7 +309,10 @@ def automate_d6_branch_protection() -> dict:
         proc = subprocess.run(  # noqa: S603,S607
             ["gh", "api", "-X", "PUT", f"repos/{repo}/branches/main/protection", "--input", "-"],
             input=json.dumps(protection),
-            cwd=REPO_ROOT, capture_output=True, text=True, timeout=30,
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         if proc.returncode != 0:
             return {"status": "halted", "detail": f"gh api failed: {proc.stderr[-1000:]}"}
@@ -287,25 +331,36 @@ def automate_d5_templates() -> dict:
     try:
         with _linear_client() as c:
             data = _linear_gql(c, "query { teams { nodes { id name } } }")
-            team_id = next((t["id"] for t in data["teams"]["nodes"]
-                           if t["name"] == os.environ.get("LINEAR_TEAM_NAME", "Engineering")), None)
+            team_id = next(
+                (
+                    t["id"]
+                    for t in data["teams"]["nodes"]
+                    if t["name"] == os.environ.get("LINEAR_TEAM_NAME", "Engineering")
+                ),
+                None,
+            )
             if not team_id:
                 return {"status": "halted", "detail": "team not found"}
             spec_text = spec.read_text()
             templates = re.findall(
                 r"##\s+Template\s+\d+:\s+(\w+).*?\*\*Body template:\*\*\s*```\s*\n(.*?)```",
-                spec_text, re.DOTALL,
+                spec_text,
+                re.DOTALL,
             )
             if len(templates) < 4:
                 return {"status": "halted", "detail": f"parsed only {len(templates)} templates"}
             created = 0
             for name, body in templates:
                 try:
-                    _linear_gql(c, """
+                    _linear_gql(
+                        c,
+                        """
                         mutation Create($input: IssueTemplateCreateInput!) {
                             issueTemplateCreate(input: $input) { success }
                         }
-                    """, {"input": {"name": name, "description": body, "teamId": team_id}})
+                    """,
+                        {"input": {"name": name, "description": body, "teamId": team_id}},
+                    )
                     created += 1
                 except Exception as e:  # noqa: BLE001
                     print(f"  ⚠ Template '{name}' failed: {e}")
@@ -313,7 +368,7 @@ def automate_d5_templates() -> dict:
                 return {
                     "status": "halted",
                     "detail": "Linear plan doesn't support issueTemplateCreate. "
-                              "Founder paste manually from docs/operations/linear-issue-templates.md",
+                    "Founder paste manually from docs/operations/linear-issue-templates.md",
                 }
             return {"status": "completed", "detail": f"{created}/4 templates created"}
     except Exception as e:  # noqa: BLE001

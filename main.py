@@ -5,6 +5,7 @@
 main.py — FastAPI entry point
 Receives SePay webhooks and Telegram updates via a single /webhook endpoint.
 """
+import hmac
 from pathlib import Path
 
 from fastapi import FastAPI, Request, BackgroundTasks
@@ -73,10 +74,14 @@ async def webhook_email(request: Request, bg: BackgroundTasks):
     except Exception:
         return JSONResponse({"ok": True})
 
-    # Validate secret
-    if EMAIL_SECRET and body.get("secret") != EMAIL_SECRET:
-        print(f"[email webhook] rejected: invalid secret")
-        return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
+    # Validate secret — constant-time compare to avoid timing attacks.
+    # NOTE: still fail-open when EMAIL_SECRET is empty/unset (legacy compat);
+    # tracked as a separate finding in the security review (C2 + prior scan).
+    if EMAIL_SECRET:
+        incoming = str(body.get("secret") or "")
+        if not hmac.compare_digest(incoming, EMAIL_SECRET):
+            print(f"[email webhook] rejected: invalid secret")
+            return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
 
     bg.add_task(_process_email, body)
     return JSONResponse({"ok": True})
