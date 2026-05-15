@@ -4,12 +4,8 @@ on:
   push:
     branches:
       - main
-      - 'feat/**'
-      - 'infra/**'
-      - 'chore/**'
-      - 'fix/**'
   schedule:
-    - cron: '0 * * * *'
+    - cron: '0 6 * * *'   # daily 6 AM UTC (1 PM Vietnam time), down from hourly
   workflow_dispatch:
 
 permissions:
