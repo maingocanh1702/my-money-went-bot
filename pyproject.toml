@@ -143,6 +143,15 @@ ignore_missing_imports = true
 module = "tools.autopilot.*"
 ignore_errors = true
 
+# Legacy single-tenant modules — transitively imported by strict-mode tests
+# (e.g. tests/integration/test_app_startup.py imports `main`). Slated for
+# strangler-fig removal in F02; relaxing checks here mirrors the
+# tools/autopilot pattern above so existing untyped legacy helpers aren't
+# flagged when imported by typed code.
+[[tool.mypy.overrides]]
+module = ["main", "config", "sheets", "telegram_api", "handlers.*"]
+ignore_errors = true
+
 # ─────────────────────────────────────────────────────────────────────
 # Pytest
 # ─────────────────────────────────────────────────────────────────────

@@ -6,6 +6,8 @@ main.py — FastAPI entry point
 Receives SePay webhooks and Telegram updates via a single /webhook endpoint.
 """
 import hmac
+import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request, BackgroundTasks
@@ -19,6 +21,9 @@ DASHBOARD_MD = ROOT / "docs" / "dashboard.md"
 from config import CHAT_ID, EMAIL_SECRET
 import sheets as sh
 import telegram_api as tg
+from core import db
+from core.logging import configure_logging, get_logger
+from core.observability import init_sentry, request_id_middleware
 from handlers.sepay        import handle_sepay_webhook
 from handlers.email_parser import parse_email
 from handlers.transaction import handle_parent_selected, handle_sub_selected, handle_freetext_sub, handle_recategorize, handle_inline_new_cat_name
@@ -33,17 +38,48 @@ from handlers.manage      import (
     handle_add_cat_name, handle_add_cat_amount,
 )
 
-app = FastAPI(title="Financial Tracking Bot")
+_PROD_ENVS = {"prod", "production", "staging"}
 
 
-@app.on_event("startup")
-async def on_startup():
-    import os
-    print(f"[startup] running on port {os.environ.get('PORT', 8000)}")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup/shutdown wiring for the multi-tenant pipeline.
+
+    Order matters: configure_logging first so subsequent startup events
+    render as structured JSON in prod. init_sentry second so any later
+    failure is captured. DB pool last (the only step that can hard-fail).
+    """
+    app_env = os.environ.get("APP_ENV", "dev")
+    configure_logging(env=app_env)
+    log = get_logger("main", component="startup")
+
+    init_sentry(os.environ.get("SENTRY_DSN"), environment=app_env)
+
+    dsn = os.environ.get("DATABASE_URL", "")
+    if dsn:
+        await db.create_pool(dsn)
+        log.info("startup.db_pool_ready")
+    elif app_env.lower() in _PROD_ENVS:
+        raise RuntimeError(
+            "DATABASE_URL is required in prod/staging — multi-tenant pipeline cannot run without it"
+        )
+    else:
+        log.warning("startup.db_pool_skipped", reason="DATABASE_URL not set (legacy mode)")
+
+    log.info("startup.ready", port=os.environ.get("PORT", "8000"))
     try:
         await tg.set_my_commands()
-    except Exception as e:
-        print(f"[startup] set_my_commands failed (no internet?): {e}")
+    except Exception as exc:  # noqa: BLE001 — best-effort, no-internet during local dev is fine
+        log.warning("startup.set_my_commands_failed", error=str(exc))
+
+    yield
+
+    await db.close_pool()
+    log.info("shutdown.db_pool_closed")
+
+
+app = FastAPI(title="Financial Tracking Bot", lifespan=lifespan)
+app.middleware("http")(request_id_middleware)
 
 
 # ─── Webhook endpoint ─────────────────────────────────────────
