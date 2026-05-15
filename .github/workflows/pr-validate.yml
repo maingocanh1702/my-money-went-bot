@@ -10,7 +10,12 @@ jobs:
         env:
           BRANCH: "${{ github.head_ref }}"
         run: |
-          case "$BRANCH" in W0.*|Wave-*|hotfix/*|release/*) exit 0 ;; esac
+          # Exemptions cover Wave-prefixed work, hotfixes, releases, plus the
+          # plan-scoped multi-PR series (fix/*, feat/c1-*, chore/*) used by
+          # security-driven work that predates Linear MMW issue assignment.
+          case "$BRANCH" in
+            W0.*|Wave-*|hotfix/*|release/*|fix/*|feat/c1-*|chore/*) exit 0 ;;
+          esac
           if ! echo "$BRANCH" | grep -Eq '^[a-z0-9-]+/MMW-[0-9]+-[a-z0-9-]+$'; then
             echo "::error::Branch '$BRANCH' must match <dev>/MMW-<id>-<slug>"
             exit 1

@@ -37,7 +37,7 @@ import textwrap
 import urllib.error
 import urllib.request
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -51,6 +51,7 @@ EVENT_LOG_PATH = REPO_ROOT / ".autopilot" / "events.log"
 # Execution plan
 # ───────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class Item:
     id: str
@@ -63,65 +64,153 @@ class Item:
 
 
 EXECUTION_ORDER: list[Item] = [
-    Item(id="C-3.0", kind="manual", title="Linear free-tier capability verification",
-         runbook_md="Log into Linear → Settings → Plan. Check: custom fields, cycles, templates, integrations. Document gaps in §C-3.0. Reply 'done' to proceed."),
-    Item(id="C-2", kind="manual", title="Linear projects + labels setup (auto via automator)",
-         depends_on=["C-3.0"],
-         runbook_md="Auto: 10 phase projects + 8 labels created via Linear GraphQL. Idempotent. Falls back to manual if API blocked."),
-    Item(id="A-P0", kind="autopilot", title="Adaptive polling rate limit + rename + cross-refs",
-         risk_tier="P2 mature", prompt_file="prompt-A-P0-rate-limit-and-rename.md"),
-    Item(id="A-P1-4", kind="autopilot", title="Script-safe DOM swap",
-         risk_tier="P2 mature", prompt_file="prompt-A-P1-dom-swap.md"),
-    Item(id="D-3", kind="autopilot", title="Branch + PR convention + pre-push hook",
-         risk_tier="P2 pilot", prompt_file="prompt-D-3-branch-pr-convention.md",
-         depends_on=["C-2"]),
-    Item(id="C-3", kind="autopilot", title="Linear migration script",
-         risk_tier="P1", prompt_file="prompt-C-3-migration-script.md",
-         depends_on=["D-3"]),
-    Item(id="C-3-execute", kind="manual", title="Run linear_migrate.py (auto via automator)",
-         depends_on=["C-3"],
-         runbook_md="Auto: --dry-run then --execute --confirm. Or manual: python scripts/linear_migrate.py --dry-run."),
-    Item(id="D-2.1", kind="manual", title="Verify Linear progress renders in dashboard",
-         depends_on=["C-3-execute"],
-         runbook_md="Open dashboard. Verify phase progress bars show Linear data. Reply 'done'."),
-    Item(id="C-4", kind="autopilot", title="Railway /ops-dashboard.json endpoint",
-         risk_tier="P1", prompt_file="prompt-C-4-railway-backend.md",
-         depends_on=["D-2.1"]),
-    Item(id="C-4-deploy", kind="manual", title="Deploy ops_api/ to Railway (auto via automator)",
-         depends_on=["C-4"],
-         runbook_md="Auto: railway up + healthz smoke. Or manual via Railway dashboard."),
-    Item(id="D-6", kind="autopilot", title="Linear status sync workflow + branch protection",
-         risk_tier="P1", prompt_file="prompt-D-6-linear-status-sync.md",
-         depends_on=["C-4-deploy"]),
-    Item(id="D-6-protect", kind="manual", title="Apply GitHub branch protection (auto via gh api)",
-         depends_on=["D-6"],
-         runbook_md="Auto: gh api PUT /branches/main/protection. Or manual via GitHub Settings → Branches."),
-    Item(id="B-1", kind="autopilot", title="Multi-source parser",
-         risk_tier="P2 mature", prompt_file="prompt-B-1-multi-source-parse.md",
-         depends_on=["D-6-protect"]),
-    Item(id="B-2", kind="autopilot", title="5-tab UI rendering",
-         risk_tier="P2 mature", prompt_file="prompt-B-2-tab-ui.md",
-         depends_on=["B-1", "A-P1-4"]),
-    Item(id="B-3", kind="autopilot", title="Polish: Gantt + readiness + staleness",
-         risk_tier="P2 mature", prompt_file="prompt-B-3-polish-gantt.md",
-         depends_on=["B-2"]),
-    Item(id="D-4", kind="autopilot", title="Multi-dev playbook + CODEOWNERS + standup",
-         risk_tier="P2 pilot", prompt_file="prompt-D-4-multidev-playbook.md"),
-    Item(id="D-5", kind="autopilot", title="Dev onboarding doc + Linear template specs",
-         risk_tier="P2 mature", prompt_file="prompt-D-5-onboarding-doc.md",
-         depends_on=["D-4"]),
-    Item(id="D-5-templates", kind="manual", title="Paste Linear issue templates (auto via API)",
-         depends_on=["D-5"],
-         runbook_md="Auto: issueTemplateCreate via Linear API. Falls back to manual UI paste if API unsupported."),
-    Item(id="C-5.3", kind="manual", title="Archive implementation-tracker.md (founder only — memory lock)",
-         depends_on=["D-5-templates"],
-         runbook_md="PRECONDITION: 7-day drift-free window. git mv docs/implementation-tracker.md docs/archive/. PR + merge."),
+    Item(
+        id="C-3.0",
+        kind="manual",
+        title="Linear free-tier capability verification",
+        runbook_md="Log into Linear → Settings → Plan. Check: custom fields, cycles, templates, integrations. Document gaps in §C-3.0. Reply 'done' to proceed.",
+    ),
+    Item(
+        id="C-2",
+        kind="manual",
+        title="Linear projects + labels setup (auto via automator)",
+        depends_on=["C-3.0"],
+        runbook_md="Auto: 10 phase projects + 8 labels created via Linear GraphQL. Idempotent. Falls back to manual if API blocked.",
+    ),
+    Item(
+        id="A-P0",
+        kind="autopilot",
+        title="Adaptive polling rate limit + rename + cross-refs",
+        risk_tier="P2 mature",
+        prompt_file="prompt-A-P0-rate-limit-and-rename.md",
+    ),
+    Item(
+        id="A-P1-4",
+        kind="autopilot",
+        title="Script-safe DOM swap",
+        risk_tier="P2 mature",
+        prompt_file="prompt-A-P1-dom-swap.md",
+    ),
+    Item(
+        id="D-3",
+        kind="autopilot",
+        title="Branch + PR convention + pre-push hook",
+        risk_tier="P2 pilot",
+        prompt_file="prompt-D-3-branch-pr-convention.md",
+        depends_on=["C-2"],
+    ),
+    Item(
+        id="C-3",
+        kind="autopilot",
+        title="Linear migration script",
+        risk_tier="P1",
+        prompt_file="prompt-C-3-migration-script.md",
+        depends_on=["D-3"],
+    ),
+    Item(
+        id="C-3-execute",
+        kind="manual",
+        title="Run linear_migrate.py (auto via automator)",
+        depends_on=["C-3"],
+        runbook_md="Auto: --dry-run then --execute --confirm. Or manual: python scripts/linear_migrate.py --dry-run.",
+    ),
+    Item(
+        id="D-2.1",
+        kind="manual",
+        title="Verify Linear progress renders in dashboard",
+        depends_on=["C-3-execute"],
+        runbook_md="Open dashboard. Verify phase progress bars show Linear data. Reply 'done'.",
+    ),
+    Item(
+        id="C-4",
+        kind="autopilot",
+        title="Railway /ops-dashboard.json endpoint",
+        risk_tier="P1",
+        prompt_file="prompt-C-4-railway-backend.md",
+        depends_on=["D-2.1"],
+    ),
+    Item(
+        id="C-4-deploy",
+        kind="manual",
+        title="Deploy ops_api/ to Railway (auto via automator)",
+        depends_on=["C-4"],
+        runbook_md="Auto: railway up + healthz smoke. Or manual via Railway dashboard.",
+    ),
+    Item(
+        id="D-6",
+        kind="autopilot",
+        title="Linear status sync workflow + branch protection",
+        risk_tier="P1",
+        prompt_file="prompt-D-6-linear-status-sync.md",
+        depends_on=["C-4-deploy"],
+    ),
+    Item(
+        id="D-6-protect",
+        kind="manual",
+        title="Apply GitHub branch protection (auto via gh api)",
+        depends_on=["D-6"],
+        runbook_md="Auto: gh api PUT /branches/main/protection. Or manual via GitHub Settings → Branches.",
+    ),
+    Item(
+        id="B-1",
+        kind="autopilot",
+        title="Multi-source parser",
+        risk_tier="P2 mature",
+        prompt_file="prompt-B-1-multi-source-parse.md",
+        depends_on=["D-6-protect"],
+    ),
+    Item(
+        id="B-2",
+        kind="autopilot",
+        title="5-tab UI rendering",
+        risk_tier="P2 mature",
+        prompt_file="prompt-B-2-tab-ui.md",
+        depends_on=["B-1", "A-P1-4"],
+    ),
+    Item(
+        id="B-3",
+        kind="autopilot",
+        title="Polish: Gantt + readiness + staleness",
+        risk_tier="P2 mature",
+        prompt_file="prompt-B-3-polish-gantt.md",
+        depends_on=["B-2"],
+    ),
+    Item(
+        id="D-4",
+        kind="autopilot",
+        title="Multi-dev playbook + CODEOWNERS + standup",
+        risk_tier="P2 pilot",
+        prompt_file="prompt-D-4-multidev-playbook.md",
+    ),
+    Item(
+        id="D-5",
+        kind="autopilot",
+        title="Dev onboarding doc + Linear template specs",
+        risk_tier="P2 mature",
+        prompt_file="prompt-D-5-onboarding-doc.md",
+        depends_on=["D-4"],
+    ),
+    Item(
+        id="D-5-templates",
+        kind="manual",
+        title="Paste Linear issue templates (auto via API)",
+        depends_on=["D-5"],
+        runbook_md="Auto: issueTemplateCreate via Linear API. Falls back to manual UI paste if API unsupported.",
+    ),
+    Item(
+        id="C-5.3",
+        kind="manual",
+        title="Archive implementation-tracker.md (founder only — memory lock)",
+        depends_on=["D-5-templates"],
+        runbook_md="PRECONDITION: 7-day drift-free window. git mv docs/implementation-tracker.md docs/archive/. PR + merge.",
+    ),
 ]
 
 
 # ───────────────────────────────────────────────────────────────────
 # State
 # ───────────────────────────────────────────────────────────────────
+
 
 @dataclass
 class ItemState:
@@ -158,21 +247,27 @@ class RunnerState:
 
     def save(self) -> None:
         self.last_updated = now_iso()
-        STATE_PATH.write_text(json.dumps({
-            "batch_name": self.batch_name,
-            "started_at": self.started_at,
-            "last_updated": self.last_updated,
-            "webhook_url": self.webhook_url,
-            "items": {k: asdict(v) for k, v in self.items.items()},
-        }, indent=2))
+        STATE_PATH.write_text(
+            json.dumps(
+                {
+                    "batch_name": self.batch_name,
+                    "started_at": self.started_at,
+                    "last_updated": self.last_updated,
+                    "webhook_url": self.webhook_url,
+                    "items": {k: asdict(v) for k, v in self.items.items()},
+                },
+                indent=2,
+            )
+        )
 
 
 # ───────────────────────────────────────────────────────────────────
 # Helpers
 # ───────────────────────────────────────────────────────────────────
 
+
 def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def sh(cmd: list[str], cwd: Path = REPO_ROOT, check: bool = True) -> subprocess.CompletedProcess:
@@ -198,9 +293,14 @@ def notify(state: RunnerState, message: str) -> None:
     try:
         msg_escaped = message.replace("\\", "\\\\").replace('"', '\\"')
         subprocess.run(  # noqa: S603,S607
-            ["osascript", "-e",
-             f'display notification "{msg_escaped}" with title "Autopilot" subtitle "{state.batch_name}"'],
-            capture_output=True, timeout=5, check=False,
+            [
+                "osascript",
+                "-e",
+                f'display notification "{msg_escaped}" with title "Autopilot" subtitle "{state.batch_name}"',
+            ],
+            capture_output=True,
+            timeout=5,
+            check=False,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
@@ -239,7 +339,9 @@ def next_pending(state: RunnerState) -> Item | None:
 BRANCH_RE = re.compile(r"Branch\s+([\w/\-.]+):", re.IGNORECASE)
 COMPLETE_RE = re.compile(r"AUTOPILOT.*?(COMPLETE|READY_FOR_MANUAL_MERGE)", re.IGNORECASE)
 HALT_RE = re.compile(r"HALT\s+—\s+([\w\-./ ]+?)\s+circuit broken", re.IGNORECASE)
-SQUASH_BLOCK_RE = re.compile(r"Suggested squash command.*?:\s*\n(.*?)(?:═══|$)", re.DOTALL | re.IGNORECASE)
+SQUASH_BLOCK_RE = re.compile(
+    r"Suggested squash command.*?:\s*\n(.*?)(?:═══|$)", re.DOTALL | re.IGNORECASE
+)
 ROUNDS_RE = re.compile(r"Round\s+\d+", re.IGNORECASE)
 
 
@@ -267,6 +369,7 @@ def parse_report(report: str) -> dict:
 # ───────────────────────────────────────────────────────────────────
 # Auto-squash + push (robust: handles remote-ahead via pull --rebase)
 # ───────────────────────────────────────────────────────────────────
+
 
 def auto_squash(branch: str, commit_msg: str) -> str:
     preflight_concurrency()
@@ -303,6 +406,7 @@ def extract_squash_commit_msg(suggested: str) -> str:
 # Item handlers
 # ───────────────────────────────────────────────────────────────────
 
+
 def handle_manual(item: Item, state: RunnerState) -> str:
     print("\n" + "─" * 70)
     print(f"📋 MANUAL ITEM: {item.id} — {item.title}")
@@ -314,7 +418,11 @@ def handle_manual(item: Item, state: RunnerState) -> str:
             from autopilot_manual_automators import MUST_BE_FOUNDER, can_automate, run_automator
         except ImportError:
             sys.path.insert(0, str(REPO_ROOT / "scripts"))
-            from autopilot_manual_automators import MUST_BE_FOUNDER, can_automate, run_automator  # type: ignore
+            from autopilot_manual_automators import (  # type: ignore
+                MUST_BE_FOUNDER,
+                can_automate,
+                run_automator,
+            )
 
         if item.id in MUST_BE_FOUNDER:
             print(f"  ⚠ {item.id} requires founder (memory lock). Manual prompt.")
@@ -366,9 +474,11 @@ def _run_via_sdk(item: Item, prompt_path: Path) -> dict:
             print(f"    · {first_line[:160]}", flush=True)
 
     result = run_autopilot_session(prompt_content, item.id, on_progress=progress)
-    print(f"\n  ⤷ status={result.status}, iter={result.iterations}, "
-          f"tokens={result.input_tokens}in/{result.output_tokens}out, "
-          f"cost=${result.cost_usd:.4f}, duration={result.duration_ms/1000:.1f}s")
+    print(
+        f"\n  ⤷ status={result.status}, iter={result.iterations}, "
+        f"tokens={result.input_tokens}in/{result.output_tokens}out, "
+        f"cost=${result.cost_usd:.4f}, duration={result.duration_ms/1000:.1f}s"
+    )
     if result.error:
         print(f"  ⤷ Error: {result.error}")
 
@@ -408,12 +518,15 @@ def _run_via_paste(item: Item, prompt_path: Path) -> dict:
 # Genealogy
 # ───────────────────────────────────────────────────────────────────
 
+
 def update_genealogy(item: Item, s: ItemState) -> None:
     if not INDEX_PATH.exists():
         return
     content = INDEX_PATH.read_text()
-    row = (f"| {item.id} | {item.risk_tier or 'manual'} | {s.codex_rounds or '—'} | "
-           f"{(s.squash_sha or '')[:7]} | {(s.completed_at or '')[:10]} | {s.status} |")
+    row = (
+        f"| {item.id} | {item.risk_tier or 'manual'} | {s.codex_rounds or '—'} | "
+        f"{(s.squash_sha or '')[:7]} | {(s.completed_at or '')[:10]} | {s.status} |"
+    )
     table_re = re.compile(
         r"(\| Prompt \| Risk \| Codex rounds \| Merge SHA \| Date \| Outcome \|\s*\n\|[^\n]+\n)",
         re.IGNORECASE,
@@ -427,6 +540,7 @@ def update_genealogy(item: Item, s: ItemState) -> None:
 # Commands
 # ───────────────────────────────────────────────────────────────────
 
+
 def cmd_status(state: RunnerState) -> None:
     done = sum(1 for s in state.items.values() if s.status == "completed")
     halted = sum(1 for s in state.items.values() if s.status == "halted")
@@ -436,7 +550,13 @@ def cmd_status(state: RunnerState) -> None:
     print(f"Progress: {done}/{total} completed, {halted} halted, {skipped} skipped\n")
     for item in EXECUTION_ORDER:
         s = state.items.get(item.id, ItemState(item.id))
-        icon = {"completed": "✅", "halted": "⛔", "skipped": "⏭", "in_progress": "🟡", "pending": "⏳"}.get(s.status, "?")
+        icon = {
+            "completed": "✅",
+            "halted": "⛔",
+            "skipped": "⏭",
+            "in_progress": "🟡",
+            "pending": "⏳",
+        }.get(s.status, "?")
         tag = "[manual]" if item.kind == "manual" else f"[{item.risk_tier}]"
         print(f"  {icon} {item.id:<14} {tag:<14} {item.title}")
     nxt = next_pending(state)
@@ -509,7 +629,9 @@ def cmd_next(state: RunnerState) -> int:
     s.completed_at = now_iso()
     state.save()
     update_genealogy(item, s)
-    notify(state, f"✅ {item.id} merged (rounds: {s.codex_rounds}, sha: {(s.squash_sha or '')[:7]})")
+    notify(
+        state, f"✅ {item.id} merged (rounds: {s.codex_rounds}, sha: {(s.squash_sha or '')[:7]})"
+    )
     print(f"\n✅ {item.id} complete.")
     return 0
 
@@ -550,7 +672,9 @@ def cmd_reset(state: RunnerState) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--status", action="store_true")
     group.add_argument("--next", action="store_true")

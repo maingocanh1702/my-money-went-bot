@@ -33,7 +33,7 @@ def main():
     ) as c:
         d = gql(
             c,
-            'query Q($id: String!) { issue(id: $id) { id labels { nodes { id name } } } }',
+            "query Q($id: String!) { issue(id: $id) { id labels { nodes { id name } } } }",
             {"id": args.issue},
         )
         issue = d["issue"]
@@ -42,7 +42,7 @@ def main():
             return 0
         existing = {lbl["name"]: lbl["id"] for lbl in issue["labels"]["nodes"]}
 
-        d = gql(c, 'query { issueLabels { nodes { id name } } }')
+        d = gql(c, "query { issueLabels { nodes { id name } } }")
         label_id = next(
             (lbl["id"] for lbl in d["issueLabels"]["nodes"] if lbl["name"] == args.label),
             None,
@@ -64,7 +64,7 @@ def main():
 
         gql(
             c,
-            'mutation U($id: String!, $ids: [String!]!) { issueUpdate(id: $id, input: {labelIds: $ids}) { success } }',
+            "mutation U($id: String!, $ids: [String!]!) { issueUpdate(id: $id, input: {labelIds: $ids}) { success } }",
             {"id": issue["id"], "ids": new_ids},
         )
         print(f"Label '{args.label}' {args.action}ed on {args.issue}")

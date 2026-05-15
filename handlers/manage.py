@@ -165,7 +165,8 @@ async def handle_manage_amount(text: str, state: dict):
     try:
         digits = "".join(c for c in text if c.isdigit())
         amount = int(digits) if digits else 0
-        assert amount >= 0
+        if amount < 0:
+            raise ValueError("amount must be non-negative")
     except Exception:
         await tg.send_text("⚠️ Số tiền không hợp lệ. Thử lại (VD: 3000000 hoặc 0).")
         return
@@ -378,7 +379,8 @@ async def handle_add_cat_amount(text: str, state: dict):
     try:
         digits = "".join(c for c in text if c.isdigit())
         amount = int(digits) if digits else 0
-        assert amount >= 0
+        if amount < 0:
+            raise ValueError("amount must be non-negative")
     except Exception:
         await tg.send_text("⚠️ Số tiền không hợp lệ. Thử lại (VD: 2000000 hoặc 0).")
         return

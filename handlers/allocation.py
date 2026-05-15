@@ -134,7 +134,8 @@ async def _ask_next_bucket():
 async def handle_alloc_amount_input(text: str, state: dict):
     try:
         amount = int("".join(c for c in text if c.isdigit()))
-        assert amount > 0
+        if amount <= 0:
+            raise ValueError("amount must be positive")
     except Exception:
         await tg.send_text("⚠️ That's not a valid amount. Try again (e.g. 3000000)")
         return
@@ -170,7 +171,8 @@ async def handle_new_bucket_name(text: str, state: dict):
 async def handle_new_bucket_amount(text: str, state: dict):
     try:
         amount = int("".join(c for c in text if c.isdigit()))
-        assert amount > 0
+        if amount <= 0:
+            raise ValueError("amount must be positive")
     except Exception:
         await tg.send_text("⚠️ That's not a valid amount. Try again.")
         return
