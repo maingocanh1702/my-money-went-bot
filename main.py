@@ -99,6 +99,11 @@ async def webhook(request: Request, bg: BackgroundTasks):
     return JSONResponse({"ok": True})          # ← 200 right away, no 302
 
 
+# Module-level logger for webhook dispatch telemetry (Phase 3).
+# Configured by lifespan's configure_logging call; emits JSON in prod.
+_dispatch_log = get_logger("main.dispatch", component="webhook_dispatch")
+
+
 # ─── SePay webhook v2 (per-tenant via URL token) ─────────────
 # Phase 2 of C1 cutover: this is the new multi-tenant entry point.
 # Tokens are minted in /start (core/handlers/start.py) and resolved
@@ -106,6 +111,7 @@ async def webhook(request: Request, bg: BackgroundTasks):
 # /webhook below stays alive in parallel until Phase 5 retires it.
 @app.post("/webhooks/sepay/{token}")
 async def webhook_sepay_v2(token: str, request: Request):
+    _dispatch_log.info("sepay.dispatch", path="v2")
     try:
         body = await request.json()
     except Exception:
@@ -226,8 +232,9 @@ async def _process(body: dict):
                 await _handle_callback(body["callback_query"])
             elif "message" in body:
                 await _handle_message(body["message"])
-        # --- SePay webhook ---
+        # --- SePay webhook (LEGACY path; Phase 5 will retire) ---
         else:
+            _dispatch_log.info("sepay.dispatch", path="legacy")
             await handle_sepay_webhook(body)
     except Exception as e:
         import traceback
