@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quy trình Development — MyMoneyWent</title>
+<style>
+:root {
+  --bg: #fafaf9;
+  --card: #ffffff;
+  --primary: #ea580c;
+  --primary-light: #fed7aa;
+  --primary-soft: #fff7ed;
+  --secondary: #1e293b;
+  --text: #334155;
+  --muted: #64748b;
+  --green: #16a34a;
+  --green-light: #dcfce7;
+  --green-soft: #f0fdf4;
+  --red: #dc2626;
+  --red-light: #fee2e2;
+  --blue: #2563eb;
+  --blue-light: #dbeafe;
+  --blue-soft: #eff6ff;
+  --yellow: #ca8a04;
+  --yellow-light: #fef3c7;
+  --yellow-soft: #fefce8;
+  --purple: #7c3aed;
+  --purple-light: #ede9fe;
+  --purple-soft: #faf5ff;
+  --border: #e2e8f0;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.06);
+  --shadow-lg: 0 12px 24px rgba(0,0,0,0.08);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  background: linear-gradient(180deg, #fff7ed 0%, var(--bg) 200px);
+  color: var(--text);
+  line-height: 1.65;
+  padding: 40px 20px 80px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+/* Header */
+header {
+  text-align: center;
+  margin-bottom: 56px;
+  padding: 20px 0;
+}
+
+.eyebrow {
+  display: inline-block;
+  background: var(--primary);
+  color: white;
+  font-size: 0.75em;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 100px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+
+h1 {
+  font-size: 2.6em;
+  color: var(--secondary);
+  margin-bottom: 14px;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.subtitle {
+  font-size: 1.1em;
+  color: var(--muted);
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+/* Section */
+.section {
+  background: var(--card);
+  border-radius: 20px;
+  padding: 44px;
+  margin-bottom: 28px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+}
+
+h2 {
+  font-size: 1.65em;
+  color: var(--secondary);
+  margin-bottom: 6px;
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+h2 .num {
+  background: var(--primary);
+  color: white;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7em;
+  font-weight: 700;
+}
+
+h3 {
+  font-size: 1.2em;
+  color: var(--secondary);
+  margin: 28px 0 14px;
+  font-weight: 600;
+}
+
+.section-intro {
+  color: var(--muted);
+  margin-bottom: 28px;
+  font-size: 1.02em;
+  padding-left: 48px;
+}
+
+/* Opening analogy box */
+.analogy-box {
+  background: var(--primary-soft);
+  border-left: 4px solid var(--primary);
+  border-radius: 12px;
+  padding: 24px 28px;
+  margin-top: 24px;
+}
+
+.analogy-box .label {
+  font-size: 0.8em;
+  font-weight: 700;
+  color: var(--primary);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.analogy-box p {
+  color: var(--secondary);
+  font-size: 1.05em;
+}
+
+/* Concept cards grid */
+.concepts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 16px;
+}
+
+.concept-card {
+  background: var(--bg);
+  border-radius: 14px;
+  padding: 22px;
+  border: 1px solid var(--border);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.concept-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary-light);
+}
+
+.concept-card .icon {
+  font-size: 2em;
+  margin-bottom: 10px;
+  display: block;
+  line-height: 1;
+}
+
+.concept-card h4 {
+  color: var(--primary);
+  margin-bottom: 8px;
+  font-size: 1.08em;
+  font-weight: 600;
+}
+
+.concept-card p {
+  font-size: 0.93em;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+/* Pipeline 4-phase visual */
+.pipeline-4phase {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-top: 28px;
+  position: relative;
+}
+
+.phase {
+  border-radius: 14px;
+  padding: 22px 20px;
+  border: 2px solid;
+  position: relative;
+}
+
+.phase-1 { background: var(--blue-soft); border-color: var(--blue); }
+.phase-2 { background: var(--primary-soft); border-color: var(--primary); }
+.phase-3 { background: var(--yellow-soft); border-color: var(--yellow); }
+.phase-4 { background: var(--green-soft); border-color: var(--green); }
+
+.phase-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.phase-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 0.85em;
+}
+
+.phase-1 .phase-num { background: var(--blue); }
+.phase-2 .phase-num { background: var(--primary); }
+.phase-3 .phase-num { background: var(--yellow); }
+.phase-4 .phase-num { background: var(--green); }
+
+.phase-title {
+  font-weight: 700;
+  color: var(--secondary);
+  font-size: 1.05em;
+}
+
+.phase-icon {
+  font-size: 1.6em;
+  margin-bottom: 12px;
+}
+
+.phase ul {
+  list-style: none;
+  padding: 0;
+}
+
+.phase li {
+  padding: 5px 0;
+  font-size: 0.92em;
+  color: var(--text);
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.phase li::before {
+  content: "▸";
+  color: var(--muted);
+  font-size: 0.9em;
+  margin-top: 1px;
+}
+
+.phase-arrow {
+  position: absolute;
+  right: -14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.4em;
+  color: var(--muted);
+  background: white;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  z-index: 2;
+}
+
+/* SVG container */
+.svg-frame {
+  display: flex;
+  justify-content: center;
+  margin: 32px 0 12px;
+}
+
+.svg-frame svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.svg-caption {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9em;
+  font-style: italic;
+  margin-bottom: 24px;
+}
+
+/* Lane comparison */
+.lanes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  margin-top: 28px;
+}
+
+.lane {
+  border-radius: 14px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-top: 6px solid;
+}
+
+.lane.fast { border-top-color: var(--green); background: var(--green-soft); }
+.lane.standard { border-top-color: var(--blue); background: var(--blue-soft); }
+.lane.foundation { border-top-color: var(--purple); background: var(--purple-soft); }
+
+.lane h4 {
+  font-size: 1.15em;
+  margin-bottom: 4px;
+  color: var(--secondary);
+}
+
+.lane .lane-when {
+  color: var(--muted);
+  font-size: 0.88em;
+  margin-bottom: 16px;
+  font-style: italic;
+}
+
+.lane ul {
+  list-style: none;
+}
+
+.lane li {
+  padding: 6px 0;
+  font-size: 0.92em;
+  color: var(--text);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.lane.fast li::before { content: "✓"; color: var(--green); font-weight: 700; }
+.lane.standard li::before { content: "✓"; color: var(--blue); font-weight: 700; }
+.lane.foundation li::before { content: "✓"; color: var(--purple); font-weight: 700; }
+
+/* Glossary table */
+.glossary-wrapper {
+  overflow-x: auto;
+  margin-top: 16px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+
+th, td {
+  text-align: left;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  background: var(--bg);
+  font-weight: 600;
+  color: var(--secondary);
+  font-size: 0.9em;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+td:first-child {
+  font-weight: 600;
+  color: var(--primary);
+  white-space: nowrap;
+}
+
+tr:last-child td { border-bottom: none; }
+
+/* Callout */
+.callout {
+  background: var(--yellow-soft);
+  border-left: 4px solid var(--yellow);
+  padding: 18px 22px;
+  border-radius: 10px;
+  margin: 24px 0 4px;
+}
+
+.callout .callout-label {
+  font-weight: 700;
+  color: var(--yellow);
+  margin-right: 6px;
+  font-size: 0.85em;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.callout p {
+  color: var(--secondary);
+  font-size: 0.96em;
+}
+
+/* Hard rules list */
+.rules-list {
+  list-style: none;
+  margin-top: 20px;
+}
+
+.rules-list li {
+  padding: 14px 18px;
+  margin-bottom: 10px;
+  background: var(--bg);
+  border-radius: 10px;
+  border-left: 4px solid var(--primary);
+  font-size: 0.97em;
+}
+
+.rules-list li strong {
+  color: var(--secondary);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.rules-list li .reason {
+  color: var(--muted);
+  font-size: 0.9em;
+  font-style: italic;
+}
+
+/* Footer */
+footer {
+  text-align: center;
+  color: var(--muted);
+  margin-top: 56px;
+  padding: 24px 0;
+  border-top: 1px solid var(--border);
+  font-size: 0.88em;
+}
+
+footer a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .pipeline-4phase { grid-template-columns: 1fr 1fr; }
+  .phase-arrow { display: none; }
+  .lanes { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 600px) {
+  body { padding: 20px 12px 40px; }
+  .section { padding: 26px 22px; }
+  h1 { font-size: 1.9em; }
+  h2 { font-size: 1.35em; }
+  .section-intro { padding-left: 0; }
+  .pipeline-4phase { grid-template-columns: 1fr; }
+  .concepts-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <span class="eyebrow">Internal · For Non-Tech</span>
+  <h1>Quy trình Development<br>MyMoneyWent</h1>
+  <p class="subtitle">
+    Từ ý tưởng tới production: cách 1 feature đi qua các giai đoạn spec → code → review → merge → deploy.
+    Tài liệu dành cho PM và những người chưa có background kỹ thuật.
+  </p>
+</header>
+
+<!-- ============================================== -->
+<!-- Section 0: Opening analogy -->
+<!-- ============================================== -->
+<section class="section">
+  <h2><span class="num">0</span>Đầu tiên — hình dung quy trình</h2>
+
+  <div class="analogy-box">
+    <div class="label">Cách dễ hình dung nhất</div>
+    <p>
+      Tưởng tượng dự án là <strong>1 cuốn sách</strong> đang được nhiều người viết cùng lúc. Cuốn sách <strong>đang bán ngoài hiệu sách</strong> không ai dám sửa thẳng vào. Mỗi khi muốn thêm chương, sửa lỗi, viết lại đoạn — phải viết bản nháp riêng, gửi biên tập viên duyệt, có người soát lỗi tự động, rồi mới đưa vào lần in tiếp theo.
+    </p>
+    <p style="margin-top: 10px;">
+      <strong>Git và các khái niệm xoay quanh chính là hệ thống quản lý cái quy trình "nháp → duyệt → xuất bản"</strong> — nhưng cho code thay vì văn bản.
+    </p>
+  </div>
+</section>
+
+<!-- ============================================== -->
+<!-- Section 1: Concepts legend -->
+<!-- ============================================== -->
+<section class="section">
+  <h2><span class="num">1</span>Tám khái niệm cơ bản</h2>
+  <p class="section-intro">Hiểu 8 khái niệm này là đủ để theo dõi mọi cuộc trao đổi với engineer.</p>
+
+  <div class="concepts-grid">
+    <div class="concept-card">
+      <span class="icon">📚</span>
+      <h4>Git</h4>
+      <p>Hệ thống lưu mọi phiên bản của code. Như máy thời gian: quay lại bất kỳ thời điểm nào trong quá khứ. Không bao giờ mất gì.</p>
+    </div>
+
+    <div class="concept-card">
+      <span class="icon">🌳</span>
+      <h4>Main</h4>
+      <p>Bản chính thức đang chạy thực tế cho user. Bất khả xâm phạm — không ai được sửa trực tiếp.</p>
+    </div>
+
+    <div class="concept-card">
+      <span class="icon">🌿</span>
+      <h4>Branch (Nhánh)</h4>
+      <p>Bản copy của dự án để làm việc riêng, không ảnh hưởng main. Mỗi feature = 1 branch.</p>
+    </div>
+
+    <div class="concept-card">
+      <span class="icon">🗂️</span>
+      <h4>Worktree</h4>
+      <p>Nhiều folder làm việc song song trên cùng 1 repo. Cho phép làm 2-3 feature cùng lúc không đụng nhau.</p>
+    </div>
+
+    <div class="concept-card">
+      <span class="icon">💾</span>
+      <h4>Commit</h4>
+      <p>1 mốc lưu trong quá trình code. Như save game — quay lại được bất cứ commit nào.</p>
+    </div>
+
+    <div class="concept-card">
+      <span class="icon">☁️</span>
+      <h4>Push</h4>
+      <p>Đẩy code từ máy lên server (GitHub). Trước push, code chỉ tồn tại trên máy bạn.</p>
+    </div>
+
+    <div class="concept-card">
+      <span class="icon">📝</span>
+      <h4>Pull Request (PR)</h4>
+      <p>Đề nghị merge branch vào main. Như nộp bản nháp cho biên tập viên duyệt.</p>
+    </div>
+
+    <div class="concept-card">
+      <span class="icon">🤖</span>
+      <h4>CI</h4>
+      <p>Robot tự động kiểm tra mỗi PR: test, format, security, kiến trúc. Cờ đỏ = không merge được.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================== -->
+<!-- Section 2: 4-phase pipeline -->
+<!-- ============================================== -->
+<section class="section">
+  <h2><span class="num">2</span>Pipeline đầy đủ — 4 giai đoạn</h2>
+  <p class="section-intro">Đây là cách 1 feature đi từ ý tưởng tới user. Mỗi giai đoạn có vai trò riêng và "cửa kiểm soát" riêng.</p>
+
+  <div class="pipeline-4phase">
+    <div class="phase phase-1">
+      <div class="phase-header">
+        <span class="phase-num">1</span>
+        <span class="phase-title">SPEC</span>
+      </div>
+      <div class="phase-icon">💡</div>
+      <ul>
+        <li>Roadmap</li>
+        <li>Tracker</li>
+        <li>Phase plan</li>
+        <li>Feature spec (FE)</li>
+        <li>Tech spec (BE)</li>
+      </ul>
+      <div class="phase-arrow">→</div>
+    </div>
+
+    <div class="phase phase-2">
+      <div class="phase-header">
+        <span class="phase-num">2</span>
+        <span class="phase-title">CODE</span>
+      </div>
+      <div class="phase-icon">⚙️</div>
+      <ul>
+        <li>Tạo branch</li>
+        <li>Tạo worktree</li>
+        <li>Viết code</li>
+        <li>Commit từng mốc</li>
+        <li>Push lên GitHub</li>
+        <li>Mở PR</li>
+      </ul>
+      <div class="phase-arrow">→</div>
+    </div>
+
+    <div class="phase phase-3">
+      <div class="phase-header">
+        <span class="phase-num">3</span>
+        <span class="phase-title">REVIEW</span>
+      </div>
+      <div class="phase-icon">🔍</div>
+      <ul>
+        <li>CI tự động chạy</li>
+        <li>Cross-model review (Codex)</li>
+        <li>Sửa theo feedback</li>
+        <li>Push lại</li>
+        <li>Lặp tới khi xanh</li>
+      </ul>
+      <div class="phase-arrow">→</div>
+    </div>
+
+    <div class="phase phase-4">
+      <div class="phase-header">
+        <span class="phase-num">4</span>
+        <span class="phase-title">SHIP</span>
+      </div>
+      <div class="phase-icon">🚀</div>
+      <ul>
+        <li>Squash-merge vào main</li>
+        <li>Railway auto-deploy</li>
+        <li>Dashboard rebuild</li>
+        <li>Branch xoá</li>
+        <li>User dùng được</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout">
+    <span class="callout-label">Ghi nhớ:</span>
+    <p style="display: inline;">Mỗi mũi tên giữa 2 giai đoạn là 1 <strong>cửa kiểm soát</strong>. Không qua được cửa thì không sang giai đoạn sau. CI và PR review chính là 2 cửa kiểm soát then chốt giữa CODE và SHIP.</p>
+  </div>
+</section>
+
+<!-- ============================================== -->
+<!-- Section 3: Worktree visual -->
+<!-- ============================================== -->
+<section class="section">
+  <h2><span class="num">3</span>Worktree — chìa khoá làm song song</h2>
+  <p class="section-intro">Cách 1 founder solo có thể chạy 3 cửa sổ Claude Code song song mà không phá nhau.</p>
+
+  <div class="svg-frame">
+    <svg viewBox="0 0 720 440" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Sơ đồ worktree">
+      <defs>
+        <marker id="arrowhead" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+          <polygon points="0 0, 10 4, 0 8" fill="#94a3b8"/>
+        </marker>
+      </defs>
+
+      <!-- Worktree 1 (top-left) -->
+      <rect x="40" y="40" width="200" height="100" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+      <text x="140" y="70" text-anchor="middle" font-weight="700" font-size="14" fill="#1e293b">📁 MyMoneyWent/</text>
+      <text x="140" y="92" text-anchor="middle" font-size="12" fill="#334155">branch: main</text>
+      <text x="140" y="110" text-anchor="middle" font-size="11" fill="#64748b">folder gốc — clean state</text>
+      <text x="140" y="128" text-anchor="middle" font-size="10" fill="#64748b" font-style="italic">session #1</text>
+
+      <!-- Worktree 2 (top-right) -->
+      <rect x="480" y="40" width="200" height="100" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+      <text x="580" y="70" text-anchor="middle" font-weight="700" font-size="14" fill="#1e293b">📁 MyMoneyWent-funding/</text>
+      <text x="580" y="92" text-anchor="middle" font-size="12" fill="#334155">branch: funding-sources</text>
+      <text x="580" y="110" text-anchor="middle" font-size="11" fill="#64748b">đang code feature F08</text>
+      <text x="580" y="128" text-anchor="middle" font-size="10" fill="#64748b" font-style="italic">session #2</text>
+
+      <!-- Worktree 3 (bottom) -->
+      <rect x="260" y="300" width="200" height="100" rx="12" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+      <text x="360" y="330" text-anchor="middle" font-weight="700" font-size="14" fill="#1e293b">📁 MyMoneyWent-entry/</text>
+      <text x="360" y="352" text-anchor="middle" font-size="12" fill="#334155">branch: manual-entry</text>
+      <text x="360" y="370" text-anchor="middle" font-size="11" fill="#64748b">đang code manual input</text>
+      <text x="360" y="388" text-anchor="middle" font-size="10" fill="#64748b" font-style="italic">session #3</text>
+
+      <!-- Central .git repo -->
+      <rect x="290" y="180" width="140" height="80" rx="12" fill="#1e293b"/>
+      <text x="360" y="210" text-anchor="middle" font-weight="700" font-size="15" fill="white">.git/</text>
+      <text x="360" y="230" text-anchor="middle" font-size="11" fill="#94a3b8">repository</text>
+      <text x="360" y="247" text-anchor="middle" font-size="11" fill="#94a3b8">trung tâm</text>
+
+      <!-- Connecting lines -->
+      <line x1="240" y1="120" x2="295" y2="195" stroke="#94a3b8" stroke-width="2" stroke-dasharray="4 3"/>
+      <line x1="480" y1="120" x2="425" y2="195" stroke="#94a3b8" stroke-width="2" stroke-dasharray="4 3"/>
+      <line x1="360" y1="300" x2="360" y2="260" stroke="#94a3b8" stroke-width="2" stroke-dasharray="4 3"/>
+
+      <!-- Labels on lines -->
+      <text x="260" y="165" text-anchor="middle" font-size="10" fill="#64748b" font-style="italic">share</text>
+      <text x="460" y="165" text-anchor="middle" font-size="10" fill="#64748b" font-style="italic">share</text>
+      <text x="380" y="285" font-size="10" fill="#64748b" font-style="italic">share</text>
+    </svg>
+  </div>
+  <p class="svg-caption">3 folder riêng biệt, 3 branch khác nhau, 3 session Claude Code chạy song song — nhưng cùng 1 kho dữ liệu Git phía sau.</p>
+
+  <h3>Tại sao bắt buộc dùng worktree?</h3>
+  <p style="color: var(--text);">Trong project rule "STRICT 1 Claude Code session per <code>.git/</code>" được lock vì <strong>F07 saga đã có 3 sự cố ref-clobber</strong> — 2 session viết đồng thời vào cùng 1 <code>.git/</code> làm refs (con trỏ branch) bị clobber, commit bị "mất" thành dangling.</p>
+  <p style="color: var(--text); margin-top: 10px;">Worktree giải quyết bằng cách cho mỗi session có 1 folder + 1 working tree riêng, nhưng vẫn share kho Git chung. Vừa parallel an toàn vừa không phải clone repo 2 lần.</p>
+</section>
+
+<!-- ============================================== -->
+<!-- Section 4: 3 Lanes by risk -->
+<!-- ============================================== -->
+<section class="section">
+  <h2><span class="num">4</span>3 Lane theo mức rủi ro</h2>
+  <p class="section-intro">Không phải feature nào cũng dùng cùng 1 quy trình. Doc-only change ≠ multi-tenant DB migration.</p>
+
+  <div class="lanes">
+    <div class="lane fast">
+      <h4>🟢 Fast Lane</h4>
+      <div class="lane-when">Cho thay đổi rủi ro thấp</div>
+      <ul>
+        <li>Docs, config, cosmetic</li>
+        <li>Self-review cho phép</li>
+        <li>Spec optional</li>
+        <li>Max 2 round review</li>
+        <li>CI vẫn bắt buộc</li>
+      </ul>
+    </div>
+    <div class="lane standard">
+      <h4>🔵 Standard Lane</h4>
+      <div class="lane-when">Cho feature thông thường (P1)</div>
+      <ul>
+        <li>Spec FE + BE đầy đủ</li>
+        <li>Cross-model review bắt buộc</li>
+        <li>Max 5 round review</li>
+        <li>Manual merge sau approval</li>
+        <li>Test isolation bắt buộc nếu touch DB</li>
+      </ul>
+    </div>
+    <div class="lane foundation">
+      <h4>🟣 Foundation Lane</h4>
+      <div class="lane-when">Cho thay đổi kiến trúc (P0)</div>
+      <ul>
+        <li>Spec chi tiết + ADR</li>
+        <li>Cross-model review + founder approval</li>
+        <li>Max 8 round (founder duyệt sau 5)</li>
+        <li>Không bao giờ auto-merge</li>
+        <li>Sign-off acceptance criteria trong PR body</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================== -->
+<!-- Section 5: Iteration reality -->
+<!-- ============================================== -->
+<section class="section">
+  <h2><span class="num">5</span>Thực tế — vòng lặp, không phải đường thẳng</h2>
+  <p class="section-intro">Pipeline 4 giai đoạn nhìn tuyến tính, nhưng giai đoạn REVIEW thường lặp 2-8 lần trước khi qua được.</p>
+
+  <div class="svg-frame">
+    <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Sơ đồ vòng lặp review">
+      <defs>
+        <marker id="arr2" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+          <polygon points="0 0, 10 4, 0 8" fill="#ea580c"/>
+        </marker>
+        <marker id="arr3" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+          <polygon points="0 0, 10 4, 0 8" fill="#16a34a"/>
+        </marker>
+      </defs>
+
+      <!-- Node: Code -->
+      <rect x="40" y="100" width="130" height="70" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+      <text x="105" y="130" text-anchor="middle" font-weight="700" font-size="14" fill="#1e293b">✏️ Code + Commit</text>
+      <text x="105" y="150" text-anchor="middle" font-size="11" fill="#64748b">local</text>
+
+      <!-- Node: Push -->
+      <rect x="210" y="100" width="130" height="70" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+      <text x="275" y="130" text-anchor="middle" font-weight="700" font-size="14" fill="#1e293b">☁️ Push + PR</text>
+      <text x="275" y="150" text-anchor="middle" font-size="11" fill="#64748b">GitHub</text>
+
+      <!-- Node: CI -->
+      <rect x="380" y="100" width="130" height="70" rx="10" fill="#fefce8" stroke="#ca8a04" stroke-width="2"/>
+      <text x="445" y="130" text-anchor="middle" font-weight="700" font-size="14" fill="#1e293b">🤖 CI + Review</text>
+      <text x="445" y="150" text-anchor="middle" font-size="11" fill="#64748b">tự động + người</text>
+
+      <!-- Node: Merge -->
+      <rect x="550" y="100" width="120" height="70" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+      <text x="610" y="130" text-anchor="middle" font-weight="700" font-size="14" fill="#1e293b">🚀 Merge</text>
+      <text x="610" y="150" text-anchor="middle" font-size="11" fill="#64748b">vào main</text>
+
+      <!-- Arrows forward -->
+      <line x1="170" y1="135" x2="205" y2="135" stroke="#ea580c" stroke-width="2" marker-end="url(#arr2)"/>
+      <line x1="340" y1="135" x2="375" y2="135" stroke="#ea580c" stroke-width="2" marker-end="url(#arr2)"/>
+      <line x1="510" y1="135" x2="545" y2="135" stroke="#16a34a" stroke-width="2" marker-end="url(#arr3)"/>
+
+      <!-- Loop back arrow (CI fail → Code) -->
+      <path d="M 445 170 Q 445 230, 275 230 Q 105 230, 105 175" fill="none" stroke="#dc2626" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arr2)"/>
+      <text x="275" y="252" text-anchor="middle" font-size="12" fill="#dc2626" font-weight="600">CI đỏ / Review request changes → sửa → push lại</text>
+
+      <!-- Loop counter badge -->
+      <circle cx="445" cy="60" r="22" fill="#fef3c7" stroke="#ca8a04" stroke-width="2"/>
+      <text x="445" y="58" text-anchor="middle" font-size="10" fill="#ca8a04" font-weight="700">LẶP</text>
+      <text x="445" y="72" text-anchor="middle" font-size="13" fill="#ca8a04" font-weight="700">2-8×</text>
+    </svg>
+  </div>
+  <p class="svg-caption">Mũi tên cam = forward path. Mũi tên đỏ đứt = quay lại sửa khi CI báo lỗi hoặc review request changes.</p>
+
+  <div class="callout">
+    <span class="callout-label">Ví dụ thực tế:</span>
+    <p style="display: inline;">F07 saga mất <strong>6 session</strong> mới merge xong. F01 mất <strong>8 round review</strong>. Mỗi vòng = feedback báo lỗi → sửa code → push lại → CI chạy lại. Vì vậy CLAUDE.md đặt <strong>MAX_ROUNDS cap</strong> theo lane (Fast 2, Standard 5, Foundation 8) để không loop vô hạn.</p>
+  </div>
+</section>
+
+<!-- ============================================== -->
+<!-- Section 6: Hard rules -->
+<!-- ============================================== -->
+<section class="section">
+  <h2><span class="num">6</span>5 quy tắc cứng quan trọng</h2>
+  <p class="section-intro">Mỗi quy tắc dưới đây sinh ra từ 1 sự cố cụ thể trong quá khứ.</p>
+
+  <ol class="rules-list">
+    <li>
+      <strong>1. STRICT 1 Claude Code session per <code>.git/</code></strong>
+      Mỗi folder Git chỉ 1 session ghi vào tại 1 thời điểm. Muốn parallel thì dùng worktree.
+      <div class="reason">Vết thương: F07 saga có 3 sự cố ref-clobber, commit bị "mất" vì 2 session viết cùng lúc.</div>
+    </li>
+    <li>
+      <strong>2. NEVER auto-delete <code>.md</code> files</strong>
+      Bất kỳ thao tác xoá file docs (checkout --theirs/ours, stash drop, rm) → PAUSE và hỏi founder trước.
+      <div class="reason">Vết thương: <code>/md2html</code> skill từng xoá file <code>.md</code> gốc sau khi convert.</div>
+    </li>
+    <li>
+      <strong>3. Spec-first</strong>
+      Không code trước khi đọc FE spec + BE tech spec. Tìm thấy gap → dừng và update spec.
+      <div class="reason">Code dựa trên giả định → tốn round review để sửa lại theo spec thật.</div>
+    </li>
+    <li>
+      <strong>4. Tenant isolation test bắt buộc</strong>
+      Bất kỳ feature nào động vào DB → bắt buộc có test multi-tenant. Không test → không merge.
+      <div class="reason">Multi-tenant + financial data: 1 lần leak data giữa user là không sửa được.</div>
+    </li>
+    <li>
+      <strong>5. Cross-model review bắt buộc cho P1/P0</strong>
+      Claude Code viết → Codex review. Self-review chỉ cho phép ở Fast Lane.
+      <div class="reason">Self-review có blindspots; cross-model catch được lỗi architectural mà 1 model bỏ qua.</div>
+    </li>
+  </ol>
+</section>
+
+<!-- ============================================== -->
+<!-- Section 7: Glossary table -->
+<!-- ============================================== -->
+<section class="section">
+  <h2><span class="num">7</span>Bảng tra cứu nhanh</h2>
+  <p class="section-intro">Khi engineer dùng những từ này, đây là ý họ.</p>
+
+  <div class="glossary-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Thuật ngữ</th>
+          <th>Ý nghĩa ngắn</th>
+          <th>PM nghe trong câu nào?</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Repo</td>
+          <td>Repository — toàn bộ dự án + lịch sử</td>
+          <td>"Tôi vừa pull repo mới nhất"</td>
+        </tr>
+        <tr>
+          <td>Main</td>
+          <td>Nhánh chính, bản đang chạy production</td>
+          <td>"Đã merge vào main chưa?"</td>
+        </tr>
+        <tr>
+          <td>Branch</td>
+          <td>Nhánh làm việc riêng cho 1 feature</td>
+          <td>"Tôi đang code trên branch funding-sources"</td>
+        </tr>
+        <tr>
+          <td>Worktree</td>
+          <td>Folder thứ 2/3 cho parallel work</td>
+          <td>"Mở worktree riêng cho feature này"</td>
+        </tr>
+        <tr>
+          <td>Commit</td>
+          <td>1 mốc save trong code</td>
+          <td>"PR này gồm 5 commit"</td>
+        </tr>
+        <tr>
+          <td>Push</td>
+          <td>Đẩy code local lên GitHub</td>
+          <td>"Tôi vừa push thêm 1 commit"</td>
+        </tr>
+        <tr>
+          <td>Pull</td>
+          <td>Tải code mới nhất từ GitHub về</td>
+          <td>"Pull main về xem có gì mới"</td>
+        </tr>
+        <tr>
+          <td>PR</td>
+          <td>Pull Request — đề nghị merge vào main</td>
+          <td>"PR đã sẵn sàng review chưa?"</td>
+        </tr>
+        <tr>
+          <td>Squash-merge</td>
+          <td>Gom tất cả commit branch thành 1 commit khi merge</td>
+          <td>"Squash-merged vào main"</td>
+        </tr>
+        <tr>
+          <td>CI</td>
+          <td>Robot kiểm tra tự động khi push/PR</td>
+          <td>"CI đang fail, đợi tôi fix"</td>
+        </tr>
+        <tr>
+          <td>CI xanh / đỏ</td>
+          <td>Pass / fail của robot kiểm tra</td>
+          <td>"CI xanh rồi, mời anh review"</td>
+        </tr>
+        <tr>
+          <td>Review</td>
+          <td>Người (hoặc AI) đọc code đề xuất sửa</td>
+          <td>"PR còn 2 comment chưa resolve"</td>
+        </tr>
+        <tr>
+          <td>Merge conflict</td>
+          <td>2 branch sửa cùng 1 dòng, phải resolve tay</td>
+          <td>"Có conflict với main, đang fix"</td>
+        </tr>
+        <tr>
+          <td>Rebase</td>
+          <td>Sửa lịch sử branch để cập nhật theo main mới</td>
+          <td>"Rebase trước khi merge"</td>
+        </tr>
+        <tr>
+          <td>Deploy</td>
+          <td>Đưa code mới vào server cho user dùng</td>
+          <td>"Đã auto-deploy sau merge"</td>
+        </tr>
+        <tr>
+          <td>Hotfix</td>
+          <td>Fix khẩn cấp đi vòng quy trình thường để vào main nhanh</td>
+          <td>"Cần hotfix bug sepay webhook"</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============================================== -->
+<!-- Section 8: Cheat sheet for PM conversations -->
+<!-- ============================================== -->
+<section class="section">
+  <h2><span class="num">8</span>Cheat sheet cho PM</h2>
+  <p class="section-intro">3 điều nhớ kỹ khi trao đổi với engineer:</p>
+
+  <ol class="rules-list">
+    <li>
+      <strong>Main là bất khả xâm phạm</strong>
+      Không ai sửa trực tiếp, mọi thay đổi đều qua PR. Khi engineer nói "merged chưa" — nghĩa là chỉ khi merged code mới đến tay user.
+    </li>
+    <li>
+      <strong>Branch + Worktree = đường đa làn</strong>
+      Nhiều feature làm song song không đè nhau. Đó là cách 1 founder solo có thể chạy nhiều việc cùng lúc.
+    </li>
+    <li>
+      <strong>PR + CI = 2 cửa kiểm soát chất lượng</strong>
+      PR là review của con người (hoặc Codex), CI là review của robot. Mọi thay đổi vào main đều qua cả 2 cửa. "PR đang chờ CI" = đợi robot; "PR đang chờ review" = đợi người.
+    </li>
+  </ol>
+</section>
+
+<footer>
+  <p><strong>MyMoneyWent · Internal Development Flow</strong></p>
+  <p>Tài liệu nội bộ · Cập nhật 2026-05-17</p>
+  <p style="margin-top: 10px;">Tham khảo chi tiết: <code>docs/operations/fast-quality-workflow.md</code> · <code>docs/operations/development-workflow.md</code></p>
+</footer>
+
+</div>
+</body>
+</html>
