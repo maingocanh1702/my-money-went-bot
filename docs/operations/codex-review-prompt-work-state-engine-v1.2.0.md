@@ -1,20 +1,33 @@
 ---
 title: Codex Review Prompt — Work-State Engine Spec v1.2.0
 purpose: Cross-model review prompt cho dashboard-plan-state-split.md (Foundation Lane P0)
-status: Ready
+status: Completed — historical artifact (review conducted 2026-05-19 → 2026-05-20)
 date: 2026-05-19
+updated: 2026-05-20
 author: Founder + Claude
 review_target:
-  - docs/operations/dashboard-plan-state-split.md (v1.2.0, 1076 lines, SPEC)
+  - docs/operations/dashboard-plan-state-split.md (v1.2.0 at review time → now v1.2.1 Accepted, 1490 lines)
   - docs/operations/linear-and-dashboard-workflow.md (v1.1.0, 654 lines, EXPLAINER context)
-  - docs/operations/walkthrough-foundation-lane-example.md (v1.0.0, 949 lines, EXAMPLE)
+  - docs/operations/walkthrough-foundation-lane-example.md (v1.0.0 at review time → now v1.0.1)
+review_outcome:
+  - Round 1 (2026-05-19): 15 findings (10 MAJOR + 5 MINOR), APPROVE WITH CHANGES → resolved
+  - Round 2 (2026-05-19): 7 findings (4 MAJOR + 3 MINOR), APPROVE WITH CHANGES → resolved (regression cleanup)
+  - Round 3 (2026-05-20): 1 finding (1 MAJOR), APPROVE WITH CHANGES → resolved
+  - Final: Spec v1.2.1 Accepted, founder sign-off 2026-05-20 (per CLAUDE.md hard rule #6)
 ---
 
-# Codex Review Prompt — Work-State Engine Spec v1.2.0
+# Codex Review Prompt — Work-State Engine Spec v1.2.0 (HISTORICAL)
+
+> **⚠️ Historical artifact — review complete.**
+> This prompt was used for Codex cross-model review of spec at version v1.2.0 (2026-05-19).
+> 3 rounds executed, all 23 findings resolved, spec bumped to v1.2.1 + founder sign-off 2026-05-20.
+> Kept for audit trail. Live spec status: `docs/operations/dashboard-plan-state-split.md` §17.
+> For future Codex review of next spec version, create new prompt artifact với version suffix matching.
 
 **Lane:** Foundation / P0
-**Spec status:** Proposed · Awaiting cross-model review
-**MMW hard rule #5:** P0/Foundation requires cross-model review trước founder approval
+**Spec status (at review time):** Proposed · Awaiting cross-model review
+**Spec status (current):** Accepted (Founder sign-off 2026-05-20, v1.2.1)
+**MMW hard rule #5:** P0/Foundation requires cross-model review trước founder approval — ✓ fulfilled
 
 ---
 
