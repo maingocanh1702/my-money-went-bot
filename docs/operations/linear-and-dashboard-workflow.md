@@ -1,7 +1,7 @@
 ---
 title: Linear ↔ Dashboard — Work Tracking Layering
 status: Explainer
-version: v1.0.1
+version: v1.1.0
 date: 2026-05-19
 author: Founder + Claude
 related:
@@ -14,18 +14,18 @@ related:
 # Linear ↔ Dashboard — Work Tracking Layering
 
 > **Status:** Explainer · Active
-> **Version:** v1.0.1
+> **Version:** v1.1.0
 > **Ngày tạo:** 2026-05-19
 > **Cập nhật:** 2026-05-19
-> **Mục đích:** Giải thích chi tiết quan hệ giữa Linear (track ở mức task/feature) và MMW dashboard (track ở mức branch/PR/commit/CI/deploy) — đây là 2 view của cùng 1 work item, link qua MMW-NNN ID convention, không phải 2 hệ thống cạnh tranh nhau.
+> **Mục đích:** Giải thích chi tiết quan hệ giữa Linear (intent/planning layer) và MMW dashboard/work-state engine (artifact-derived reality layer) — đây là 2 view của cùng 1 work item, link qua MMW-NNN ID convention, không phải 2 hệ thống cạnh tranh nhau.
 
 ---
 
 ## TL;DR
 
-Linear và MMW dashboard tracking **không tách rời** — 2 view của **cùng 1 work item** ở 2 độ granularity khác nhau. Linear nhìn ở mức **semantic intent** (task, AC, discussion, sprint); dashboard nhìn ở mức **artifact reality** (branch, PR, commit, CI run, deploy). Link giữa 2 view = **MMW-NNN Linear ticket ID** xuất hiện ở 3 chỗ enforce bởi convention: branch name (`feat/MMW-NNN-slug`), PR body (`Closes MMW-NNN`), tracker row (`linear_id: MMW-NNN`).
+Linear và MMW dashboard tracking **không tách rời** — 2 view của **cùng 1 work item** ở 2 độ granularity khác nhau. Linear nhìn ở mức **semantic intent** (task, AC, discussion, sprint); dashboard/work-state engine nhìn ở mức **artifact reality** (branch, PR, commit, CI run, deploy). Link giữa 2 view = **MMW-NNN Linear ticket ID** xuất hiện ở 3 chỗ enforce bởi convention: branch name (`feat/MMW-NNN-slug`), PR body (`Closes MMW-NNN`), tracker row (`linear_id: MMW-NNN`).
 
-Hiện tại (pre-Phase 3 của `dashboard-plan-state-split.md`), 3 nguồn "status" parallel — Linear status, tracker.md status, dashboard render — có thể drift do tất cả manual. Sau Phase 3, dashboard engine derive status từ artifacts → authoritative; Linear giữ vai trò complementary (planning + discussion + stakeholder), không phải competing source of truth.
+Hiện tại (pre-Phase 3 của `dashboard-plan-state-split.md`), 3 nguồn "status" parallel — Linear status, tracker.md status, dashboard render — có thể drift do tất cả manual. Sau Phase 3, dashboard engine derive status từ artifacts → **artifact-derived authoritative state**; Linear giữ vai trò complementary (planning + discussion + stakeholder), không phải competing source of truth.
 
 ---
 
@@ -60,6 +60,15 @@ Cốt lõi: **work item** là đơn vị logic duy nhất xuyên suốt cả Lin
 ```
 
 **Quy tắc đơn giản**: nếu thông tin trả lời "what/why/who/when do we want this?" → Linear lo. Nếu thông tin trả lời "where is this in artifact reality right now?" → dashboard lo.
+
+Short version:
+
+```txt
+Human defines intent.
+Engine derives reality.
+```
+
+Linear can own planning/status labels for human collaboration, but execution truth comes from Git/GitHub/CI/deploy artifacts.
 
 ---
 
@@ -497,7 +506,7 @@ Dashboard projection
 
 ---
 
-### Option B — Linear là projection (engine push to Linear)
+### Option B — Linear là projection (engine push to Linear, one-way)
 
 ```txt
 tracker.md (plan source, unchanged)
@@ -519,7 +528,7 @@ Linear API update ticket status (1-way)
 - Risk: API write loop nếu Linear's own GitHub integration cũng fire
 - Engine phải handle Linear-side rate limit
 
-**Khi nào activate**: founder muốn Linear ticket status reflect artifact reality cho stakeholder, không cần Linear thành plan source.
+**Khi nào activate**: founder muốn Linear ticket status reflect artifact reality cho stakeholder, không cần Linear thành plan source. Nếu sync sau này, prefer **Engine → Linear one-way** trước; tránh bidirectional sync hoặc để Linear override artifact-derived state.
 
 ---
 
@@ -556,7 +565,7 @@ Dashboard (authoritative)           Linear UI (best-effort)
 ## 10. Decision guide — when to use which tool
 
 ### "Cần xem status hiện tại của feature X"
-→ **Dashboard**. Authoritative source.
+→ **Dashboard/work-state engine**. Artifact-derived authoritative state.
 
 ### "Cần plan feature mới — write AC, set priority"
 → **Linear** (ticket) + **spec doc** (chi tiết AC). Tracker.md row link cả 2.
@@ -640,5 +649,6 @@ Founder decision call. Memory chưa lock decision này — open question cho roa
 
 | Version | Date | Author | Notes |
 |---------|------|--------|-------|
+| v1.1.0 | 2026-05-19 | Founder + Claude | Integrated artifact-driven workflow wording: Linear as intent/planning layer, dashboard/work-state engine as artifact-derived reality layer, and clarified Engine → Linear one-way sync preference if sync is activated later. |
 | v1.0.1 | 2026-05-19 | Founder + Claude | Hardening pass: aligned branch examples/exemptions with `pr-validate.yml`, softened drift claim to account for artifact mapping drift, and clarified Phase 1 wording. |
 | v1.0.0 | 2026-05-19 | Founder + Claude | Initial explainer. Describes Linear ↔ dashboard layering, link mechanism, hierarchy, current vs future state, role separation, end-to-end walkthrough, edge cases, Phase 4 sync options, decision guide. |

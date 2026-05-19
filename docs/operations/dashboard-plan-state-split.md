@@ -1,7 +1,7 @@
 ---
 title: Dashboard Plan/State Split — Auto-Progress Work Engine Design
 status: Proposed
-version: v1.1.1
+version: v1.2.0
 date: 2026-05-19
 updated: 2026-05-19
 author: Founder + Claude
@@ -15,10 +15,10 @@ related:
 # Dashboard Plan/State Split — Auto-Progress Work Engine Design
 
 > **Status:** Proposed · Awaiting cross-model review (Codex) + founder approval
-> **Version:** v1.1.1
+> **Version:** v1.2.0
 > **Ngày tạo:** 2026-05-19
 > **Cập nhật:** 2026-05-19
-> **Mục đích:** Tách plan/state để xây foundation cho một **Linear/Jira-like work tracker có progress tự update từ trigger/artifact**, không chỉ sửa dashboard. Dashboard là projection đầu tiên; core asset là work-item schema + signal collectors + event engine + progress model.
+> **Mục đích:** Tách plan/state để xây foundation cho một **Linear/Jira-like work tracker có progress tự update từ trigger/artifact**, không chỉ sửa dashboard. Dashboard là projection đầu tiên; core asset là work-item schema + signal collectors + event engine + progress model — tạo ra **artifact-derived authoritative state**.
 
 ---
 
@@ -48,7 +48,9 @@ Projections
   dashboard.html / dashboard.json / kanban board / weekly review / Linear sync
 ```
 
-Sau migration, founder **không edit status/progress bằng tay nữa**. Manual fields vẫn tồn tại cho planning: priority, lane, owner, deadline, dependencies, decision_needed, external_blockers, acceptance criteria. Auto fields được derive: status, progress %, PR state, review state, CI state, deploy state, staleness, activity.
+Sau migration, founder **không edit status/progress bằng tay nữa**. Manual fields vẫn tồn tại cho planning: priority, lane, owner, deadline, dependencies, decision_needed, external_blockers, acceptance criteria. Auto fields được derive: status, progress %, PR state, review state, CI state, deploy state, staleness, activity, runtime urgency.
+
+Core thesis: **humans define intent; engine derives reality**. State trở thành **artifact-derived authoritative state** — authoritative vì nó được derive từ Git/GitHub/CI/deploy artifacts, không vì một người kéo status column.
 
 Important nuance: **manual status drift is eliminated by design**, nhưng artifact mapping drift vẫn có thể xảy ra và phải được surfaced bằng warnings (`missing_spec`, `branch_not_found`, `unknown_pr`, `stale-cache`). Không tuyên bố “drift impossible” tuyệt đối.
 
@@ -94,6 +96,36 @@ scripts/work_state/
 ```
 
 `build-dashboard.py` becomes orchestration/projection code, not the owner of truth.
+
+---
+
+## 0.1 Intent vs Reality
+
+### Intent layer — what humans want to happen
+
+Managed by Linear, tracker/spec docs, and founder decisions. Examples:
+
+- roadmap placement
+- business priority
+- risk tier / lane
+- acceptance criteria
+- owner / deadline
+- sprint/cycle planning
+- dependencies and external blockers
+
+### Reality layer — what engineering artifacts prove happened
+
+Managed by Git, GitHub, CI, Railway/deploy signals, and the work-state engine. Examples:
+
+- spec file exists
+- branch exists
+- commits pushed
+- PR opened
+- review state changed
+- CI passed/failed
+- deploy succeeded/failed
+
+Rule: humans define **intent**; engine derives **reality**. Manual drag-and-drop can annotate planning, but cannot be source of truth for execution state.
 
 ---
 
@@ -190,6 +222,7 @@ Linear có thể trở thành plan source hoặc projection sau này. Không ph�
 | `ci_state` | derived | GitHub Checks/Actions | Required workflows only |
 | `deploy_state` | derived/unknown-safe | Railway/git deploy source | Phase 1 may be heuristic |
 | `staleness` | derived overlay | event engine | PR age/no activity |
+| `runtime_urgency` | derived | urgency model | Operational attention: normal/warning/elevated/critical |
 | `activity` | derived | events log | Last event timestamp/source |
 | `manual_state_override` | manual escape hatch | plan source | Rare, expiry required, surfaced clearly |
 
@@ -313,8 +346,9 @@ Aggregation rule v1:
 | Review state | GitHub PR reviews | Review system |
 | CI state | GitHub Checks/required workflows | CI system |
 | Deploy state | Railway/API/git deploy source | Deploy target; unknown-safe |
-| Current status | state engine | Function of signals/events |
+| Current status | state engine | Artifact-derived authoritative state from signals/events |
 | Progress % | progress model | Function of status + work type |
+| Runtime urgency | urgency model | Function of overlays, failure severity, priority/risk context |
 
 Manual status drift is eliminated. Artifact mapping drift is detectable via warnings and unknown states.
 
@@ -520,6 +554,42 @@ Invalidation rules:
 
 ## 8. Status state machine
 
+Internal machine state stays detailed. Human-facing dashboard can render a simpler projection on top.
+
+### 8.0 Human status projection
+
+Dashboard cards should render:
+
+```txt
+HIGH_LEVEL_STATUS · machine_state
+```
+
+Examples:
+
+```txt
+TODO · tech-ready
+IN_PROGRESS · pr-opened
+WAITING · review-requested
+FAILING · ci-failing
+DONE · deployed
+UNKNOWN · github-api-unknown
+```
+
+Recommended v1 projection:
+
+| Human status | Machine state / overlay |
+|---|---|
+| `BACKLOG` | planned item with no spec/branch artifacts yet |
+| `TODO` | `spec-only`, `tech-ready` |
+| `IN_PROGRESS` | `branch-created`, `in-progress`, `in-review`, `approved-pending-merge` |
+| `WAITING` | `review-requested`, `deploying`, stale waiting states |
+| `FAILING` | `ci-failing`, `deploy-failed` overlays |
+| `BLOCKED` | explicit `blocked` overlay |
+| `DONE` | `deployed`; for docs/research/no-deploy work, terminal merged/released artifact |
+| `UNKNOWN` | `unknown`, `artifact-drift`, unresolved API/cache state |
+
+Do not replace internal machine states with this projection. Projection is for UI readability; machine state remains the actionable detail.
+
 ### 8.1 Base status
 
 Derived status, first-match priority:
@@ -665,6 +735,31 @@ Anti-pattern cần tránh: recalibrate trước khi có data thực sự. V1 wei
 
 ---
 
+## 9.4 Runtime urgency model
+
+`runtime_urgency` is derived operational attention. It is **not** business priority and **not** risk tier.
+
+```txt
+priority        = roadmap/business importance (manual)
+risk_tier       = process/safety strictness (manual/inferred)
+runtime_urgency = operational attention needed now (derived)
+```
+
+Recommended v1 values:
+
+| Runtime urgency | Derived condition examples |
+|---|---|
+| `critical` | deploy failed on main/prod; security P0 failing CI after merge; production artifact unknown for deployed feature |
+| `elevated` | blocked P0/P1 work; required CI failing on active PR; PR approved but stale before merge |
+| `warning` | stale PR > threshold; cache warmup/unknown signal on active work; artifact-drift warnings |
+| `normal` | no active warning/failure overlays |
+
+Dashboard should sort/flag by `runtime_urgency` separately from `priority`. A P2 item can be `critical` if deploy failed; a P0 item can be `normal` if it is progressing cleanly.
+
+Progress changes from **artifact/workflow events**, not manual status drag-and-drop. Examples include spec created, branch created, commit pushed, PR opened, CI passed, review approved, founder sign-off, merged, deployed.
+
+---
+
 ## 10. Implementation plan
 
 Migration is phased. No big-bang.
@@ -801,7 +896,9 @@ class Signals:
 class CurrentState:
     item_id: str
     status: str
+    human_status: str
     progress: int
+    runtime_urgency: str
     overlays: list[str]
     signals: Signals
     last_event_ts: str | None
@@ -877,6 +974,8 @@ Anti-loop guard stays mandatory.
 - [ ] **AC9** — Deploy signal can be `unknown`; engine remains useful without Railway API.
 - [ ] **AC10** — Overlays implemented separately from base status: `blocked`, `stale`, `ci-failing`, `unknown`, `artifact-drift`, `partial-progress`, `stale-cache`, `cache-warmup`, `manual-override`.
 - [ ] **AC11** — Progress profile exists for at least `standard_feature`, `docs_only`, `foundation_change`, `dashboard_engine`.
+- [ ] **AC11a** — Human status projection exists (`BACKLOG`, `TODO`, `IN_PROGRESS`, `WAITING`, `FAILING`, `BLOCKED`, `DONE`, `UNKNOWN`) and renders as `HIGH_LEVEL · machine_state` without replacing machine state.
+- [ ] **AC11b** — `runtime_urgency` derived field exists (`normal`, `warning`, `elevated`, `critical`) and is distinct from `priority` and `risk_tier`.
 - [ ] **AC12** — Unit tests cover state transitions and edge cases: PR closed unmerged, branch deleted after merge, squash merge/PR cache, API unavailable, missing spec links, CI fail, stale PR, manual override expiry.
 - [ ] **AC13** — `.github/workflows/dashboard.yml` triggers on PR, review, CI completion, main push, schedule, manual dispatch.
 - [ ] **AC14** — `dashboard-realtime-explained.md` updated with work-state engine architecture.
@@ -971,6 +1070,7 @@ Lane: **Foundation Lane / P0** because this changes dashboard pipeline, tracker 
 
 | Version | Date | Author | Notes |
 |---|---|---|---|
+| v1.2.0 | 2026-05-19 | Founder + Claude | Integrated artifact-driven workflow feedback: added Intent vs Reality framing, artifact-derived authoritative state wording, human status projection, runtime urgency model, and clarified progress changes come from artifact/workflow events. |
 | v1.1.1 | 2026-05-19 | Founder + Claude | Hardening pass: added CI/runtime state persistence strategy, cache-warmup/stale-cache overlays, CLI module path consistency, required-check config source, and separated priority vs risk_tier vs lane. |
 | v1.1.0 | 2026-05-19 | Founder + Claude | Expanded from dashboard plan/state split into auto-progress work engine. Added WorkItem schema, manual-vs-derived boundary, event log, progress profiles, projections, robust PR/CI/deploy handling, overlays, migration gates, and Linear/Jira-like future path. |
 | v1.0.0 | 2026-05-19 | Founder + Claude | Initial proposal. Status: Proposed. Awaiting Codex review + founder sign-off. |
