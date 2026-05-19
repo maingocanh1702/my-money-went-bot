@@ -1,6 +1,6 @@
 ---
 title: Dashboard Plan/State Split — Auto-Progress Work Engine Design
-status: Proposed · Codex-approved · Awaiting founder sign-off
+status: Accepted (Founder sign-off 2026-05-20)
 version: v1.2.1
 date: 2026-05-19
 updated: 2026-05-20
@@ -14,7 +14,7 @@ related:
 
 # Dashboard Plan/State Split — Auto-Progress Work Engine Design
 
-> **Status:** Proposed · Codex-approved (3 rounds) · Awaiting founder sign-off
+> **Status:** **Accepted** (Founder sign-off 2026-05-20) · Codex-approved (3 rounds, 23 findings)
 > **Version:** v1.2.1
 > **Ngày tạo:** 2026-05-19
 > **Cập nhật:** 2026-05-20
@@ -1416,11 +1416,74 @@ Lane: **Foundation Lane / P0** because this changes dashboard pipeline, tracker 
 
 ---
 
+## 17. Approval history
+
+### Codex cross-model review (3 rounds, 2026-05-19 → 2026-05-20)
+
+Per CLAUDE.md hard rule #5: Foundation Lane (P0) requires cross-model review before founder approval.
+
+- **Round 1** (2026-05-19): 15 findings — 0 BLOCKER, 10 MAJOR, 5 MINOR. Verdict: **APPROVE WITH CHANGES**.
+- **Round 2** (2026-05-19): 7 findings — 0 BLOCKER, 4 MAJOR, 3 MINOR (regression cleanup from round 1 fixes). Verdict: **APPROVE WITH CHANGES**.
+- **Round 3** (2026-05-20): 1 finding — 0 BLOCKER, 1 MAJOR, 0 MINOR (`convention_drift` mapping consistency). Verdict: **APPROVE WITH CHANGES** → resolved.
+
+Total: 23 findings addressed in-session per memory rule `feedback_spec_versioning.md` (no version bump mid-review).
+
+Round counter: 3/8 used (Foundation cap 8). Converged trong realistic range per memory `feedback_f07_lessons.md` (3-4 round expected).
+
+### Founder sign-off — 2026-05-20
+
+Per Foundation Lane / P0 gate (CLAUDE.md hard rule #6: "Foundation Lane never auto-merges — founder approval = manual squash + sign-off in PR body confirming acceptance criteria / blast radius / gates / known tradeoffs"):
+
+**AC**: 30 ACs defined (AC1a-AC1g, AC2-AC11, AC11a-AC11e, AC12-AC25). Each verifiable independently. Implementation phases reference specific ACs.
+
+**Cross-model review**: Codex 3 rounds complete (15 + 7 + 1 = 23 findings), all addressed. Verdict APPROVE per round 3.
+
+**Blast radius**:
+- Doc-only at spec stage (1426 lines + 30 ACs + supporting examples)
+- Engine implementation Phase 1 sẽ có separate blast radius assessment per PR
+- Migration Phase 3 (remove manual status) gated by 2-week stability metric per AC15
+- No production code touched ở stage này; engine code = new modules trong `scripts/work_state/`
+
+**Known tradeoffs**:
+- V1 progress weights heuristic — calibration plan §9.3 after 4 weeks shadow data
+- Railway deploy signal accepts `unknown` (Phase 1 acceptable per AC9)
+- Linear sync deferred Phase 4 (NG1) — solo founder + tracker.md plan source sufficient v1
+- Multi-PR aggregation MIN-progressed default — split recommended for independent PRs (§4.1)
+- CI cache key strategy single-runner serialized via existing `concurrency: dashboard-rebuild` group — no multi-runner race handling v1
+- Foundation milestone signals (codex-approved label, founder sign-off marker) require future convention adoption — Phase 1 implementation phải document trong PR conventions
+
+**Migration reversibility**: §15 rollback runbook covers 8-step recovery:
+1. Tag pre-migration state
+2. Verify migration commit range via `git log`
+3. Revert range
+4. Restore tracker .bak
+5. Regenerate dashboard outputs via `build-dashboard.py` overwrite (no `.md` deletion per hard rule #2)
+6. Bump `CACHE_SCHEMA_VERSION` to invalidate `.dashboard/`
+7. Re-deploy to main
+8. Optional: clean stale GH cache via `gh cache delete`
+
+**Test coverage** (5-category plan per Wave 0 lessons memory `feedback_wave0_lessons.md`):
+1. Bootstrap unit: AC11c (foundation_change signals detection)
+2. DB lookup unit: N/A (engine không persist to DB)
+3. Decorator/interface: AC11d (multi-branch matrix), AC11e (event dedup per type)
+4. Tenant isolation: N/A (spec stage; engine implementation sẽ enforce via existing CI gates)
+5. Migration reversibility: AC22 (full rollback runbook covers)
+
+Plus AC12 covers state transitions + edge cases (PR closed unmerged, branch deleted after merge, squash merge cache, API unavailable, missing spec links, CI fail, deploy fail post-merge, stale PR, manual override expiry, multi-branch compound states).
+
+**Approved for implementation.** Phase 0 (tracker audit) can start immediately. Phase 1 implementation opens new Linear ticket `MMW-NNN` cho engine code work, follows `walkthrough-foundation-lane-example.md` Foundation Lane template.
+
+Spec status transition: **Proposed → Accepted (2026-05-20)**.
+
+— Founder, 2026-05-20
+
+---
+
 ## Changelog
 
 | Version | Date | Author | Notes |
 |---|---|---|---|
-| v1.2.1 | 2026-05-20 | Founder + Claude | Codex cross-model review consolidated (3 rounds, 23 findings total addressed). Round 1: 15 findings (10 MAJOR + 5 MINOR) — linear_id field, deploy-failed overlay, canonical overlay enum, multi-branch lattice, runtime urgency deterministic algorithm, per-event-type dedup, CI cache key strategy, force-pr-resolve as CLI, foundation_change milestone signals, critical misclassification defined, spec move detection, phase rollup counts, exempt branch behavior, Phase 1 estimate revised 5-7 days, rollback runbook completeness. Round 2: 7 findings (4 MAJOR + 3 MINOR) — AC10 "mirror exactly" softened, P2 blocked → warning fallback, §8.0 explicit mappings for changes-requested/merged/abandoned (new ABANDONED bucket), §8.2.1 naming convention (kebab overlays vs snake warnings), partial-progress wording tightened, AC9a typo, rollback hard-rule #2 guard. Round 3: 1 finding (1 MAJOR) — convention_drift info-only consistency. 30 ACs (added AC11c-AC11e, AC19-AC25). 1076 → 1426 lines (+32%). Verdict: APPROVE WITH CHANGES → all resolved → ready for v1.2.1 + Foundation Lane founder sign-off. |
+| v1.2.1 | 2026-05-20 | Founder + Claude | Codex cross-model review consolidated (3 rounds, 23 findings total addressed). Round 1: 15 findings (10 MAJOR + 5 MINOR) — linear_id field, deploy-failed overlay, canonical overlay enum, multi-branch lattice, runtime urgency deterministic algorithm, per-event-type dedup, CI cache key strategy, force-pr-resolve as CLI, foundation_change milestone signals, critical misclassification defined, spec move detection, phase rollup counts, exempt branch behavior, Phase 1 estimate revised 5-7 days, rollback runbook completeness. Round 2: 7 findings (4 MAJOR + 3 MINOR) — AC10 "mirror exactly" softened, P2 blocked → warning fallback, §8.0 explicit mappings for changes-requested/merged/abandoned (new ABANDONED bucket), §8.2.1 naming convention (kebab overlays vs snake warnings), partial-progress wording tightened, AC9a typo, rollback hard-rule #2 guard. Round 3: 1 finding (1 MAJOR) — convention_drift info-only consistency. 30 ACs (added AC11c-AC11e, AC19-AC25). 1076 → 1426 lines (+32%). Verdict: APPROVE WITH CHANGES → all resolved → Founder sign-off 2026-05-20 → Status: **Accepted**. |
 | v1.2.0 | 2026-05-19 | Founder + Claude | Integrated artifact-driven workflow feedback: added Intent vs Reality framing, artifact-derived authoritative state wording, human status projection, runtime urgency model, and clarified progress changes come from artifact/workflow events. |
 | v1.1.1 | 2026-05-19 | Founder + Claude | Hardening pass: added CI/runtime state persistence strategy, cache-warmup/stale-cache overlays, CLI module path consistency, required-check config source, and separated priority vs risk_tier vs lane. |
 | v1.1.0 | 2026-05-19 | Founder + Claude | Expanded from dashboard plan/state split into auto-progress work engine. Added WorkItem schema, manual-vs-derived boundary, event log, progress profiles, projections, robust PR/CI/deploy handling, overlays, migration gates, and Linear/Jira-like future path. |
