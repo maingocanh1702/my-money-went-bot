@@ -17,13 +17,13 @@ related:
 > **Version:** v1.1.0
 > **Ngày tạo:** 2026-05-19
 > **Cập nhật:** 2026-05-19
-> **Mục đích:** Giải thích chi tiết quan hệ giữa Linear (intent/planning layer) và MMW dashboard/work-state engine (artifact-derived reality layer) — đây là 2 view của cùng 1 work item, link qua MMW-NNN ID convention, không phải 2 hệ thống cạnh tranh nhau.
+> **Mục đích:** Giải thích chi tiết quan hệ giữa Linear (intent/planning layer) và MMW dashboard/work-state engine (artifact-derived reality layer) — đây là 2 view của cùng 1 work item, link qua MYM-NNN ID convention, không phải 2 hệ thống cạnh tranh nhau.
 
 ---
 
 ## TL;DR
 
-Linear và MMW dashboard tracking **không tách rời** — 2 view của **cùng 1 work item** ở 2 độ granularity khác nhau. Linear nhìn ở mức **semantic intent** (task, AC, discussion, sprint); dashboard/work-state engine nhìn ở mức **artifact reality** (branch, PR, commit, CI run, deploy). Link giữa 2 view = **MMW-NNN Linear ticket ID** xuất hiện ở 3 chỗ enforce bởi convention: branch name (`feat/MMW-NNN-slug`), PR body (`Closes MMW-NNN`), tracker row (`linear_id: MMW-NNN`).
+Linear và MMW dashboard tracking **không tách rời** — 2 view của **cùng 1 work item** ở 2 độ granularity khác nhau. Linear nhìn ở mức **semantic intent** (task, AC, discussion, sprint); dashboard/work-state engine nhìn ở mức **artifact reality** (branch, PR, commit, CI run, deploy). Link giữa 2 view = **MYM-NNN Linear ticket ID** xuất hiện ở 3 chỗ enforce bởi convention: branch name (`feat/MYM-NNN-slug`), PR body (`Closes MYM-NNN`), tracker row (`linear_id: MYM-NNN`).
 
 Hiện tại (pre-Phase 3 của `dashboard-plan-state-split.md`), 3 nguồn "status" parallel — Linear status, tracker.md status, dashboard render — có thể drift do tất cả manual. Sau Phase 3, dashboard engine derive status từ artifacts → **artifact-derived authoritative state**; Linear giữ vai trò complementary (planning + discussion + stakeholder), không phải competing source of truth.
 
@@ -35,7 +35,7 @@ Cốt lõi: **work item** là đơn vị logic duy nhất xuyên suốt cả Lin
 
 ```txt
                     WORK ITEM (logical unit)
-                    ID anchor: MMW-108
+                    ID anchor: MYM-108
                     Feature: funding-sources
                             │
             ┌───────────────┴───────────────┐
@@ -78,25 +78,25 @@ Linear can own planning/status labels for human collaboration, but execution tru
 
 ### 2.1 Branch naming
 
-Convention: `<type>/MMW-<NNN>-<slug>` với type ∈ {feat, fix, chore, refactor, docs, infra, test}.
+Convention: `<type>/MYM-<NNN>-<slug>` với type ∈ {feat, fix, chore, refactor, docs, infra, test}.
 
 Examples:
-- `feat/MMW-108-funding-sources`
-- `fix/MMW-203-webhook-dedup`
-- `infra/MMW-602-railway-deploy`
+- `feat/MYM-108-funding-sources`
+- `fix/MYM-203-webhook-dedup`
+- `infra/MYM-602-railway-deploy`
 
 Enforcement: `.github/workflows/pr-validate.yml` regex check — branch nào không match sẽ block PR.
 
 Exempt list hiện tại trong `.github/workflows/pr-validate.yml`: `W0.*`, `Wave-*`, `hotfix/*`, `release/*`, `fix/*`, `feat/c1-*`, `chore/*`.
 
-Note: `fix/*`, `feat/c1-*`, `chore/*` là legacy/security-plan exemptions. New planned work vẫn nên dùng `MMW-NNN` convention để Linear/dashboard link bền.
+Note: `fix/*`, `feat/c1-*`, `chore/*` là legacy/security-plan exemptions. New planned work vẫn nên dùng `MYM-NNN` convention để Linear/dashboard link bền.
 
 ### 2.2 PR body reference
 
 Convention: PR body phải chứa ít nhất 1 trong các cụm:
-- `Closes MMW-NNN`
-- `Fixes MMW-NNN`
-- `Ref MMW-NNN`
+- `Closes MYM-NNN`
+- `Fixes MYM-NNN`
+- `Ref MYM-NNN`
 - `Linear: N/A` (exempt cho ad-hoc/hotfix)
 
 Enforcement: cùng `pr-validate.yml` workflow check PR body.
@@ -110,12 +110,12 @@ Mỗi row trong `docs/implementation-tracker.md` có column `linear_id`:
 ```markdown
 | feature_id | name | linear_id | branches | ... |
 |---|---|---|---|---|
-| funding-sources | Funding sources resolver | MMW-108 | feat/MMW-108-funding-sources | ... |
+| funding-sources | Funding sources resolver | MYM-108 | feat/MYM-108-funding-sources | ... |
 ```
 
 Enforcement: `plan_reader.py` (proposed) warn nếu row có branch nhưng thiếu linear_id, hoặc ngược lại.
 
-**3 chỗ trên cùng đeo "MMW-108"** → engine biết PR/branch/commit nào thuộc về work item nào. Đây là bộ ba enforce link.
+**3 chỗ trên cùng đeo "MYM-108"** → engine biết PR/branch/commit nào thuộc về work item nào. Đây là bộ ba enforce link.
 
 ---
 
@@ -123,7 +123,7 @@ Enforcement: `plan_reader.py` (proposed) warn nếu row có branch nhưng thiế
 
 ```txt
 ┌─────────────────────────────────────────────────────────┐
-│ 1 Linear ticket (MMW-108)                                │
+│ 1 Linear ticket (MYM-108)                                │
 │ ─ Title, AC, priority, sprint                            │
 │ ─ Discussion thread                                      │
 │ ─ Status (Backlog/Todo/In Progress/Done)                 │
@@ -132,7 +132,7 @@ Enforcement: `plan_reader.py` (proposed) warn nếu row có branch nhưng thiế
                             ▼
 ┌─────────────────────────────────────────────────────────┐
 │ 1+ Git branches                                          │
-│ ─ Naming: feat/MMW-108-funding-sources                   │
+│ ─ Naming: feat/MYM-108-funding-sources                   │
 │ ─ Tracked by tracker.md branches[] field                 │
 │ ─ Local + remote (origin)                                │
 └───────────────────────────┬─────────────────────────────┘
@@ -142,7 +142,7 @@ Enforcement: `plan_reader.py` (proposed) warn nếu row có branch nhưng thiế
 │ 1+ GitHub Pull Requests                                  │
 │ ─ State: draft / open / merged / closed                  │
 │ ─ Reviews: pending / approved / changes-requested        │
-│ ─ Body: "Closes MMW-108" reference                       │
+│ ─ Body: "Closes MYM-108" reference                       │
 └───────────────────────────┬─────────────────────────────┘
                             │  1:N
                             ▼
@@ -198,7 +198,7 @@ Trước khi `dashboard-plan-state-split.md` migrate xong, có **3 nguồn statu
 └────────────────────────────────────────────────────┘
 ```
 
-Hệ quả thực tế: PR `feat/MMW-108-funding-sources` merged 2 ngày trước, nhưng:
+Hệ quả thực tế: PR `feat/MYM-108-funding-sources` merged 2 ngày trước, nhưng:
 - Linear ticket vẫn ở column "In Progress"
 - tracker.md row vẫn `🔄 In progress`
 - Dashboard vẫn render "In progress" badge
@@ -292,14 +292,14 @@ Founder mở Linear, create ticket:
   - FS resolved before any transaction INSERT
   - Tenant isolation tests pass
 
-Linear auto-assign ID: **MMW-108**. Ticket vào column "Backlog".
+Linear auto-assign ID: **MYM-108**. Ticket vào column "Backlog".
 
 ### Step 2 — Spec writing (tracker + spec docs, manual)
 
 Founder edit `docs/implementation-tracker.md` thêm row:
 
 ```markdown
-| funding-sources | Funding sources resolver | MMW-108 | feat/MMW-108-funding-sources | P1 | Foundation | docs/features/feature-funding-sources.md | docs/features/BE/feature-funding-sources-tech.md |
+| funding-sources | Funding sources resolver | MYM-108 | feat/MYM-108-funding-sources | P1 | Foundation | docs/features/feature-funding-sources.md | docs/features/BE/feature-funding-sources-tech.md |
 ```
 
 Founder viết FE spec (`docs/features/feature-funding-sources.md`) + BE tech spec (`docs/features/BE/feature-funding-sources-tech.md`).
@@ -314,12 +314,12 @@ Linear ticket vẫn ở "Backlog" — founder chưa move (hoặc Linear's GitHub
 
 ### Step 3 — Branch creation (Git, manual command)
 
-Founder chạy `git worktree add ../MyMoneyWent-funding feat/MMW-108-funding-sources -b`. Engine detect branch_created → emit event:
+Founder chạy `git worktree add ../MyMoneyWent-funding feat/MYM-108-funding-sources -b`. Engine detect branch_created → emit event:
 ```
 branch_created → state: tech-ready → in-progress
 ```
 
-Linear: tùy config — nếu Linear's GitHub integration thấy branch khớp `MMW-108`, có thể auto-move ticket sang "In Progress". Hoặc founder bấm tay.
+Linear: tùy config — nếu Linear's GitHub integration thấy branch khớp `MYM-108`, có thể auto-move ticket sang "In Progress". Hoặc founder bấm tay.
 
 ### Step 4 — Code + commit (Git, founder)
 
@@ -337,7 +337,7 @@ State machine: vẫn `in-progress` (chưa có PR).
 
 ### Step 5 — PR open (GitHub, founder)
 
-Founder mở PR via `gh pr create` hoặc UI. PR body chứa "Closes MMW-108".
+Founder mở PR via `gh pr create` hoặc UI. PR body chứa "Closes MYM-108".
 
 GitHub events:
 - `pull_request` event (opened)
@@ -349,7 +349,7 @@ Engine:
 - CI pass → `ci_passed` → overlay: removed
 - CI fail (nếu fail) → `ci_failed` → overlay: ci-failing
 
-Linear: integration tự link PR #42 vào ticket MMW-108. Có thể auto-move sang "In Review" tùy config.
+Linear: integration tự link PR #42 vào ticket MYM-108. Có thể auto-move sang "In Review" tùy config.
 
 ### Step 6 — Review iteration (GitHub, Codex)
 
@@ -373,7 +373,7 @@ GitHub event:
 Engine:
 - `merged` → state: approved-pending-merge → merged
 
-Linear's GitHub integration: thấy "Closes MMW-108" + PR merged → auto-move ticket sang "Done" (nếu config). Hoặc founder manual.
+Linear's GitHub integration: thấy "Closes MYM-108" + PR merged → auto-move ticket sang "Done" (nếu config). Hoặc founder manual.
 
 ### Step 8 — Deploy (Railway, auto)
 
@@ -415,7 +415,7 @@ Linear: ticket "Done" sau khi sprint complete.
 
 **Trigger**: founder muốn hotfix nhanh, chưa kịp create Linear ticket.
 
-**Block**: `pr-validate.yml` reject vì branch không match `MMW-NNN` regex.
+**Block**: `pr-validate.yml` reject vì branch không match `MYM-NNN` regex.
 
 **Workaround**: 
 - Option A: create Linear ticket trước rồi mới mở PR.
@@ -449,10 +449,10 @@ Linear: ticket "Done" sau khi sprint complete.
 
 **Tracker row**:
 ```yaml
-linear_id: MMW-120
+linear_id: MYM-120
 branches:
-  - feat/MMW-120-transaction-capture-additive
-  - feat/MMW-121-transaction-capture-cutover
+  - feat/MYM-120-transaction-capture-additive
+  - feat/MYM-121-transaction-capture-cutover
 ```
 
 **Dashboard view**: MIN-progressed rule — work item status = trạng thái của branch chậm nhất. Overlay `partial-progress` nếu một branch đã merged còn branch khác chưa.
@@ -556,7 +556,7 @@ Dashboard (authoritative)           Linear UI (best-effort)
 
 ---
 
-**Recommendation cho MMW hiện tại**: **Option C** (parallel). Vì solo founder, Linear chỉ phục vụ planning + đáp ứng requirement của `pr-validate.yml` (cần MMW-NNN reference). Dashboard authoritative cho realtime status.
+**Recommendation cho MMW hiện tại**: **Option C** (parallel). Vì solo founder, Linear chỉ phục vụ planning + đáp ứng requirement của `pr-validate.yml` (cần MYM-NNN reference). Dashboard authoritative cho realtime status.
 
 **Khi hire engineer thứ 2**: re-evaluate Option B trước Option A. Option B chi phí thấp (1-way sync), giải quyết "Linear status reflects reality" cho team visibility, không lock plan source vào Linear.
 
@@ -621,7 +621,7 @@ Sau Phase 4 Option A (deferred): tracker.md có thể trở thành auto-generate
 
 **Không cho team scale.** Dashboard mạnh ở artifact view + cross-feature overview. Linear mạnh ở discussion + sprint + stakeholder + mobile + notifications. 2 cái phục vụ use case khác nhau.
 
-Solo founder có thể tạm bỏ Linear (chỉ giữ tracker.md), nhưng `pr-validate.yml` đang require MMW-NNN reference — phải hoặc giữ Linear, hoặc disable check đó.
+Solo founder có thể tạm bỏ Linear (chỉ giữ tracker.md), nhưng `pr-validate.yml` đang require MYM-NNN reference — phải hoặc giữ Linear, hoặc disable check đó.
 
 ---
 
@@ -641,7 +641,7 @@ Founder decision call. Memory chưa lock decision này — open question cho roa
 - **Current dashboard infra** — `docs/operations/dashboard-realtime-explained.md`
 - **Branch + PR convention enforcement** — `.github/workflows/pr-validate.yml`
 - **Plan source schema** — `docs/implementation-tracker.md`
-- **MMW-NNN convention origin** — `CLAUDE.md` § "Git & commit policy"
+- **MYM-NNN convention origin** — `CLAUDE.md` § "Git & commit policy"
 
 ---
 

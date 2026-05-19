@@ -1,4 +1,4 @@
-Task: ops-dashboard D-3 — branch + PR convention (MMW-XXX magic word) + pre-push hook + ci/pr-validate
+Task: ops-dashboard D-3 — branch + PR convention (MYM-XXX magic word) + pre-push hook + ci/pr-validate
 Working dir: /Users/maingocanh/Projects/MyMoneyWent. NO prior context.
 
 Mode: AUTOPILOT — branch `feat/branch-pr-convention`, Codex 1× clean, STOP_AT_READY.
@@ -6,7 +6,7 @@ Mode: AUTOPILOT — branch `feat/branch-pr-convention`, Codex 1× clean, STOP_AT
 Risk tier:          P2 pilot
 Merge policy:       manual_only
 
-Context: Branch convention `<dev>/MMW-<id>-<slug>` + PR template với `Closes MMW-XXX` để Linear auto-sync. Legacy W0.* grandfathered.
+Context: Branch convention `<dev>/MYM-<id>-<slug>` + PR template với `Closes MYM-XXX` để Linear auto-sync. Legacy W0.* grandfathered.
 
 Scope: (a) `.github/pull_request_template.md`, (b) `scripts/git-hooks/pre-push.sh` + Makefile install target, (c) `.github/workflows/pr-validate.yml`. NO Linear API integration (D-6).
 
@@ -39,8 +39,8 @@ Step 2 — PR template `.github/pull_request_template.md`
 <!-- 1-2 sentences -->
 
 ## Linear Issue
-Closes MMW-XXX
-<!-- Required: Closes/Fixes/Ref MMW-NNN. Legacy W0.*: "Linear: N/A" -->
+Closes MYM-XXX
+<!-- Required: Closes/Fixes/Ref MYM-NNN. Legacy W0.*: "Linear: N/A" -->
 
 ## Changes
 - [ ] Item 1
@@ -65,7 +65,7 @@ while read local_ref local_sha remote_ref remote_sha; do
     main|master|develop|W0.*|Wave-*|hotfix/*|release/*) exit 0 ;;
   esac
   if ! echo "$branch" | grep -Eq '^[a-z0-9-]+/MMW-[0-9]+-[a-z0-9-]+$'; then
-    echo "❌ Branch '$branch' must match <dev>/MMW-<id>-<slug>"
+    echo "❌ Branch '$branch' must match <dev>/MYM-<id>-<slug>"
     echo "   Bypass: git push --no-verify"
     exit 1
   fi
@@ -98,7 +98,7 @@ jobs:
         run: |
           case "$BRANCH" in W0.*|Wave-*|hotfix/*|release/*) exit 0 ;; esac
           if ! echo "$BRANCH" | grep -Eq '^[a-z0-9-]+/MMW-[0-9]+-[a-z0-9-]+$'; then
-            echo "::error::Branch '$BRANCH' must match <dev>/MMW-<id>-<slug>"
+            echo "::error::Branch '$BRANCH' must match <dev>/MYM-<id>-<slug>"
             exit 1
           fi
       - name: PR body magic word
@@ -106,7 +106,7 @@ jobs:
         run: |
           if echo "$PR_BODY" | grep -Eq '(Closes|Fixes|Ref) MMW-[0-9]+'; then exit 0; fi
           if echo "$PR_BODY" | grep -q 'Linear: N/A'; then exit 0; fi
-          echo "::error::PR body missing 'Closes/Fixes/Ref MMW-NNN' or 'Linear: N/A'"
+          echo "::error::PR body missing 'Closes/Fixes/Ref MYM-NNN' or 'Linear: N/A'"
           exit 1
 ```
 
@@ -115,7 +115,7 @@ Step 6 — Local verify
 bash -n scripts/git-hooks/pre-push.sh
 python -c "import yaml; yaml.safe_load(open('.github/workflows/pr-validate.yml'))"
 # Hook self-test
-bash -c 'echo "refs/heads/anh/MMW-42-test test refs/heads/anh/MMW-42-test test" | bash scripts/git-hooks/pre-push.sh origin "..."'  # exit 0
+bash -c 'echo "refs/heads/anh/MYM-42-test test refs/heads/anh/MYM-42-test test" | bash scripts/git-hooks/pre-push.sh origin "..."'  # exit 0
 bash -c 'echo "refs/heads/bad-name test refs/heads/bad-name test" | bash scripts/git-hooks/pre-push.sh origin "..."' && echo FAIL || echo "expected exit 1 ✓"
 pytest tests/ -v
 ```
@@ -126,7 +126,7 @@ Atomic commits:
 git add .github/pull_request_template.md
 git commit -m "feat(workflow): PR template with Linear magic-word
 
-Required: Closes/Fixes/Ref MMW-NNN. Legacy: 'Linear: N/A'. Refs §D-3."
+Required: Closes/Fixes/Ref MYM-NNN. Legacy: 'Linear: N/A'. Refs §D-3."
 
 git add scripts/git-hooks/pre-push.sh Makefile
 git commit -m "feat(workflow): pre-push hook enforcing branch convention
@@ -160,7 +160,7 @@ Verify: hook self-test pos+neg pass; yaml parse OK
 Suggested squash:
   git checkout main && git pull --ff-only origin main
   git merge --squash feat/branch-pr-convention
-  git commit -m "feat(workflow): MMW-XXX branch convention + PR template + pre-push + ci-validate (§D-3)"
+  git commit -m "feat(workflow): MYM-XXX branch convention + PR template + pre-push + ci-validate (§D-3)"
   git branch -D feat/branch-pr-convention && git push origin main
 ═══════════════════════════════════════════════════════
 ```

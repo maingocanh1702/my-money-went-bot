@@ -495,13 +495,13 @@ Status transitions auto-driven by GitHub events (via GitHub Actions → Linear A
 | Issue created (no template) | `Triage` | Founder reviews, fills required fields |
 | Issue created (template) | `Backlog` | Required fields enforced by template |
 | Added to cycle / assigned + required fields complete | `Todo` | Pre-condition: Phase + Feature + Priority + Acceptance criteria all set |
-| Branch created matching `*/MMW-<id>-*` (first push) | `In Progress` | Linear GitHub integration auto-trigger |
+| Branch created matching `*/MYM-<id>-*` (first push) | `In Progress` | Linear GitHub integration auto-trigger |
 | Draft PR opened | `In Progress` | Stays In Progress until ready-for-review |
 | PR marked "Ready for review" | `In Review` | |
 | Review state = `CHANGES_REQUESTED` | `In Review` + label `changes-requested` | Status doesn't regress, label added |
 | CI check failed (required check) | `In Review` + label `ci-failing` | Blocks merge via branch protection |
 | CI check passing + ≥1 review approval | `In Review` (label `ci-failing` / `changes-requested` cleared) | Ready to merge |
-| PR merged | `Done` | Linear MagicWord `Closes MMW-XXX` required |
+| PR merged | `Done` | Linear MagicWord `Closes MYM-XXX` required |
 | PR closed unmerged | `Todo` if work continues, `Canceled` if abandoned | Manual triage by assignee |
 | Cycle ends | Unfinished → rollover next cycle | Linear built-in |
 
@@ -545,7 +545,7 @@ Linear free tier limits change. Before committing to setup, verify in current Li
 | C3.5 | Migrate 21 features → Linear issues (parent + sub) | 1h scripted | Parent issue per feature with sub-issues for each PR |
 | C3.6 | Manual QA migration result | 1-2h | Spot-check 5-10 issues: required fields present? GitHub links work? Phase assignment correct? Fix script bugs and re-run if needed. |
 | C3.7 | Create Views (MVP Tracker, Backlog, Current Cycle, Workload, Blocked) | 20 min | Per C2 Views block |
-| C3.8 | Smoke test PR↔issue sync | 30 min | Open 1 test PR on burner branch matching `MMW-XXX` convention → verify status auto-moves |
+| C3.8 | Smoke test PR↔issue sync | 30 min | Open 1 test PR on burner branch matching `MYM-XXX` convention → verify status auto-moves |
 
 **Subtotal: ~6-8 giờ** (was 1.5h; 35 PR + 21 feature migration with QA + free-tier verification is the bulk)
 
@@ -785,8 +785,8 @@ query PhaseProgress {
 ## D3. Branch + PR Convention với Linear Magic Word (Gap 2 — P0)
 
 **Vấn đề:** Linear PR auto-sync trigger qua:
-1. Branch name chứa Linear issue ID (`username/MMW-123-slug`), HOẶC
-2. PR title/body có magic word (`Fixes MMW-123`, `Closes MMW-123`, `Ref MMW-123`)
+1. Branch name chứa Linear issue ID (`username/MYM-123-slug`), HOẶC
+2. PR title/body có magic word (`Fixes MYM-123`, `Closes MYM-123`, `Ref MYM-123`)
 
 Convention hiện tại `W0.9-dashboard-realtime` **không match** → automation không trigger.
 
@@ -794,8 +794,8 @@ Convention hiện tại `W0.9-dashboard-realtime` **không match** → automatio
 
 ```
 Format: <dev-handle>/MMW-<issue-id>-<kebab-slug>
-Example: anh/MMW-42-multi-source-parse
-         devB/MMW-58-linear-graphql-integration
+Example: anh/MYM-42-multi-source-parse
+         devB/MYM-58-linear-graphql-integration
 ```
 
 **Linear UI "Copy git branch name"** tự gen format này nếu set Settings → Workspace → Git branch format = `{username}/MMW-{issueId}-{title-kebab}`.
@@ -807,7 +807,7 @@ Example: anh/MMW-42-multi-source-parse
 <!-- 1-2 sentences what & why -->
 
 ## Linear Issue
-Closes MMW-XXX
+Closes MYM-XXX
 <!-- Required: at least one Linear magic word -->
 <!-- Multi-issue PR: list each on separate line -->
 
@@ -836,7 +836,7 @@ Closes MMW-XXX
 | Linear | Settings → Integrations → GitHub → enable "Auto-link PRs by branch + magic word" |
 
 **Migration của 35 existing PRs:**
-- Bulk edit Linear issues to add `MMW-XXX` to legacy branch names? **No** — quá noisy
+- Bulk edit Linear issues to add `MYM-XXX` to legacy branch names? **No** — quá noisy
 - Strategy: legacy PRs (W0.*) link manual qua Linear UI "Link to GitHub PR" 1 lần; PRs mới từ migration trở đi dùng convention mới
 
 **Files:** `.github/pull_request_template.md` (NEW), `.git/hooks/pre-push` hoặc `scripts/git-hooks/pre-push.sh`, `.github/workflows/pr-validate.yml` (NEW or extend existing)
@@ -900,7 +900,7 @@ Sections:
 2. **Workflow cheat sheet**:
    - Picking task: Linear Backlog → drag to Todo → click "Copy branch name" → checkout
    - During work: commits, status auto-syncs khi push first commit
-   - Opening PR: use template, ensure `Closes MMW-XXX` present
+   - Opening PR: use template, ensure `Closes MYM-XXX` present
    - DoD: CI green + 1 approval + Linear status auto-moved to Done after merge
 3. **Conventions index** (links to existing docs):
    - Branch naming → §D3

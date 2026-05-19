@@ -30,8 +30,8 @@ pytest tests/ -v      # MUST be green
 1. Linear Backlog → filter `good-first-issue` (week 1)
 2. Verify required fields filled (Phase, Feature, Priority, Acceptance criteria)
 3. Drag to **Todo** → self-assign
-4. Click **Copy git branch name** → e.g. `your-handle/MMW-42-task-slug`
-5. `git checkout main && git pull && git checkout -b your-handle/MMW-42-task-slug`
+4. Click **Copy git branch name** → e.g. `your-handle/MYM-42-task-slug`
+5. `git checkout main && git pull && git checkout -b your-handle/MYM-42-task-slug`
 
 ### During work
 - Small atomic commits, present-tense imperative (`feat:`, `fix:`, `docs:`, `test:`)
@@ -40,7 +40,7 @@ pytest tests/ -v      # MUST be green
 
 ### PR
 - Use PR template auto-filled
-- **Required**: `Closes MMW-42` in body
+- **Required**: `Closes MYM-42` in body
 - DoD: CI green + ≥1 approval + Linear auto-`Done` on merge
 
 ## 3. Conventions (deep links)

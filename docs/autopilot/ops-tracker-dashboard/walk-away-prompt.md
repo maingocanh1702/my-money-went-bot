@@ -115,7 +115,7 @@ echo "✅ PHASE 0 COMPLETE — bootstrap done. Moving to PHASE 1."
 
 # PHASE 1 — D-3: Branch + PR convention + pre-push hook + ci/pr-validate
 
-**Goal:** Establish `<dev>/MMW-<id>-<slug>` branch naming + `Closes MMW-XXX` PR body magic word + CI validator.
+**Goal:** Establish `<dev>/MYM-<id>-<slug>` branch naming + `Closes MYM-XXX` PR body magic word + CI validator.
 
 ## 1.1 Branch + state
 ```bash
@@ -130,8 +130,8 @@ Content:
 <!-- 1-2 sentences -->
 
 ## Linear Issue
-Closes MMW-XXX
-<!-- Required: Closes/Fixes/Ref MMW-NNN. Legacy W0.*: "Linear: N/A" -->
+Closes MYM-XXX
+<!-- Required: Closes/Fixes/Ref MYM-NNN. Legacy W0.*: "Linear: N/A" -->
 
 ## Changes
 - [ ] Item 1
@@ -156,7 +156,7 @@ while read local_ref local_sha remote_ref remote_sha; do
     main|master|develop|W0.*|Wave-*|hotfix/*|release/*) exit 0 ;;
   esac
   if ! echo "$branch" | grep -Eq '^[a-z0-9-]+/MMW-[0-9]+-[a-z0-9-]+$'; then
-    echo "❌ Branch '$branch' must match <dev>/MMW-<id>-<slug>"
+    echo "❌ Branch '$branch' must match <dev>/MYM-<id>-<slug>"
     echo "   Bypass: git push --no-verify"
     exit 1
   fi
@@ -187,7 +187,7 @@ jobs:
         run: |
           case "$BRANCH" in W0.*|Wave-*|hotfix/*|release/*) exit 0 ;; esac
           if ! echo "$BRANCH" | grep -Eq '^[a-z0-9-]+/MMW-[0-9]+-[a-z0-9-]+$'; then
-            echo "::error::Branch '$BRANCH' must match <dev>/MMW-<id>-<slug>"
+            echo "::error::Branch '$BRANCH' must match <dev>/MYM-<id>-<slug>"
             exit 1
           fi
       - name: PR body magic word
@@ -195,7 +195,7 @@ jobs:
         run: |
           if echo "$PR_BODY" | grep -Eq '(Closes|Fixes|Ref) MMW-[0-9]+'; then exit 0; fi
           if echo "$PR_BODY" | grep -q 'Linear: N/A'; then exit 0; fi
-          echo "::error::PR body missing 'Closes/Fixes/Ref MMW-NNN' or 'Linear: N/A'"
+          echo "::error::PR body missing 'Closes/Fixes/Ref MYM-NNN' or 'Linear: N/A'"
           exit 1
 ```
 
@@ -204,7 +204,7 @@ jobs:
 bash -n scripts/git-hooks/pre-push.sh   # syntax OK
 python -c "import yaml; yaml.safe_load(open('.github/workflows/pr-validate.yml'))"
 # Positive case (must exit 0):
-echo "refs/heads/anh/MMW-42-test test refs/heads/anh/MMW-42-test test" | bash scripts/git-hooks/pre-push.sh origin url
+echo "refs/heads/anh/MYM-42-test test refs/heads/anh/MYM-42-test test" | bash scripts/git-hooks/pre-push.sh origin url
 # Negative case (must exit 1):
 echo "refs/heads/bad-name test refs/heads/bad-name test" | bash scripts/git-hooks/pre-push.sh origin url; [ $? -eq 1 ] && echo "neg OK"
 ```
@@ -214,11 +214,11 @@ echo "refs/heads/bad-name test refs/heads/bad-name test" | bash scripts/git-hook
 git add .github/pull_request_template.md
 git commit -m "feat(workflow): PR template with Linear magic-word
 
-Required: Closes/Fixes/Ref MMW-NNN. Legacy W0.*: 'Linear: N/A'.
+Required: Closes/Fixes/Ref MYM-NNN. Legacy W0.*: 'Linear: N/A'.
 Refs plan v3.1.0 §D-3."
 
 git add scripts/git-hooks/pre-push.sh Makefile
-git commit -m "feat(workflow): pre-push hook enforcing <dev>/MMW-<id> convention
+git commit -m "feat(workflow): pre-push hook enforcing <dev>/MYM-<id> convention
 
 Install: make install-hooks. Bypass: git push --no-verify."
 
@@ -239,7 +239,7 @@ fi
 ## 1.8 Squash + push (use Squash Helper above)
 ```bash
 BRANCH=feat/d3-branch-pr-convention
-COMMIT_MSG="feat(workflow): MMW-XXX branch convention + PR template + pre-push + ci/pr-validate
+COMMIT_MSG="feat(workflow): MYM-XXX branch convention + PR template + pre-push + ci/pr-validate
 
 PR template requires Linear magic word. Pre-push hook enforces branch
 naming. CI validator runs on PR open/edit/sync. Refs §D-3."
@@ -294,7 +294,7 @@ Sections (full content):
 ## Task assignment
 - Devs self-serve: Linear Backlog → drag to Todo → self-assign
 - Founder may assign Urgent bugs + cross-feature parents
-- Linear copies branch name `<dev>/MMW-<id>-<slug>`
+- Linear copies branch name `<dev>/MYM-<id>-<slug>`
 
 ## WIP limit (soft)
 - ≤2 issues in `In Progress` + `In Review` per dev
@@ -414,8 +414,8 @@ pytest tests/ -v      # MUST be green
 1. Linear Backlog → filter `good-first-issue` (week 1)
 2. Verify required fields filled (Phase, Feature, Priority, Acceptance criteria)
 3. Drag to **Todo** → self-assign
-4. Click **Copy git branch name** → e.g. `your-handle/MMW-42-task-slug`
-5. `git checkout main && git pull && git checkout -b your-handle/MMW-42-task-slug`
+4. Click **Copy git branch name** → e.g. `your-handle/MYM-42-task-slug`
+5. `git checkout main && git pull && git checkout -b your-handle/MYM-42-task-slug`
 
 ### During work
 - Small atomic commits, present-tense imperative (`feat:`, `fix:`, `docs:`, `test:`)
@@ -424,7 +424,7 @@ pytest tests/ -v      # MUST be green
 
 ### PR
 - Use PR template auto-filled
-- **Required**: `Closes MMW-42` in body
+- **Required**: `Closes MYM-42` in body
 - DoD: CI green + ≥1 approval + Linear auto-`Done` on merge
 
 ## 3. Conventions (deep links)
@@ -716,7 +716,7 @@ def main():
     with httpx.Client(base_url=ENDPOINT,
                       headers={"Authorization": key, "Content-Type": "application/json"},
                       timeout=30) as c:
-        # Lookup issue UUID from MMW-NNN
+        # Lookup issue UUID from MYM-NNN
         d = gql(c, 'query Q($id: String!) { issue(id: $id) { id labels { nodes { id name } } } }',
                 {"id": args.issue})
         issue = d["issue"]
@@ -781,7 +781,7 @@ Add `pr-validate` to required checks AFTER ≥10 PRs use new convention (avoids 
 
 ## Verification
 
-Open 1 test PR matching `<dev>/MMW-NNN-...` convention → check pr-validate runs → ci-failing label appears on linked Linear when CI fails.
+Open 1 test PR matching `<dev>/MYM-NNN-...` convention → check pr-validate runs → ci-failing label appears on linked Linear when CI fails.
 ```
 
 ## 4.5 Self-test, commits, Codex, squash
@@ -947,7 +947,7 @@ GitHub infrastructure:
 
 Multi-dev ready state:
   - When dev #2 onboards: hand them docs/operations/dev-onboarding.md
-  - Their first PR: must follow <dev>/MMW-NNN-slug branch + "Closes MMW-NNN" body
+  - Their first PR: must follow <dev>/MYM-NNN-slug branch + "Closes MYM-NNN" body
   - Linear auto-syncs status on PR open/merge
 
 Founder follow-ups (manual, not blocking):

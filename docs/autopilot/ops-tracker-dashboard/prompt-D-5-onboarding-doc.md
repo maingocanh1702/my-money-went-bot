@@ -35,7 +35,7 @@ mkdir -p .autopilot/state/d-5/codex
 Step 2 — Onboarding `docs/operations/dev-onboarding.md`
 Sections:
 1. **First-day setup (30 min)**: Linear access, GitHub collaborator, Discord, clone + make setup + install-hooks
-2. **Workflow cheat sheet**: pick task (Linear Backlog → drag Todo), branch `<dev>/MMW-<id>-<slug>`, status auto-syncs first push, PR template, DoD (CI + 1 approval + Linear Done auto)
+2. **Workflow cheat sheet**: pick task (Linear Backlog → drag Todo), branch `<dev>/MYM-<id>-<slug>`, status auto-syncs first push, PR template, DoD (CI + 1 approval + Linear Done auto)
 3. **Conventions pointers**: §D-3, §D-4 playbook, MEMORY.md, contribution.md
 4. **Where to ask**: spec/Linear, infra/Discord, founder review/PR tag
 5. **First PR path**: good-first-issue, target merged in 3 days

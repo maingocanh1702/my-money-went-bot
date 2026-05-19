@@ -125,7 +125,7 @@ H. MMW-specific compatibility
    - Aligns with CLAUDE.md hard rules #1-#9 explicitly?
    - Wave 0 decisions respected (founder=id=1 bootstrap, etc.)?
    - Compatible with current `scripts/build-dashboard.py` — refactor not rewrite?
-   - Linear convention `MMW-NNN` honored in plan_reader?
+   - Linear convention `MYM-NNN` honored in plan_reader?
    - `pr-validate.yml` exempt prefixes interaction: what status do branches like
      `fix/*` (exempt) get when they don't have a tracker row?
 

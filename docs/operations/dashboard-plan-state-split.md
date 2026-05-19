@@ -199,8 +199,8 @@ Linear có thể trở thành plan source hoặc projection sau này. Không ph�
 
 | Field | Type | Source of truth | Notes |
 |---|---|---|---|
-| `id` | manual | plan source | Stable internal identity (e.g. `MMW-108`, `W0.9`, kebab feature_id fallback). Must not change casually. |
-| `linear_id` | manual, optional | plan source | MMW Linear ticket reference (e.g. `MMW-108`). May be `None` cho legacy Wave rows (`W0.9`) hoặc ad-hoc work. `plan_reader` warn nếu row có `branches` + active PR nhưng thiếu `linear_id` — required cho Linear integration linkage. |
+| `id` | manual | plan source | Stable internal identity (e.g. `MYM-108`, `W0.9`, kebab feature_id fallback). Must not change casually. |
+| `linear_id` | manual, optional | plan source | MMW Linear ticket reference (e.g. `MYM-108`). May be `None` cho legacy Wave rows (`W0.9`) hoặc ad-hoc work. `plan_reader` warn nếu row có `branches` + active PR nhưng thiếu `linear_id` — required cho Linear integration linkage. |
 | `feature_id` | manual | plan source | Kebab-case canonical feature key (e.g. `funding-sources`). Used khi `id` == `linear_id` thì `feature_id` là human-readable companion. |
 | `title` | manual | plan source | Human-readable |
 | `type` | manual | plan source | `feature`, `bugfix`, `docs`, `infra`, `research`, `dashboard`, `ops` |
@@ -248,8 +248,8 @@ Tracker markdown remains acceptable as v1 plan source, but engine normalizes eve
 Target normalized shape:
 
 ```yaml
-id: MMW-108              # stable internal identity
-linear_id: MMW-108       # Linear ticket reference (often == id, but distinct field)
+id: MYM-108              # stable internal identity
+linear_id: MYM-108       # Linear ticket reference (often == id, but distinct field)
 feature_id: funding-sources
 title: Funding sources resolver + handlers
 type: feature
@@ -262,7 +262,7 @@ specs:
   product: docs/features/feature-funding-sources.md
   tech: docs/features/BE/feature-funding-sources-tech.md
 branches:
-  - feat/MMW-108-funding-sources
+  - feat/MYM-108-funding-sources
 github_pr: null
 acceptance:
   - FS resolved before any transaction INSERT
@@ -278,7 +278,7 @@ progress_profile: standard_feature
 Legacy/ad-hoc work item example (linear_id None):
 
 ```yaml
-id: W0.9                 # internal ID, không match MMW-NNN pattern
+id: W0.9                 # internal ID, không match MYM-NNN pattern
 linear_id: null          # no Linear ticket — legacy Wave work
 feature_id: dashboard-realtime
 title: Dashboard realtime — auto-rebuild + git-state detect + reconcile
@@ -297,8 +297,8 @@ Some work items have multiple PRs (e.g. transaction capture split into F02a/F02b
 
 ```yaml
 branches:
-  - feat/MMW-120-transaction-capture-additive
-  - feat/MMW-121-transaction-capture-cutover
+  - feat/MYM-120-transaction-capture-additive
+  - feat/MYM-121-transaction-capture-cutover
 ```
 
 Aggregation rule v1:
@@ -528,14 +528,14 @@ UI must distinguish `not-deployed` ("engine confident: deploy chưa xảy ra") v
 
 ### 6.8 Exempt branch behavior
 
-`.github/workflows/pr-validate.yml` exempts certain branch prefixes from `MMW-NNN` regex: `W0.*`, `Wave-*`, `hotfix/*`, `release/*`, `fix/*`, `feat/c1-*`, `chore/*`. These branches có thể có active PR mà không link tới tracker row.
+`.github/workflows/pr-validate.yml` exempts certain branch prefixes from `MYM-NNN` regex: `W0.*`, `Wave-*`, `hotfix/*`, `release/*`, `fix/*`, `feat/c1-*`, `chore/*`. These branches có thể có active PR mà không link tới tracker row.
 
 Engine behavior cho exempt branches:
 
 1. **Match tracker row by branch name**: nếu có row trong tracker với `branches[]` chứa exact branch name → bind work item normal (legacy Wave rows như `W0.9` thường ở category này).
 2. **Không có tracker row**: emit `untracked_branch` warning (artifact-drift overlay). Render branch trong dashboard "Untracked" section với base state derived từ PR/CI/deploy signals nhưng không có plan metadata (priority/AC/owner unknown).
 3. **PR body có `Linear: N/A`**: skip warning, render in "Ad-hoc work" bucket. Counted in throughput metrics, không counted trong feature progress %.
-4. **PR body có `Closes MMW-NNN` nhưng branch exempt prefix**: bind tới work item by linear_id, emit `convention_drift` info (recommend founder rename branch sang `feat/MMW-NNN-slug` next time).
+4. **PR body có `Closes MYM-NNN` nhưng branch exempt prefix**: bind tới work item by linear_id, emit `convention_drift` info (recommend founder rename branch sang `feat/MYM-NNN-slug` next time).
 
 Mục đích: exempt branches ship được nhưng dashboard surface chúng để founder không bị blind, đồng thời không break engine khi gặp legacy/hotfix work.
 
@@ -556,9 +556,9 @@ Write append-only JSONL:
 Example:
 
 ```json
-{"ts":"2026-05-19T06:12:00Z","item":"MMW-108","event":"spec_created","from":"not-started","to":"spec-only","source":"filesystem","artifact":"docs/features/feature-funding-sources.md"}
-{"ts":"2026-05-19T07:31:00Z","item":"MMW-108","event":"pr_opened","from":"in-progress","to":"in-review","source":"github","pr":42}
-{"ts":"2026-05-19T08:10:00Z","item":"MMW-108","event":"ci_failed","overlay":"ci-failing","source":"github","check":"test"}
+{"ts":"2026-05-19T06:12:00Z","item":"MYM-108","event":"spec_created","from":"not-started","to":"spec-only","source":"filesystem","artifact":"docs/features/feature-funding-sources.md"}
+{"ts":"2026-05-19T07:31:00Z","item":"MYM-108","event":"pr_opened","from":"in-progress","to":"in-review","source":"github","pr":42}
+{"ts":"2026-05-19T08:10:00Z","item":"MYM-108","event":"ci_failed","overlay":"ci-failing","source":"github","check":"test"}
 ```
 
 ### 7.2 Trigger → event → transition map
@@ -663,7 +663,7 @@ Invalidation rules:
 - **Manual nuke**: `python scripts/build-dashboard.py --rebuild-cache` xoá cache + re-resolve toàn bộ PR mappings.
 - **Schema version bump**: bump `CACHE_SCHEMA_VERSION` trong code → next read invalidates entire cache khi version mismatch.
 - **Auto-invalidate on remap**: nếu `(branch, feature_id)` mapping đổi giữa builds, drop stale entry + re-resolve.
-- **Per-item force resolve via CLI**: `python -m scripts.work_state --force-pr-resolve MMW-123` skip cache cho 1 work item trong 1 lần build, không touch tracker. Mục đích: ad-hoc fix khi cache stale mà chưa hit TTL. Không lưu state — invocation-scoped, không có "reset flag sau" semantics. Plan-source KHÔNG có `force_pr_resolve` field (không phải tracker concern).
+- **Per-item force resolve via CLI**: `python -m scripts.work_state --force-pr-resolve MYM-123` skip cache cho 1 work item trong 1 lần build, không touch tracker. Mục đích: ad-hoc fix khi cache stale mà chưa hit TTL. Không lưu state — invocation-scoped, không có "reset flag sau" semantics. Plan-source KHÔNG có `force_pr_resolve` field (không phải tracker concern).
 
 ---
 
@@ -1146,7 +1146,7 @@ scripts/work_state/
 ```python
 @dataclass(frozen=True)
 class WorkItem:
-    id: str                 # Stable internal identity (e.g. "MMW-108", "W0.9" legacy)
+    id: str                 # Stable internal identity (e.g. "MYM-108", "W0.9" legacy)
     linear_id: str | None   # Linear ticket reference; None for legacy/ad-hoc work
     feature_id: str         # Kebab-case canonical feature key
     title: str
@@ -1276,8 +1276,8 @@ Anti-loop guard stays mandatory.
 - [ ] **AC16** — `CLAUDE.md` source-of-truth table updated: status/progress derived from work-state engine; tracker.md là plan source only; `.dashboard/` runtime state ignored by git per `.gitignore`.
 - [ ] **AC17** — CI restores/saves `.dashboard/` via `actions/cache` per §7.4.1 strategy (primary key `dashboard-state-v${V}-main`, PR builds write-only ephemeral key); cache-warmup rate <5% across 100 builds; Phase 2 promotion requires persistence strategy locked.
 - [ ] **AC18** — `priority`, `risk_tier`, and `lane` remain separate fields; if `risk_tier` is inferred, dashboard surfaces `risk_tier_inferred` warning until made explicit.
-- [ ] **AC19** — `WorkItem` schema separates `id` (stable internal, e.g. `MMW-108` or `W0.9` legacy) from `linear_id: str | None` (Linear ticket reference, optional). `plan_reader` warn nếu row có active PR/branches nhưng thiếu `linear_id`.
-- [ ] **AC20** — Exempt branch behavior implemented per §6.8: untracked branches → `untracked_branch` warning, render in "Untracked" section; `Linear: N/A` PR body → "Ad-hoc work" bucket; `Closes MMW-NNN` on exempt branch → bind by `linear_id` + `convention_drift` info.
+- [ ] **AC19** — `WorkItem` schema separates `id` (stable internal, e.g. `MYM-108` or `W0.9` legacy) from `linear_id: str | None` (Linear ticket reference, optional). `plan_reader` warn nếu row có active PR/branches nhưng thiếu `linear_id`.
+- [ ] **AC20** — Exempt branch behavior implemented per §6.8: untracked branches → `untracked_branch` warning, render in "Untracked" section; `Linear: N/A` PR body → "Ad-hoc work" bucket; `Closes MYM-NNN` on exempt branch → bind by `linear_id` + `convention_drift` info.
 - [ ] **AC21** — Phase rollup (§9.2) renders companion counts: items by human status, items by urgency level, items by priority. Single average % alone insufficient — UI phải show full picture.
 - [ ] **AC22** — Migration runbook (§15) covers full rollback: revert HEAD + restore tracker .bak + bump `CACHE_SCHEMA_VERSION` (invalidates `.dashboard/`) + regenerate dashboard outputs via `build-dashboard.py` overwrite (KHÔNG xoá `.md` files per CLAUDE.md hard rule #2; gate with founder approval nếu cần destructive op) + identify migration commit range/tag.
 - [ ] **AC23** — `--force-pr-resolve <work_item_id>` CLI flag implemented (§7.5) — invocation-scoped, không touch tracker plan source.
@@ -1471,7 +1471,7 @@ Per Foundation Lane / P0 gate (CLAUDE.md hard rule #6: "Foundation Lane never au
 
 Plus AC12 covers state transitions + edge cases (PR closed unmerged, branch deleted after merge, squash merge cache, API unavailable, missing spec links, CI fail, deploy fail post-merge, stale PR, manual override expiry, multi-branch compound states).
 
-**Approved for implementation.** Phase 0 (tracker audit) can start immediately. Phase 1 implementation opens new Linear ticket `MMW-NNN` cho engine code work, follows `walkthrough-foundation-lane-example.md` Foundation Lane template.
+**Approved for implementation.** Phase 0 (tracker audit) can start immediately. Phase 1 implementation opens new Linear ticket `MYM-NNN` cho engine code work, follows `walkthrough-foundation-lane-example.md` Foundation Lane template.
 
 Spec status transition: **Proposed → Accepted (2026-05-20)**.
 

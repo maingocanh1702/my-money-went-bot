@@ -12,12 +12,12 @@ jobs:
         run: |
           # Exemptions cover Wave-prefixed work, hotfixes, releases, plus the
           # plan-scoped multi-PR series (fix/*, feat/c1-*, chore/*) used by
-          # security-driven work that predates Linear MMW issue assignment.
+          # security-driven work that predates Linear MYM issue assignment.
           case "$BRANCH" in
             W0.*|Wave-*|hotfix/*|release/*|fix/*|feat/c1-*|chore/*) exit 0 ;;
           esac
           if ! echo "$BRANCH" | grep -Eq '^[a-z0-9-]+/MMW-[0-9]+-[a-z0-9-]+$'; then
-            echo "::error::Branch '$BRANCH' must match <dev>/MMW-<id>-<slug>"
+            echo "::error::Branch '$BRANCH' must match <dev>/MYM-<id>-<slug>"
             exit 1
           fi
       - name: PR body magic word
@@ -26,5 +26,5 @@ jobs:
         run: |
           if echo "$PR_BODY" | grep -Eq '(Closes|Fixes|Ref) MMW-[0-9]+'; then exit 0; fi
           if echo "$PR_BODY" | grep -q 'Linear: N/A'; then exit 0; fi
-          echo "::error::PR body missing 'Closes/Fixes/Ref MMW-NNN' or 'Linear: N/A'"
+          echo "::error::PR body missing 'Closes/Fixes/Ref MYM-NNN' or 'Linear: N/A'"
           exit 1

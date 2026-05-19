@@ -37,7 +37,7 @@ mkdir -p .autopilot/state/d-6/codex
 
 Step 2 — TDD if helper script
 `tests/github_workflows/test_linear_sync.py`:
-- `test_extract_magic_word_from_body` → MMW-NNN
+- `test_extract_magic_word_from_body` → MYM-NNN
 - `test_extract_legacy_acknowledgement` → "Linear: N/A" → None
 - `test_compute_label_check_failed` → add ci-failing
 - `test_compute_label_check_success` → remove ci-failing

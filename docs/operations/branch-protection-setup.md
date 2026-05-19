@@ -42,4 +42,4 @@ Add `pr-validate` to required checks AFTER ≥10 PRs use new convention (avoids 
 
 ## Verification
 
-Open 1 test PR matching `<dev>/MMW-NNN-...` convention → check pr-validate runs → ci-failing label appears on linked Linear when CI fails.
+Open 1 test PR matching `<dev>/MYM-NNN-...` convention → check pr-validate runs → ci-failing label appears on linked Linear when CI fails.
