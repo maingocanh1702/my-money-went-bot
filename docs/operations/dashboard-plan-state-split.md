@@ -340,7 +340,14 @@ Overlay set = union of all branch overlays. Examples:
 | `blocked` + `in-progress` | `merged` | `in-progress` (MIN; blocked is overlay, base is `in-progress`) | `blocked` + `partial-progress` |
 | `deployed` | `deployed` | `deployed` | (none — no partial) |
 
-`partial-progress` overlay added bất cứ khi nào không phải tất cả branch ở cùng terminal state (`deployed`/`merged`/`abandoned`).
+`partial-progress` overlay added **chỉ khi**: ít nhất 1 branch ở terminal state (`deployed`/`merged`/`abandoned`) AND ít nhất 1 branch khác KHÔNG ở cùng terminal state. Không add cho ordinary active multi-branch work (vd cả 2 branch đều `in-progress`) — sẽ noisy.
+
+Concrete:
+- 2 branch đều `in-progress` → no overlay (đang work song song, expected)
+- 1 `deployed` + 1 `in-progress` → `partial-progress` ✓ (asymmetric terminal)
+- 2 `deployed` → no overlay (cả 2 đều terminal cùng state)
+- 1 `merged` + 1 `deployed` → `partial-progress` ✓ (mixed terminals)
+- 1 `abandoned` + 1 `in-progress` → `partial-progress` ✓ (1 terminal, 1 active; engine ignores abandoned trong base aggregation per §4.1.1, nhưng overlay surface fact)
 
 #### 4.1.3 runtime_urgency interaction
 
@@ -689,21 +696,27 @@ Recommended v1 projection (mirror canonical overlay enum §8.2):
 |---|---|
 | `BACKLOG` | base = `not-started` (no spec/branch artifacts yet) |
 | `TODO` | base ∈ {`spec-only`, `tech-ready`} |
-| `IN_PROGRESS` | base ∈ {`branch-created`, `in-progress`, `in-review`, `approved-pending-merge`} |
-| `WAITING` | overlay `review-requested` OR `stale` OR base ∈ {`deploying`} |
+| `IN_PROGRESS` | base ∈ {`branch-created`, `in-progress`, `in-review`, `changes-requested`, `approved-pending-merge`} |
+| `WAITING` | overlay `review-requested` OR `stale` OR base ∈ {`deploying`} OR (base = `merged` AND deploy_state ∈ {`not-deployed`, `unknown`}) |
 | `FAILING` | overlay `ci-failing` OR `deploy-failed` (dominant over base) |
 | `BLOCKED` | overlay `blocked` (explicit, dominant over all non-terminal) |
-| `DONE` | base = `deployed`; cho docs/research/no-deploy work, terminal `merged` với `deploy_state=not-applicable` |
-| `UNKNOWN` | overlay ∈ {`unknown`, `artifact-drift`, `ambiguous-pr-mapping`} |
+| `DONE` | base = `deployed`; OR base = `merged` AND `deploy_state = not-applicable` (docs/research work với no deploy surface) |
+| `ABANDONED` | base = `abandoned` (PR closed without merge — terminal but not success) |
+| `UNKNOWN` | overlay ∈ {`unknown`, `artifact-drift`, `ambiguous-pr-mapping`} AND no higher-precedence rule matches |
+
+Notes on base state coverage:
+- `changes-requested` (base) → `IN_PROGRESS` vì work đang được address; reviewer feedback không = FAILING
+- `merged` (base) → split theo deploy_state: `not-applicable` = `DONE`, `unknown`/`not-deployed` = `WAITING`, `deploy-failed` overlay = `FAILING`, `deployed` = `DONE`
+- `abandoned` (base) → new human status `ABANDONED` (terminal, neither success nor failure — render với muted UI)
 
 **Resolution precedence** (first match wins khi multiple overlays active):
 1. `BLOCKED` (human intent dominant)
 2. `FAILING` (`ci-failing` / `deploy-failed`)
 3. `UNKNOWN` (signal/mapping issue)
-4. `WAITING` (`review-requested` / `stale`)
-5. Base status → map to `BACKLOG`/`TODO`/`IN_PROGRESS`/`DONE`
+4. `WAITING` (`review-requested` / `stale` / merged-pre-deploy)
+5. Base status → map to `BACKLOG`/`TODO`/`IN_PROGRESS`/`DONE`/`ABANDONED`
 
-Annotation overlays (`partial-progress`, `stale-cache`, `cache-warmup`, `risk-tier-inferred`, `manual-override`) không thay đổi human status; render như badge bên cạnh.
+Annotation overlays (`partial-progress`, `stale-cache`, `cache-warmup`, `risk-tier-inferred`, `manual-override`, `ci-running`) không thay đổi human status; render như badge bên cạnh.
 
 Do not replace internal machine states with this projection. Projection is for UI readability; machine state remains the actionable detail.
 
@@ -778,6 +791,38 @@ Do not overload base status with operational warnings. **All overlay references 
 
 Important: CI fail streak or PR age should not auto-become `blocked`. They become `ci-failing` or `stale` overlays. `blocked` requires explicit human intent (label or override). Engine emit `deploy-failed` overlay khi `deploy_state=deploy-failed`; base status vẫn `merged`.
 
+### 8.2.1 Naming conventions — overlay (kebab-case) vs warning (snake_case)
+
+Spec dùng 2 enum separate với case convention khác nhau để engineer phân biệt khi đọc code/JSON:
+
+**Overlay** — UI-visible state label, kebab-case:
+- Examples: `ci-failing`, `deploy-failed`, `cache-warmup`, `artifact-drift`, `ambiguous-pr-mapping`, `risk-tier-inferred`, `manual-override`
+- Lives in: `CurrentState.overlays: list[Overlay]` rendered as badges/colors trong dashboard
+- Per-item aggregate signal — meant for human glance
+
+**Warning code** — machine-emitted detail, snake_case:
+- Examples: `missing_spec_link`, `missing_tech_link`, `possible_spec_moved`, `untracked_branch`, `convention_drift`, `ambiguous_pr_mapping`, `git_unknown`, `unknown_event_dedup_strategy`
+- Lives in: `Signals.warnings: list[WarningCode]` for diagnostics + log/audit
+- Granular detail per signal collector — may roll up to one overlay
+
+**Mapping table** (warning → overlay):
+
+| Warning code (snake_case) | Rolls up to overlay (kebab-case) | Source collector |
+|---|---|---|
+| `missing_spec_link` | `artifact-drift` | filesystem |
+| `missing_tech_link` | `artifact-drift` | filesystem |
+| `possible_spec_moved` | `artifact-drift` | filesystem |
+| `untracked_branch` | `artifact-drift` | github |
+| `convention_drift` | (info only — no overlay; logged for founder awareness) | github |
+| `ambiguous_pr_mapping` | `ambiguous-pr-mapping` | github |
+| `git_unknown` | `unknown` | git |
+| `risk_tier_inferred` | `risk-tier-inferred` | plan_reader |
+| `unknown_event_dedup_strategy` | (info only) | event_engine |
+
+Rationale: warnings = atomic facts engine observed; overlays = derived UI rollup. Multiple warnings can map to same overlay; some warnings don't rise to overlay level (info-only).
+
+`compute_overlays(signals: Signals) → list[Overlay]` reads `signals.warnings` + signal values, applies mapping table + derivation rules (§8.2 overlay table).
+
 ### 8.3 Manual override escape hatch
 
 Rare cases can override computed status with expiry:
@@ -843,7 +888,7 @@ Foundation Lane work needs signals beyond standard milestones. Each milestone ph
 | founder sign-off | 95% | PR comment by founder chứa `Foundation Lane founder approval:` marker (per `walkthrough-foundation-lane-example.md` §6 convention) |
 | merged/deployed | 100% | `pr_state=merged` AND (`deploy_state=deployed` OR `deploy_state=not-applicable`) |
 
-Engine signal collectors phải implement detection cho mỗi marker. Per AC9a (new), `plan_reader.py` + `signal_collectors/github.py` cover các marker này.
+Engine signal collectors phải implement detection cho mỗi marker. Per AC11c, `plan_reader.py` + `signal_collectors/github.py` cover các marker này.
 
 Fallback: nếu milestone không có signal yet → progress stay ở previous milestone, không skip. Engine không "guess" — chỉ count khi signal verified.
 
@@ -921,6 +966,10 @@ def compute_urgency(item: WorkItem, base: Status, overlays: set[Overlay]) -> Urg
         return "elevated"  # engine can't trust state for this item
 
     # 3. WARNING — degraded signal or attention soon
+    if "blocked" in overlays:
+        # P2 blocked still deserves attention (human intent: cannot progress)
+        # just not as urgent as P0/P1 blocked
+        return "warning"
     if "stale" in overlays:
         return "warning"
     if "unknown" in overlays:
@@ -1209,12 +1258,16 @@ Anti-loop guard stays mandatory.
 - [ ] **AC7** — PR resolution handles branch deleted after merge via cached PR number or fallback search.
 - [ ] **AC8** — CI state reads required checks for PR/branch head SHA, not arbitrary latest workflow run.
 - [ ] **AC9** — Deploy signal can be `unknown`; engine remains useful without Railway API.
-- [ ] **AC10** — Overlays implemented separately from base status per canonical enum §8.2: `blocked`, `stale`, `ci-running`, `ci-failing`, `review-requested`, `deploy-failed`, `unknown`, `artifact-drift`, `ambiguous-pr-mapping`, `partial-progress`, `stale-cache`, `cache-warmup`, `risk-tier-inferred`, `manual-override`. Lists in §7.2 events, §8.0 human projection, §10 Phase 2 mirror this set exactly.
+- [ ] **AC10** — Overlays implemented separately from base status. §8.2 is canonical source of overlay enum (14 overlays: `blocked`, `stale`, `ci-running`, `ci-failing`, `review-requested`, `deploy-failed`, `unknown`, `artifact-drift`, `ambiguous-pr-mapping`, `partial-progress`, `stale-cache`, `cache-warmup`, `risk-tier-inferred`, `manual-override`). All overlay references trong spec phải dùng tên từ §8.2 (no inventing new overlay names). Subset references OK theo context:
+  - §7.2 event map references ONLY event-derived overlays (subset: `ci-running`, `ci-failing`, `review-requested`, `deploy-failed`, `stale`)
+  - §8.0 human projection maps overlays → human status (annotation-only overlays like `cache-warmup` don't change human status, only render as badge)
+  - §10 Phase 2 implementation list = full enum (all 14 must be implementable)
+  - Compute-overlays function (`compute_overlays(s) → list[Overlay]`) source-of-truth for which overlays apply when; lives in `signal_collectors/` + `event_engine.py` per §11.
 - [ ] **AC11** — Progress profile exists for at least `standard_feature`, `docs_only`, `foundation_change`, `dashboard_engine`.
-- [ ] **AC11a** — Human status projection exists (`BACKLOG`, `TODO`, `IN_PROGRESS`, `WAITING`, `FAILING`, `BLOCKED`, `DONE`, `UNKNOWN`) and renders as `HIGH_LEVEL · machine_state` without replacing machine state. Resolution precedence (§8.0) deterministic.
+- [ ] **AC11a** — Human status projection exists (`BACKLOG`, `TODO`, `IN_PROGRESS`, `WAITING`, `FAILING`, `BLOCKED`, `DONE`, `ABANDONED`, `UNKNOWN` — 9 statuses) and renders as `HIGH_LEVEL · machine_state` without replacing machine state. Resolution precedence (§8.0) deterministic. Every machine base state has explicit mapping (no fallthrough): `not-started`, `spec-only`, `tech-ready`, `branch-created`, `in-progress`, `in-review`, `changes-requested`, `approved-pending-merge`, `merged` (split by deploy_state), `deploying`, `deployed`, `abandoned`.
 - [ ] **AC11b** — `runtime_urgency` derived field exists (`normal`, `warning`, `elevated`, `critical`) and is distinct from `priority` and `risk_tier`. Deterministic first-match algorithm per §9.4.1, multi-branch MAX aggregation per §9.4.2.
 - [ ] **AC11c** — `foundation_change` progress milestones có detectable artifact signal per §9.1 — không count milestone không có signal. `signal_collectors/github.py` detect codex-approved label/marker + founder sign-off comment marker.
-- [ ] **AC11d** — Multi-branch aggregation matrix (§4.1.1, 4.1.2, 4.1.3) implemented: MIN-progressed base + UNION overlays + MAX urgency. `partial-progress` overlay applied per rule.
+- [ ] **AC11d** — Multi-branch aggregation matrix (§4.1.1, 4.1.2, 4.1.3) implemented: MIN-progressed base + UNION overlays + MAX urgency. `partial-progress` overlay applied **only when** ≥1 branch terminal AND ≥1 branch không cùng terminal state (không apply cho ordinary active multi-branch work).
 - [ ] **AC11e** — Event de-dup uses per-event-type identity (§7.2.1) — CI events keyed by `check_run_id`, deploy by `deployment_id`, stale max once per 24h per (item, threshold).
 - [ ] **AC12** — Unit tests cover state transitions and edge cases: PR closed unmerged, branch deleted after merge, squash merge/PR cache, API unavailable, missing spec links, CI fail, deploy fail post-merge, stale PR, manual override expiry, multi-branch compound states (deployed+ci-failing, merged+blocked).
 - [ ] **AC13** — `.github/workflows/dashboard.yml` triggers on PR, review, CI completion, main push, schedule, manual dispatch.
@@ -1226,9 +1279,10 @@ Anti-loop guard stays mandatory.
 - [ ] **AC19** — `WorkItem` schema separates `id` (stable internal, e.g. `MMW-108` or `W0.9` legacy) from `linear_id: str | None` (Linear ticket reference, optional). `plan_reader` warn nếu row có active PR/branches nhưng thiếu `linear_id`.
 - [ ] **AC20** — Exempt branch behavior implemented per §6.8: untracked branches → `untracked_branch` warning, render in "Untracked" section; `Linear: N/A` PR body → "Ad-hoc work" bucket; `Closes MMW-NNN` on exempt branch → bind by `linear_id` + `convention_drift` info.
 - [ ] **AC21** — Phase rollup (§9.2) renders companion counts: items by human status, items by urgency level, items by priority. Single average % alone insufficient — UI phải show full picture.
-- [ ] **AC22** — Migration runbook (§15) covers full rollback: revert HEAD + restore tracker .bak + bump `CACHE_SCHEMA_VERSION` (invalidates `.dashboard/`) + remove generated `docs/dashboard.{html,json,md}` if Phase 3 commit range tagged + identify migration commit range/tag.
+- [ ] **AC22** — Migration runbook (§15) covers full rollback: revert HEAD + restore tracker .bak + bump `CACHE_SCHEMA_VERSION` (invalidates `.dashboard/`) + regenerate dashboard outputs via `build-dashboard.py` overwrite (KHÔNG xoá `.md` files per CLAUDE.md hard rule #2; gate with founder approval nếu cần destructive op) + identify migration commit range/tag.
 - [ ] **AC23** — `--force-pr-resolve <work_item_id>` CLI flag implemented (§7.5) — invocation-scoped, không touch tracker plan source.
 - [ ] **AC24** — Possible spec drift detection (§6.1): nếu canonical spec path missing nhưng glob match feature_id → emit `possible_spec_moved` warning với suggested path. Engine không auto-update.
+- [ ] **AC25** — Naming convention separation (§8.2.1): Overlays use kebab-case (UI-visible), warning codes use snake_case (machine detail). Mapping table maps `WarningCode → Overlay` deterministically. JSON output reflects this (`CurrentState.overlays` kebab, `Signals.warnings` snake).
 
 ---
 
@@ -1306,13 +1360,22 @@ git commit --amend --no-edit
 # Or directly clear runtime state for next build:
 rm -rf .dashboard/
 
-# 5. Remove generated dashboard outputs nếu cần (next build sẽ regenerate từ rolled-back state)
-rm -f docs/dashboard.html docs/dashboard.md docs/dashboard.json
-
-# 6. Trigger rebuild on main to regenerate dashboard outputs from old logic
+# 5. Regenerate dashboard outputs từ rolled-back code
+#    KHÔNG xoá files (CLAUDE.md hard rule #2: never auto-delete .md). Build script overwrite in-place.
 python scripts/build-dashboard.py
+
+# Verify outputs reverted to pre-engine format:
+head -20 docs/dashboard.md  # should match pre-engine schema
+diff -q docs/dashboard.html docs/dashboard.html.{pre-engine-backup-if-saved}
+
 git add docs/dashboard.html docs/dashboard.md docs/dashboard.json
 git commit -m "chore(dashboard): regenerate after engine rollback"
+
+# Note: nếu build-dashboard.py vẫn dùng engine code (chưa reverted hoàn toàn),
+# regenerate sẽ fail hoặc produce post-engine outputs. Quay lại step 2-3 verify
+# git revert range covered scripts/work_state/ + scripts/build-dashboard.py.
+# Nếu cần xoá file thay vì overwrite (rare): PAUSE và hỏi founder per
+# memory `feedback_never_auto_delete_docs.md`.
 
 # 7. Push + force re-deploy on Railway
 git push origin main
