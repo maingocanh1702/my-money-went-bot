@@ -1,7 +1,7 @@
 ---
 title: Walk-through — Foundation Lane example (admin-auth)
 status: Reference
-version: v1.0.0
+version: v1.0.1
 date: 2026-05-19
 author: Founder + Claude
 related:
@@ -15,8 +15,9 @@ related:
 # Walk-through — Foundation Lane example: `admin-auth`
 
 > **Status:** Reference · Active
-> **Version:** v1.0.0
+> **Version:** v1.0.1
 > **Ngày tạo:** 2026-05-19
+> **Cập nhật:** 2026-05-20
 > **Mục đích:** Concrete worked example cho 1 P0/Foundation Lane feature đi qua đầy đủ Linear → tracker → spec → branch → code → PR → cross-model review → merge → deploy. Dùng `admin-auth` làm vehicle. Áp dụng same shape cho mọi P0 feature sau này (admin-commands Phase 6, multi-tenant migration W0.1, security/auth changes).
 
 ---
@@ -53,17 +54,19 @@ Mục tiêu: founder mở doc này khi start P0 feature tiếp theo, replace t�
 Feature scope:
 - Build `is_admin(user_id) -> bool` + `@admin_required` decorator
 - Add `admins` table với migration
-- Bootstrap: founder = `user_id=1` (per memory `project_wave0_gap_decisions.md`)
+- Admin identity source: `ADMIN_IDS` env (comma-separated Telegram/user IDs). Dev/example may use `ADMIN_IDS=1`, but production must be explicit.
 - **Out of scope** (defer Phase 6): admin commands (`/admin_stats`, `/admin_cost`, `/admin_user`, `/admin_resolve`), audit log wiring
+
+> **Security boundary:** `admin-auth` only answers "may this actor enter an admin-only handler?" It does **not** grant implicit cross-tenant data access. Any future admin command that reads across tenants must declare scope, add audit logging, and include dedicated tenant-isolation tests.
 
 ---
 
 ## 1. Plan source artifacts
 
-### 1.1 Linear ticket — MMW-202
+### 1.1 Linear ticket — MYM-202
 
 ```
-ID: MMW-202
+ID: MYM-202
 Title: Admin auth framework (commands deferred to Phase 6)
 Type: feature
 Priority: P0
@@ -78,12 +81,12 @@ Foundation cho /admin_* commands sau này. Phase 2 chỉ ship framework +
 identity check + tenant isolation. Commands defer Phase 6.
 
 Acceptance criteria:
-- [ ] Admin identity verified via Telegram user_id (FOUNDER_TELEGRAM_ID env, default 1)
+- [ ] Admin identity verified via Telegram/user ID against `ADMIN_IDS` env (explicit in production)
 - [ ] @admin_required decorator usable bởi handler functions
 - [ ] Non-admin call → silent ignore (no leak about command existence)
-- [ ] Anonymous webhook (message.from_user is None) → silent reject
+- [ ] Anonymous webhook (actor_id is None) → silent reject
 - [ ] Tenant isolation tests pass cho admin path + non-admin path + anonymous
-- [ ] Migration 0042_admins reversible (alembic downgrade tested)
+- [ ] Alembic Python migration `<next_revision>_add_admins.py` reversible (upgrade + downgrade tested)
 - [ ] Audit log wiring deferred to Phase 6 (out of scope, document trong spec)
 
 Dependencies: None
@@ -100,8 +103,10 @@ Edit `docs/implementation-tracker.md`, add row:
 ```markdown
 | feature_id | name | linear_id | phase | priority | risk_tier | lane | branches | specs.product | specs.tech | acceptance |
 |---|---|---|---|---|---|---|---|---|---|---|
-| admin-auth | Admin auth framework | MMW-202 | 2 | P0 | P0 | Foundation | feat/MMW-202-admin-auth | docs/features/feature-admin-auth.md | docs/features/BE/feature-admin-auth-tech.md | FS resolver + tenant isolation tests + reversible migration |
+| admin-auth | Admin auth framework | MYM-202 | 2 | P0 | P0 | Foundation | feat/MYM-202-admin-auth | docs/features/feature-admin-auth.md | docs/features/BE/feature-admin-auth-tech.md | Admin identity + decorator + silent reject + tenant-isolation/security tests + reversible migration |
 ```
+
+> **Schema note:** This row assumes post work-state schema (`linear_id`, `risk_tier`, `lane`, `specs.*`, `branches`). Current tracker rows may still use legacy columns and branch `feat/admin-auth`; migrate the row before following exact commands.
 
 Commit tracker change. Build script chạy, dashboard rebuild.
 
@@ -124,7 +129,7 @@ Skeleton:
 Framework cho admin commands (Phase 6). Phase 2 chỉ ship identity check + decorator.
 
 ## User experience
-- Admin user (founder = user_id=1) gõ /admin_command → bot respond.
+- Admin user whose ID is listed in `ADMIN_IDS` gõ `/admin_command` → handler may respond.
 - Non-admin user gõ cùng command → **silent ignore** (bot không reply, không log error to user).
 - Anonymous webhook (no user_id) → silent reject.
 
@@ -134,7 +139,7 @@ Leak prevention. Nếu bot reply "you are not admin", attacker biết command ex
 
 ## Edge cases
 - Admin lost access (revoked) → @lru_cache invalidate trong 60s (TTL).
-- Founder bootstrap: nếu DB empty hoặc startup glitch, FOUNDER_TELEGRAM_ID=1 luôn admin.
+- Dev bootstrap: `ADMIN_IDS=1` may be used locally only. Production requires explicit `ADMIN_IDS`; no hidden default admin.
 
 ## Out of scope (defer Phase 6)
 - Specific commands (/admin_stats, etc.)
@@ -145,10 +150,10 @@ Leak prevention. Nếu bot reply "you are not admin", attacker biết command ex
 [mirror Linear ticket AC]
 
 ## Test cases (high-level)
-- Founder (id=1) → is_admin returns True without DB hit (bootstrap)
-- Regular user (id=2) not in admins table → False
-- Anonymous (from_user=None) → silent reject path
-- Tenant isolation: admin sees all, non-admin sees own
+- User ID listed in `ADMIN_IDS` → `is_admin()` returns True
+- Regular user not listed in `ADMIN_IDS` or admins table → False
+- Anonymous / missing actor id → silent reject path
+- Tenant isolation: `admin-auth` does **not** grant implicit cross-tenant data access. It only gates admin-only handlers. Future cross-tenant admin commands must declare access scope + audit logging + dedicated tests.
 ```
 
 ### 1.4 BE tech spec
@@ -161,8 +166,8 @@ Skeleton:
 
 ## Module structure
 - `core/auth/__init__.py`
-- `core/auth/admin.py` — public API: is_admin(), admin_required decorator
-- `core/auth/cache.py` — TTLCache wrapper (60s TTL, maxsize=128)
+- `core/auth/admin.py` — public API: `is_admin()`, `admin_required` decorator
+- Optional cache utility — use existing project cache helper if available; adding `cachetools` requires explicit dependency/risk note
 
 ## Public API
 ```python
@@ -172,33 +177,42 @@ def admin_required(handler: Callable) -> Callable: ...
 ```
 
 ## Data model
+
+Use normal Alembic Python revision format used by this repo:
+
+```txt
+migrations/versions/<next_revision>_add_admins.py
+```
+
+Illustrative DDL inside Alembic upgrade/downgrade:
+
 ```sql
--- migrations/0042_admins.sql
 CREATE TABLE admins (
     user_id BIGINT PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
-    granted_by BIGINT NOT NULL REFERENCES users(user_id),
+    granted_by BIGINT REFERENCES users(user_id),
     granted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_admins_granted_at ON admins(granted_at);
-
--- Down migration (alembic downgrade): DROP TABLE admins CASCADE;
 ```
 
-## Bootstrap behavior
-- `FOUNDER_TELEGRAM_ID` env var (default `1`).
-- Inside is_admin: if `user_id == FOUNDER_TELEGRAM_ID` → return True without DB hit.
-- This satisfies Wave 0 decision "founder=id=1 bootstrap-only assumption" 
-  (memory `project_wave0_gap_decisions.md`).
+Downgrade must drop index/table and be tested with `alembic downgrade -1`.
+
+## Admin identity behavior
+- `ADMIN_IDS` env var: comma-separated user IDs, e.g. `ADMIN_IDS=1,828512068897603585`.
+- Production: missing/empty `ADMIN_IDS` is configuration error (fail fast at startup).
+- Dev/test may use explicit `ADMIN_IDS=1`; no implicit hidden default.
+- DB `admins` table can extend env bootstrap later, but env admins remain the break-glass path.
 
 ## Cache invalidation
-- TTLCache 60s — trade-off: admin revoke có ≤60s lag, acceptable per founder.
-- Manual cache_clear() exposed cho future admin grant/revoke flow Phase 6.
+- Cache optional. If used, TTL 60s — trade-off: admin revoke has ≤60s lag.
+- Use existing project cache helper or stdlib implementation first. If adding `cachetools`, declare dependency change in PR risk/blast radius.
+- Manual `cache_clear()` exposed for future admin grant/revoke flow Phase 6.
 
 ## Test plan (5 categories per Wave 0 lessons)
-1. Bootstrap unit: founder=admin without DB
+1. Bootstrap/config unit: IDs from `ADMIN_IDS` are admin without DB
 2. DB lookup unit: non-founder admin/non-admin states
 3. Decorator behavior: pass-through + silent ignore + anonymous reject
-4. Tenant isolation integration: admin user sees all, non-admin sees own (MANDATORY)
+4. Tenant isolation/security integration: admin-auth does not bypass tenant filters or leak data by itself (MANDATORY)
 5. Migration reversibility: alembic upgrade + downgrade round-trip
 
 ## Failure modes
@@ -230,11 +244,11 @@ source .venv/bin/activate      # per memory feedback_activate_venv_before_commit
 git fetch origin
 
 # Create new worktree for parallel session (CLAUDE.md hard rule #1)
-git worktree add ../MyMoneyWent-admin-auth feat/MMW-202-admin-auth -b
+git worktree add ../MyMoneyWent-admin-auth feat/MYM-202-admin-auth -b
 cd ../MyMoneyWent-admin-auth
 ```
 
-Branch name `feat/MMW-202-admin-auth` matches `pr-validate.yml` regex `^[a-z0-9-]+/MMW-[0-9]+-[a-z0-9-]+$`.
+Branch name `feat/MYM-202-admin-auth` matches `pr-validate.yml` regex `^[a-z0-9-]+/MMW-[0-9]+-[a-z0-9-]+$`.
 
 Engine events:
 - `branch_created` → state `tech-ready → in-progress`
@@ -246,7 +260,9 @@ Engine events:
 
 ### Step 3 — Code + commits (T+2 to T+4)
 
-Implement theo BE tech spec:
+Implement theo BE tech spec.
+
+> **Implementation note:** code below is illustrative pseudo-code for workflow shape. Actual implementation must follow current repo DB/session/model patterns and messenger adapter shape. Do not add new dependencies (`cachetools`, `freezegun`, etc.) without explicit dependency/risk note in PR body.
 
 ```python
 # core/auth/__init__.py
@@ -261,26 +277,22 @@ import os
 from functools import wraps
 from typing import Callable, Optional
 
-from cachetools import TTLCache
-from cachetools.keys import hashkey
+from core.config import ADMIN_IDS
+from core.db import get_session  # illustrative; use current repo session pattern
+from core.db.models import Admin  # illustrative; use current model location
 
-from core.db import get_session
-from core.db.models import Admin
-
-FOUNDER_TELEGRAM_ID = int(os.getenv("FOUNDER_TELEGRAM_ID", "1"))
-
-# TTL 60s — admin revoke lag accepted per spec
-_admin_cache: TTLCache[int, bool] = TTLCache(maxsize=128, ttl=60)
+# Optional cache; implementation may use existing project helper instead of new deps.
+_admin_cache: dict[int, bool] = {}
 
 
 async def is_admin(user_id: int) -> bool:
     """Check if user_id is admin.
 
-    Bootstrap: FOUNDER_TELEGRAM_ID always admin (no DB hit).
-    Otherwise: DB lookup + TTL cache.
+    ADMIN_IDS env users are admin (no DB hit).
+    Otherwise: DB lookup + optional cache.
     Fail closed: DB error → False (no leak).
     """
-    if user_id == FOUNDER_TELEGRAM_ID:
+    if user_id in ADMIN_IDS:
         return True
 
     cached = _admin_cache.get(user_id)
@@ -303,9 +315,9 @@ def admin_required(handler: Callable) -> Callable:
     """Decorator: silent ignore for non-admin / anonymous calls."""
     @wraps(handler)
     async def wrapper(message, *args, **kwargs):
-        if message.from_user is None:
+        if actor_id is None:
             return  # silent — anonymous reject
-        if not await is_admin(message.from_user.id):
+        if not await is_admin(actor_id):
             return  # silent — non-admin reject
         return await handler(message, *args, **kwargs)
     return wrapper
@@ -321,7 +333,7 @@ def cache_clear() -> None:
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from core.auth.admin import is_admin, admin_required, cache_clear, FOUNDER_TELEGRAM_ID
+from core.auth.admin import is_admin, admin_required, cache_clear
 
 
 @pytest.fixture(autouse=True)
@@ -332,9 +344,10 @@ def clear_cache():
 
 
 # Category 1: Bootstrap unit
-async def test_founder_is_admin_without_db_hit():
-    """Bootstrap: founder always admin, no DB call."""
-    assert await is_admin(FOUNDER_TELEGRAM_ID) is True
+async def test_env_admin_is_admin_without_db_hit(monkeypatch):
+    """Bootstrap: ADMIN_IDS users are admin, no DB call."""
+    monkeypatch.setenv("ADMIN_IDS", "1")
+    assert await is_admin(1) is True
 
 
 # Category 2: DB lookup unit
@@ -369,19 +382,20 @@ async def test_admin_required_passes_through_admin():
     handler = AsyncMock(return_value="ok")
     @admin_required
     async def my_handler(msg): return await handler(msg)
-    msg = MagicMock(from_user=MagicMock(id=FOUNDER_TELEGRAM_ID))
+    msg = MagicMock(from_user=MagicMock(id=1))  # 1 present in ADMIN_IDS for this test
     result = await my_handler(msg)
     assert result == "ok"
     handler.assert_called_once_with(msg)
 
 
 # Category 4: Tenant isolation integration (MANDATORY per CLAUDE.md hard rule #4)
-async def test_tenant_isolation_admin_sees_all_tenants(db, founder, tenant_a, tenant_b):
-    # ... admin queries → see both tenant_a + tenant_b data
+async def test_admin_auth_does_not_bypass_tenant_filters(db, admin_user, tenant_a, tenant_b):
+    # Auth gate can allow handler execution, but handler queries must still apply
+    # explicit tenant scope unless the future admin command declares cross-tenant access.
     ...
 
-async def test_tenant_isolation_non_admin_sees_own_only(db, user_a, tenant_a, tenant_b):
-    # ... user_a queries → see only tenant_a data
+async def test_non_admin_path_does_not_execute_or_leak_data(db, user_a, tenant_a, tenant_b):
+    # Non-admin never reaches handler; no data returned, no command-existence leak.
     ...
 
 
@@ -397,7 +411,7 @@ async def test_cache_clear_invalidates(db):
 
 Migration:
 ```sql
--- migrations/versions/0042_admins.sql
+-- migrations/versions/<next_revision>_add_admins.py (Alembic Python revision)
 -- Up
 CREATE TABLE admins (
     user_id BIGINT PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
@@ -412,9 +426,9 @@ DROP TABLE admins CASCADE;
 
 Conventional Commits style (CLAUDE.md):
 ```
-feat(admin-auth): add FOUNDER_TELEGRAM_ID bootstrap + is_admin function
+feat(admin-auth): add ADMIN_IDS bootstrap + is_admin function
 feat(admin-auth): add @admin_required decorator with silent ignore
-feat(admin-auth): add admins table migration (0042)
+feat(admin-auth): add admins table migration
 test(admin-auth): tenant isolation tests for admin/non-admin/anonymous paths
 test(admin-auth): cache hit/clear + bootstrap edge cases
 ```
@@ -440,11 +454,11 @@ signals: spec=✓ tech=✓ branch=✓ commits=5 pr=∅ ci=∅
 ### Step 4 — Push + PR open (T+4)
 
 ```bash
-git push -u origin feat/MMW-202-admin-auth
+git push -u origin feat/MYM-202-admin-auth
 
 gh pr create \
   --base main \
-  --title "feat(admin-auth): admin auth framework (Closes MMW-202)" \
+  --title "feat(admin-auth): admin auth framework (Closes MYM-202)" \
   --body-file - <<'EOF'
 ## What
 Admin auth framework — `is_admin()` + `@admin_required` decorator + `admins` table 
@@ -456,8 +470,8 @@ isolation **trước** khi viết command, không retrofit security sau.
 
 ## How
 - `core/auth/admin.py` — is_admin + decorator + TTLCache 60s
-- `migrations/0042_admins.sql` — admins table (reversible)
-- `FOUNDER_TELEGRAM_ID` env var, default 1 (Wave 0 bootstrap)
+- `migrations/versions/<next_revision>_add_admins.py` — admins table (reversible Alembic Python revision)
+- `ADMIN_IDS` env var, explicit in production
 - Silent ignore design — no leak about command existence
 
 ## Tests
@@ -479,7 +493,7 @@ isolation **trước** khi viết command, không retrofit security sau.
 - Migration additive (CREATE TABLE), no data loss path
 - Cache TTL 60s — admin revoke lag accepted (documented)
 
-Closes MMW-202
+Closes MYM-202
 EOF
 ```
 
@@ -499,7 +513,7 @@ Required checks run (per CLAUDE.md):
 
 CI green sau ~4 phút. Engine: `ci_passed`, overlay `ci-running` cleared.
 
-Linear: integration link PR #87 vào ticket MMW-202. Auto-move sang "In Review".
+Linear: integration link PR #87 vào ticket MYM-202. Auto-move sang "In Review".
 
 Dashboard:
 ```
@@ -522,10 +536,7 @@ Tag Codex review trên PR. Codex round 1 — 3 findings:
 [Codex Review · Round 1]
 
 Finding 1 (BLOCKER):
-core/auth/admin.py:18 — FOUNDER_TELEGRAM_ID hardcoded fallback `1` in os.getenv 
-default. Acceptable for dev, but prod should fail loudly if env not set 
-(security-sensitive). Recommend: raise ConfigError if FOUNDER_TELEGRAM_ID unset 
-in production (detect via ENV=production check).
+core/auth/admin.py:18 — `ADMIN_IDS` parsing silently defaults to empty set in production. For security-sensitive admin framework, prod should fail loudly if env not set. Recommend: raise ConfigError if `ADMIN_IDS` empty in production (detect via ENV=production check).
 
 Finding 2 (MAJOR):
 core/auth/admin.py:30-40 — except Exception in is_admin() catches everything, 
@@ -533,8 +544,7 @@ hides programming bugs (TypeError, AttributeError). Narrow to (asyncpg.PostgresE
 asyncio.TimeoutError, sqlalchemy.exc.SQLAlchemyError) — explicit DB error categories.
 
 Finding 3 (MINOR):
-tests/core/auth/test_admin.py — thiếu test cho TTL expiry. Add freezegun-based 
-test: set admin in cache, advance time 61s, assert re-lookup.
+tests/core/auth/test_admin.py — thiếu test cho TTL/cache expiry if cache is implemented. Add test using project-approved time helper. If adding `freezegun`, declare dependency change explicitly.
 ```
 
 Engine: `changes_requested`, state `in-review → changes-requested`.
@@ -556,16 +566,15 @@ import os
 
 ENV = os.getenv("ENV", "development")
 
-_founder_id_raw = os.getenv("FOUNDER_TELEGRAM_ID")
-if _founder_id_raw is None:
-    if ENV == "production":
-        raise RuntimeError(
-            "FOUNDER_TELEGRAM_ID required in production — refusing to start "
-            "with default fallback to id=1 (would grant founder access to wrong user)."
-        )
-    _founder_id_raw = "1"  # dev fallback
+_admin_ids_raw = os.getenv("ADMIN_IDS", "")
+if not _admin_ids_raw.strip() and ENV == "production":
+    raise RuntimeError("ADMIN_IDS required in production")
 
-FOUNDER_TELEGRAM_ID = int(_founder_id_raw)
+ADMIN_IDS = frozenset(
+    int(part.strip())
+    for part in _admin_ids_raw.split(",")
+    if part.strip()
+)
 ```
 
 **Finding 2 fix:**
@@ -585,22 +594,19 @@ except (asyncpg.PostgresError, asyncio.TimeoutError, SQLAlchemyError) as e:
 **Finding 3 fix:**
 ```python
 # tests/core/auth/test_admin.py
-from freezegun import freeze_time
-import datetime
-
-async def test_ttl_cache_expires_after_60s(db):
-    with freeze_time("2026-05-19 10:00:00") as frozen:
-        await is_admin(999)  # populates cache
-        frozen.tick(delta=datetime.timedelta(seconds=61))
-        # Next call should re-lookup, not hit cache
-        # ... assert via mock spy on DB session
+async def test_ttl_cache_expires_after_60s(db, time_helper):
+    # Use project-approved time helper/monkeypatch. If using freezegun, declare dependency.
+    await is_admin(999)  # populates cache
+    time_helper.advance(seconds=61)
+    # Next call should re-lookup, not hit cache
+    # ... assert via mock spy on DB session
 ```
 
 Push 3 fix commits:
 ```
-fix(admin-auth): raise ConfigError if FOUNDER_TELEGRAM_ID unset in prod
+fix(admin-auth): require ADMIN_IDS in production
 fix(admin-auth): narrow exception catch in is_admin to DB errors only
-test(admin-auth): add TTL expiry test with freezegun
+test(admin-auth): add TTL expiry test
 ```
 
 CI re-run → green sau 3 phút. Re-request Codex review.
@@ -657,7 +663,7 @@ Click "Squash and merge" trên GitHub UI.
 
 GitHub: PR #87 closed (merged=true). Engine: `merged`, state `approved-pending-merge → merged`.
 
-Linear's GitHub integration: detect "Closes MMW-202" + merged → auto-move ticket sang "Done".
+Linear's GitHub integration: detect "Closes MYM-202" + merged → auto-move ticket sang "Done".
 
 Dashboard:
 ```
@@ -678,7 +684,7 @@ Railway webhook fires sau push lên main:
 2. Run alembic migrations:
    ```
    $ alembic upgrade head
-   INFO  [alembic.runtime.migration] Running upgrade 0041 -> 0042, add admins table
+   INFO  [alembic.runtime.migration] Running upgrade <prev> -> <next>, add admins table
    ```
 3. Deploy new replica (~60s)
 4. Health check `GET /healthz` pass
@@ -858,13 +864,13 @@ Substitution table — replace admin-auth specifics với feature mới:
 | Field | admin-auth value | Your feature (fill in) |
 |-------|------------------|------------------------|
 | feature_id | `admin-auth` | `<your-feature-kebab>` |
-| linear_id | `MMW-202` | `MMW-<new-id>` |
+| linear_id | `MYM-202` | `MMW-<new-id>` |
 | Phase | 2 | `<phase>` |
-| Branch prefix | `feat/MMW-202-admin-auth` | `feat/MMW-<id>-<slug>` |
+| Branch prefix | `feat/MYM-202-admin-auth` | `feat/MYM-<id>-<slug>` |
 | Spec path | `docs/features/feature-admin-auth.md` | `docs/features/feature-<slug>.md` |
 | Tech spec | `docs/features/BE/feature-admin-auth-tech.md` | `docs/features/BE/feature-<slug>-tech.md` |
 | Module path | `core/auth/admin.py` | `core/<area>/<module>.py` |
-| Migration file | `0042_admins.sql` | `<next>_<name>.sql` |
+| Migration file | `migrations/versions/<next_revision>_add_admins.py` | `migrations/versions/<next_revision>_<name>.py` |
 | Test file | `tests/core/auth/test_admin.py` | `tests/core/<area>/test_<module>.py` |
 | Bootstrap assumption | founder=id=1 | (your bootstrap if any) |
 
@@ -907,7 +913,7 @@ Other P0 candidates trong tracker:
 - Codex review requested: ...
 - Round count: ...
 
-Closes MMW-NNN
+Closes MYM-NNN
 ```
 
 ---
@@ -946,4 +952,5 @@ Ready to squash-merge.
 
 | Version | Date | Author | Notes |
 |---------|------|--------|-------|
-| v1.0.0 | 2026-05-19 | Founder + Claude | Initial reference walk-through. Uses admin-auth (MMW-202, P0, Foundation Lane) as concrete vehicle. Complements §7 of linear-and-dashboard-workflow.md (which uses funding-sources P1/Standard). |
+| v1.0.1 | 2026-05-20 | Founder + Claude | Hardening pass: aligned admin identity with `ADMIN_IDS`, corrected Alembic migration format, fixed tracker acceptance typo, clarified post work-state schema assumption, removed implicit cross-tenant admin access, and marked code/dependency snippets as illustrative. |
+| v1.0.0 | 2026-05-19 | Founder + Claude | Initial reference walk-through. Uses admin-auth (MYM-202, P0, Foundation Lane) as concrete vehicle. Complements §7 of linear-and-dashboard-workflow.md (which uses funding-sources P1/Standard). |

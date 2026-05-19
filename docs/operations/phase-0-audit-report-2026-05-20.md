@@ -70,7 +70,7 @@ Cross-reference: spec §11.2 WorkItem dataclass requires 18 fields. Tracker prov
 
 | WorkItem field | Default strategy | Warning emitted? |
 |----------------|------------------|------------------|
-| `linear_id` | None if id không match `MMW-NNN` pattern; else id itself | `missing_linear_id` if branches exist + PR active |
+| `linear_id` | None if id không match `MYM-NNN` pattern; else id itself | `missing_linear_id` if branches exist + PR active |
 | `type` | Infer: `W*` → `infra`, kebab → `feature`. Manual override via future YAML extension | `type_inferred` (annotation) |
 | `phase` | Section header context (parse `### Phase N:` heading above row) | None (deterministic) |
 | `priority` | Default `P1` (mid-tier). Manual override via future YAML extension | `priority_defaulted` |
@@ -92,7 +92,7 @@ Cross-reference: spec §11.2 WorkItem dataclass requires 18 fields. Tracker prov
 ```yaml
 # Inferred WorkItem cho row `funding-sources` (manual fields shown; ⚠ = inferred)
 id: funding-sources
-linear_id: null                              # ⚠ no MMW-NNN; warning missing_linear_id (branches exist)
+linear_id: null                              # ⚠ no MYM-NNN; warning missing_linear_id (branches exist)
 feature_id: funding-sources
 title: Funding sources resolver + handlers
 type: feature                                # ⚠ inferred from kebab pattern
@@ -227,13 +227,13 @@ Acceptance: AC1a + AC1b + AC1c (filesystem + git subset) + AC2 + AC3 + AC4 + AC1
 Linked spec: docs/operations/dashboard-plan-state-split.md (Accepted v1.2.1)
 ```
 
-→ Assigned ID becomes `MMW-NNN`. Tracker row gets added.
+→ Assigned ID becomes `MYM-NNN`. Tracker row gets added.
 
 **Action 3:** Add tracker row cho engine work itself
 
 ```markdown
 | PR | Wave | Feature | Status | Branch | Gates | Notes |
-| work-state-engine-1a | Wave 2+ | Work-state engine Phase 1a (core + filesystem + git) | ⬜ | `feat/MMW-NNN-work-state-engine-1a` | 🔒T 🔒I 🔒X | Engine kickoff per dashboard-plan-state-split.md v1.2.1 Accepted. P0/Foundation. Spec §10 Phase 1a scope. |
+| work-state-engine-1a | Wave 2+ | Work-state engine Phase 1a (core + filesystem + git) | ⬜ | `feat/MYM-NNN-work-state-engine-1a` | 🔒T 🔒I 🔒X | Engine kickoff per dashboard-plan-state-split.md v1.2.1 Accepted. P0/Foundation. Spec §10 Phase 1a scope. |
 ```
 
 ### 5.2 Nice-to-have (not blocking Phase 1)

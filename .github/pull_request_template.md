@@ -2,8 +2,8 @@
 <!-- 1-2 sentences -->
 
 ## Linear Issue
-Closes MMW-XXX
-<!-- Required: Closes/Fixes/Ref MMW-NNN. Legacy W0.*: "Linear: N/A" -->
+Closes MYM-XXX
+<!-- Required: Closes/Fixes/Ref MYM-NNN. Legacy W0.*: "Linear: N/A" -->
 
 ## Changes
 - [ ] Item 1

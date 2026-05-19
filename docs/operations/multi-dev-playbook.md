@@ -5,7 +5,7 @@
 ## Task assignment
 - Devs self-serve: Linear Backlog → drag to Todo → self-assign
 - Founder may assign Urgent bugs + cross-feature parents
-- Linear copies branch name `<dev>/MMW-<id>-<slug>`
+- Linear copies branch name `<dev>/MYM-<id>-<slug>`
 
 ## WIP limit (soft)
 - ≤2 issues in `In Progress` + `In Review` per dev
