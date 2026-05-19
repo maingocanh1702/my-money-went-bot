@@ -1,9 +1,9 @@
 ---
 title: Dashboard Plan/State Split — Auto-Progress Work Engine Design
-status: Proposed
-version: v1.2.0
+status: Proposed · Codex-approved · Awaiting founder sign-off
+version: v1.2.1
 date: 2026-05-19
-updated: 2026-05-19
+updated: 2026-05-20
 author: Founder + Claude
 related:
   - docs/operations/dashboard-realtime-explained.md
@@ -14,10 +14,10 @@ related:
 
 # Dashboard Plan/State Split — Auto-Progress Work Engine Design
 
-> **Status:** Proposed · Awaiting cross-model review (Codex) + founder approval
-> **Version:** v1.2.0
+> **Status:** Proposed · Codex-approved (3 rounds) · Awaiting founder sign-off
+> **Version:** v1.2.1
 > **Ngày tạo:** 2026-05-19
-> **Cập nhật:** 2026-05-19
+> **Cập nhật:** 2026-05-20
 > **Mục đích:** Tách plan/state để xây foundation cho một **Linear/Jira-like work tracker có progress tự update từ trigger/artifact**, không chỉ sửa dashboard. Dashboard là projection đầu tiên; core asset là work-item schema + signal collectors + event engine + progress model — tạo ra **artifact-derived authoritative state**.
 
 ---
@@ -781,7 +781,7 @@ Do not overload base status with operational warnings. **All overlay references 
 | `review-requested` | reviewers requested, no response yet | Waiting for reviewer | `WAITING` |
 | `deploy-failed` | Railway/CI reports deploy failure | Production rollback / re-deploy needed | `FAILING` |
 | `unknown` | API/signal failure | Engine cannot trust signal | `UNKNOWN` |
-| `artifact-drift` | tracker points to missing/ambiguous artifact (incl. `missing_spec_link`, `possible_spec_moved`, `untracked_branch`, `convention_drift`) | Plan/source mapping needs repair | `UNKNOWN` |
+| `artifact-drift` | tracker points to missing/ambiguous artifact (incl. `missing_spec_link`, `missing_tech_link`, `possible_spec_moved`, `untracked_branch`) | Plan/source mapping needs repair | `UNKNOWN` |
 | `ambiguous-pr-mapping` | PR identity resolution found multiple candidates | Engine can't pick PR → mark unknown | `UNKNOWN` |
 | `partial-progress` | multi-branch aggregation: some coupled branches at terminal state while others in-progress | Reality hidden by MIN-progressed status alone | (annotation, no rollup change) |
 | `stale-cache` | cache entry expired or invalidated | Engine revalidates before trusting cached mapping | (annotation) |
@@ -1420,6 +1420,7 @@ Lane: **Foundation Lane / P0** because this changes dashboard pipeline, tracker 
 
 | Version | Date | Author | Notes |
 |---|---|---|---|
+| v1.2.1 | 2026-05-20 | Founder + Claude | Codex cross-model review consolidated (3 rounds, 23 findings total addressed). Round 1: 15 findings (10 MAJOR + 5 MINOR) — linear_id field, deploy-failed overlay, canonical overlay enum, multi-branch lattice, runtime urgency deterministic algorithm, per-event-type dedup, CI cache key strategy, force-pr-resolve as CLI, foundation_change milestone signals, critical misclassification defined, spec move detection, phase rollup counts, exempt branch behavior, Phase 1 estimate revised 5-7 days, rollback runbook completeness. Round 2: 7 findings (4 MAJOR + 3 MINOR) — AC10 "mirror exactly" softened, P2 blocked → warning fallback, §8.0 explicit mappings for changes-requested/merged/abandoned (new ABANDONED bucket), §8.2.1 naming convention (kebab overlays vs snake warnings), partial-progress wording tightened, AC9a typo, rollback hard-rule #2 guard. Round 3: 1 finding (1 MAJOR) — convention_drift info-only consistency. 30 ACs (added AC11c-AC11e, AC19-AC25). 1076 → 1426 lines (+32%). Verdict: APPROVE WITH CHANGES → all resolved → ready for v1.2.1 + Foundation Lane founder sign-off. |
 | v1.2.0 | 2026-05-19 | Founder + Claude | Integrated artifact-driven workflow feedback: added Intent vs Reality framing, artifact-derived authoritative state wording, human status projection, runtime urgency model, and clarified progress changes come from artifact/workflow events. |
 | v1.1.1 | 2026-05-19 | Founder + Claude | Hardening pass: added CI/runtime state persistence strategy, cache-warmup/stale-cache overlays, CLI module path consistency, required-check config source, and separated priority vs risk_tier vs lane. |
 | v1.1.0 | 2026-05-19 | Founder + Claude | Expanded from dashboard plan/state split into auto-progress work engine. Added WorkItem schema, manual-vs-derived boundary, event log, progress profiles, projections, robust PR/CI/deploy handling, overlays, migration gates, and Linear/Jira-like future path. |
