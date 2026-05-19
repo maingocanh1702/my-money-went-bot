@@ -42,3 +42,9 @@ docs/tasks/
 scripts/.autopilot_runner_state.json
 scripts/.linear_migrate_state.json
 scripts/.dryrun-ok
+
+# Temporary recovery workspace (not tracked)
+.recovery-stash-conflicts/
+
+# Work-state engine runtime state (per dashboard-plan-state-split.md §7.3)
+.dashboard/
