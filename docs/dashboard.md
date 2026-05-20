@@ -2,7 +2,7 @@
 
 > **Auto-generated** từ [`implementation-tracker.md`](implementation-tracker.md) bằng `scripts/build-dashboard.py`.
 > KHÔNG edit trực tiếp — sửa tracker rồi rebuild.
-> **Cập nhật:** 2026-05-20 17:44 · **Branch hiện tại:** `main`
+> **Cập nhật:** 2026-05-21 01:18 · **Branch hiện tại:** `feat/MYM-4-work-state-engine-1b-projection`
 
 Để xem dashboard HTML đẹp hơn: mở [`dashboard.html`](dashboard.html) bằng browser.
 
@@ -11,7 +11,7 @@
 ## Tổng quan
 
 - **MVP progress:** **17%** (6/36 PR merged)
-- **In flight:** 0 PR · **Blocked:** 0 · **Deferred:** 0
+- **In flight:** 1 PR · **Blocked:** 0 · **Deferred:** 0
 - **Target launch:** Tháng 9/2026 (~16 weeks runway)
 
 ## Phase progress
@@ -37,7 +37,7 @@
 | `W0.10` | Dashboard v3 rich UI + click-through + Chart.js | ✅ Merged | `feat/dashboard-v3-rich-v2` |
 | `work-state-engine-1a` | Work-State Engine — Phase 1a (skeleton + filesystem + git) | ✅ Merged | `feat/MYM-1-work-state-engine-1a` |
 | `work-state-engine-1b` | Work-State Engine — Phase 1b (github + ci + railway collectors) | ⬜ Not started | `feat/MYM-3-work-state-engine-1b` |
-| `work-state-engine-1b'` | Work-State Engine — Phase 1b' (dashboard projection follow-up) | ⬜ Not started | `feat/MYM-4-work-state-engine-1b-projection` |
+| `work-state-engine-1b'` | Work-State Engine — Phase 1b' (dashboard projection follow-up) | ⬜ In review | `feat/MYM-4-work-state-engine-1b-projection` |
 | `W1.1` | Docker Compose dev + prod | ⬜ Not started | `infra/W1.1-docker-compose` |
 | `W1.2` | Discord adapter (`core/messenger/discord.py`) | ⬜ Not started | `feat/W1.2-discord-adapter` |
 | `W1.3` | Phase 1 integration smoke | ⬜ Not started | `chore/W1.3-phase1-smoke` |
@@ -124,17 +124,24 @@ gantt
 
 ## Đang làm
 
-_Không có PR active._
+### work-state-engine-1b' — Work-State Engine — Phase 1b' (dashboard projection follow-up)
+
+- **Status:** ⬜ In review · 🌿 đang trên branch này
+- **Branch:** `feat/MYM-4-work-state-engine-1b-projection`
+- **Wave:** Wave 0 follow-up
+- **Gates:** 🔒X
+- **Phase:** Phase 1
+- **Notes:** **Ready to kickoff post MYM-3 merge.** **Linear:** [MYM-4](https://linear.app/maingocanh/issue/MYM-4) — project `Work-State Engine`, P1 manual_only. **Spec:** `docs/operations/dashboard-engine/dashboard-plan-state-split.md` v1.2.1 §10 + §11.1 + §13 (AC1g + AC5 + AC6 + AC10 + AC11a). **Prereq:** MYM-3 merged ✓ at `3e654cf` (2026-05-20) — Signals dataclass extensions stable, github+ci+railway active. **Prompt:** `docs/autopilot/prompts/work-state-engine-1b-projection-autopilot.md` (drafted 2026-05-21: 7 Steps + 2 Checkpoints + 12 circuit breakers; pure read-only consumer of `.dashboard/current_state.json`). **Scope:** Single module `scripts/work_state/projections/dashboard.py` — enrich `docs/dashboard.json` rows với `state` block (computed_status + human_status + pr_state + ci_state + deploy_state + review_state + overlays + last_event_ts). Side-by-side rendering (manual `status` từ tracker giữ UNCHANGED, additive `state` từ engine). CLI entry point. Idempotent. `--no-network` mode supported. ~0.5-1 work-day. Codex 2× consecutive clean required. Out of scope: multi-branch agg projection (Phase 1c), build-dashboard.py auto-wiring (Phase 1c), runtime urgency AC11b (Phase 1d), foundation_change milestones AC11c (post-shadow ticket), manual status removal (Phase 3 cutover). **Scope reconcile rationale:** A+ option lock 2026-05-20 — projection split out of spec §10's canonical 1b để align Linear milestone 1:1 với prompt scope.
 
 ## Up next
 
 | PR | Feature | Phase | Status |
 |----|---------|-------|--------|
 | `work-state-engine-1b` | Work-State Engine — Phase 1b (github + ci + railway collectors) | Phase 1 | ⬜ Not started |
-| `work-state-engine-1b'` | Work-State Engine — Phase 1b' (dashboard projection follow-up) | Phase 1 | ⬜ Not started |
 | `W1.1` | Docker Compose dev + prod | Phase 1 | ⬜ Not started |
 | `W1.2` | Discord adapter (`core/messenger/discord.py`) | Phase 1 | ⬜ Not started |
 | `W1.3` | Phase 1 integration smoke | Phase 1 | ⬜ Not started |
+| `funding-sources` | Funding sources resolver + handlers | Phase 2 | ⬜ Not started |
 
 ---
 
