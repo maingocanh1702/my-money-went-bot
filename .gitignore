@@ -29,6 +29,12 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Linter & type-checker caches
+.import_linter_cache/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
 # Logs
 *.log
 HOW_IT_WORKS.md
