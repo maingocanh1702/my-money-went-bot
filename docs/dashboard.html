@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>MyMoneyWent — progress dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="60">
+<style>
+:root {
+  --bg-page: #f6f4ef;
+  --bg-surface: #ffffff;
+  --bg-secondary: #f1efe8;
+  --bg-hover: rgba(0,0,0,0.025);
+  --bg-warning: #faeeda;
+  --bg-info: #e6f1fb;
+  --bg-success: #eaf3de;
+  --bg-danger: #fcebeb;
+  --text-primary: #1a1915;
+  --text-secondary: #5f5e5a;
+  --text-tertiary: #888780;
+  --text-warning: #854f0b;
+  --text-info: #185fa5;
+  --text-success: #3b6d11;
+  --text-danger: #a32d2d;
+  --border-tertiary: rgba(0,0,0,0.10);
+  --border-secondary: rgba(0,0,0,0.18);
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-page: #1a1915;
+    --bg-surface: #25241f;
+    --bg-secondary: #2c2c2a;
+    --bg-hover: rgba(255,255,255,0.04);
+    --bg-warning: #412402;
+    --bg-info: #042c53;
+    --bg-success: #173404;
+    --bg-danger: #501313;
+    --text-primary: #f1efe8;
+    --text-secondary: #b4b2a9;
+    --text-tertiary: #888780;
+    --text-warning: #faeeda;
+    --text-info: #e6f1fb;
+    --text-success: #eaf3de;
+    --text-danger: #fcebeb;
+    --border-tertiary: rgba(255,255,255,0.10);
+    --border-secondary: rgba(255,255,255,0.22);
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 1.25rem 1rem 2rem; font-family: var(--font-sans); background: var(--bg-page); color: var(--text-primary); line-height: 1.4; }
+.container { max-width: 1080px; margin: 0 auto; }
+.page-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 1rem; }
+h1 { font-size: 18px; font-weight: 500; margin: 0; }
+.meta { font-size: 11px; color: var(--text-tertiary); margin: 0; font-family: var(--font-mono); }
+.meta code { font-family: var(--font-mono); }
+.head-meta { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.live-indicator { font-size: 11px; font-family: var(--font-mono); cursor: pointer; padding: 3px 9px; border-radius: 12px; user-select: none; border: 1px solid transparent; transition: filter 0.15s ease; }
+.live-indicator.init { background: var(--bg-secondary); color: var(--text-tertiary); }
+.live-indicator.ok { background: var(--bg-success); color: var(--text-success); border-color: rgba(59,109,17,0.2); }
+.live-indicator.syncing { background: var(--bg-info); color: var(--text-info); border-color: rgba(24,95,165,0.2); }
+.live-indicator.err { background: var(--bg-danger); color: var(--text-danger); border-color: rgba(163,45,45,0.2); }
+.live-indicator.warn { background: var(--bg-warning); color: var(--text-warning); border-color: rgba(133,79,11,0.2); }
+.live-indicator.paused { background: var(--bg-secondary); color: var(--text-secondary); }
+.live-indicator:hover { filter: brightness(0.95); }
+@keyframes live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+.live-indicator.ok::before { content: "●"; margin-right: 4px; color: #3b6d11; animation: live-pulse 2s ease-in-out infinite; }
+
+/* Status dots — shared visual language */
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; box-sizing: border-box; }
+.dot.merged { background: #3b6d11; }
+.dot.ready { background: #639922; }
+.dot.in-review { background: #185fa5; }
+.dot.in-progress { background: #ba7517; }
+.dot.blocked { background: #a32d2d; }
+.dot.deferred { background: var(--text-tertiary); opacity: 0.45; }
+.dot.not-started { background: transparent; border: 1.5px solid var(--border-secondary); }
+
+/* Hero strip — current PR + KPIs side by side */
+.hero { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 2fr); gap: 10px; margin-bottom: 10px; }
+.hero-current { background: var(--bg-surface); border: 0.5px solid var(--border-tertiary); border-radius: var(--radius-lg); padding: 12px 14px; display: flex; gap: 12px; align-items: center; min-height: 76px; }
+.hero-current .dot { width: 14px; height: 14px; }
+.hero-current .hero-text { min-width: 0; flex: 1; }
+.hero-current .hero-label { font-size: 10px; color: var(--text-tertiary); margin: 0 0 3px; text-transform: uppercase; letter-spacing: 0.06em; }
+.hero-current .hero-title { font-size: 15px; font-weight: 500; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hero-current .hero-sub { font-size: 11px; color: var(--text-secondary); margin: 3px 0 0; font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hero-current.empty .hero-title { color: var(--text-tertiary); }
+
+.hero-kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.kpi { background: var(--bg-surface); border: 0.5px solid var(--border-tertiary); border-radius: var(--radius-md); padding: 10px 8px; text-align: center; display: flex; flex-direction: column; justify-content: center; }
+.kpi.alert { background: var(--bg-danger); border-color: var(--bg-danger); }
+.kpi.alert .kpi-val { color: var(--text-danger); }
+.kpi.alert .kpi-lbl { color: var(--text-danger); }
+.kpi-val { font-size: 20px; font-weight: 500; margin: 0; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.kpi-lbl { font-size: 10px; color: var(--text-secondary); margin: 3px 0 0; text-transform: uppercase; letter-spacing: 0.05em; }
+.kpi-sub { font-size: 10px; color: var(--text-tertiary); margin: 1px 0 0; }
+
+/* Next-up chips strip */
+.next-strip { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 14px; padding: 8px 12px; background: var(--bg-secondary); border-radius: var(--radius-md); }
+.next-label { font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500; margin-right: 4px; }
+.next-chip { background: var(--bg-surface); border: 0.5px solid var(--border-tertiary); border-radius: var(--radius-md); padding: 4px 10px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; color: var(--text-primary); }
+.next-chip .pr-id { font-family: var(--font-mono); color: var(--text-secondary); font-size: 11px; }
+
+/* Phase kanban board */
+.board { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.phase-card { background: var(--bg-surface); border: 0.5px solid var(--border-tertiary); border-radius: var(--radius-lg); padding: 12px 14px; display: flex; flex-direction: column; min-height: 0; }
+.phase-card.active { border-color: var(--border-secondary); }
+.phase-card-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.phase-card-name { font-size: 13px; font-weight: 500; margin: 0; }
+.phase-card-meta { font-size: 11px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.phase-card-bar { background: var(--bg-secondary); height: 4px; border-radius: 999px; overflow: hidden; margin-bottom: 10px; }
+.phase-card-bar > div { background: var(--text-info); height: 100%; transition: width 0.3s; }
+.phase-card-bar > div.zero { background: var(--border-tertiary); width: 100% !important; opacity: 0.35; }
+.phase-prs { display: flex; flex-direction: column; gap: 2px; }
+.pr-row { display: grid; grid-template-columns: 12px 64px minmax(0, 1fr); gap: 8px; align-items: center; padding: 4px 6px; border-radius: 5px; font-size: 12px; line-height: 1.3; transition: background 0.1s; }
+.pr-row:hover { background: var(--bg-hover); }
+.pr-row.current { background: var(--bg-info); }
+.pr-row.current .pr-id, .pr-row.current .pr-name { color: var(--text-info); }
+.pr-row .pr-id { font-family: var(--font-mono); color: var(--text-secondary); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pr-row .pr-name { color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 5px; min-width: 0; }
+.pr-row .pr-name-text { overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.pr-row.deferred .pr-name, .pr-row.deferred .pr-id { color: var(--text-tertiary); }
+.sync-badge { font-size: 10px; font-family: var(--font-mono); padding: 1px 5px; border-radius: 999px; flex-shrink: 0; line-height: 1.3; }
+.sync-badge.unpushed { background: var(--bg-warning); color: var(--text-warning); }
+.sync-badge.unpulled { background: var(--bg-info); color: var(--text-info); }
+
+/* Risk callout */
+.callout { padding: 10px 14px; border-radius: var(--radius-md); display: flex; gap: 10px; align-items: flex-start; font-size: 12px; margin-top: 14px; }
+.callout.warn { background: var(--bg-warning); color: var(--text-warning); }
+.callout strong { display: block; margin-bottom: 2px; font-weight: 500; }
+
+/* Legend */
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 11px; color: var(--text-secondary); margin-top: 1rem; padding-top: 0.75rem; border-top: 0.5px solid var(--border-tertiary); align-items: center; }
+.legend .item { display: inline-flex; align-items: center; gap: 5px; }
+
+@media (max-width: 760px) {
+  .hero { grid-template-columns: 1fr; }
+  .hero-kpis { grid-template-columns: repeat(6, 1fr); }
+}
+@media (max-width: 540px) {
+  .hero-kpis { grid-template-columns: repeat(3, 1fr); }
+  .kpi-val { font-size: 18px; }
+  .pr-row { grid-template-columns: 12px 56px minmax(0, 1fr); gap: 6px; }
+  .sync-badge { font-size: 9px; padding: 1px 4px; }
+}
+
+/* === v3: animations + filter/search + chart === */
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+@keyframes ring-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(24, 95, 165, 0.4); }
+  100% { box-shadow: 0 0 0 8px rgba(24, 95, 165, 0); }
+}
+.phase-card { animation: fade-in 0.3s ease-out; }
+.phase-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06); transition: transform 0.2s, box-shadow 0.2s; }
+.pr-row { cursor: pointer; transition: background 0.15s, transform 0.1s; }
+.pr-row:hover { transform: translateX(2px); }
+.pr-row.hidden { display: none; }
+.sync-badge { animation: pulse 2s infinite; }
+.dot.in-review { animation: ring-pulse 2s infinite; }
+.toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+.search-input {
+  flex: 1; min-width: 180px; padding: 6px 10px; font-size: 13px;
+  border: 0.5px solid var(--border-tertiary); border-radius: var(--radius-md);
+  background: var(--bg-surface); color: var(--text-primary); font-family: var(--font-sans);
+}
+.search-input:focus { outline: none; border-color: var(--text-info); }
+.filter-btn {
+  padding: 5px 12px; font-size: 12px; cursor: pointer;
+  border: 0.5px solid var(--border-tertiary); border-radius: var(--radius-md);
+  background: var(--bg-surface); color: var(--text-secondary); font-family: var(--font-sans);
+}
+.filter-btn:hover { background: var(--bg-hover); }
+.filter-btn.active { background: var(--text-info); color: white; border-color: var(--text-info); }
+.chart-section {
+  background: var(--bg-surface); border: 0.5px solid var(--border-tertiary);
+  border-radius: var(--radius-lg); padding: 14px 16px; margin-bottom: 14px;
+}
+.chart-title { font-size: 11px; color: var(--text-tertiary); margin: 0 0 10px;
+  text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500;
+}
+.chart-section canvas { max-height: 140px; }
+
+
+.tab-bar { display: flex; gap: 4px; border-bottom: 1px solid #e0e0e0; margin: 16px 0 12px; flex-wrap: wrap; }
+.tab-btn { background: none; border: none; padding: 8px 14px; cursor: pointer; font-size: 14px; color: #555; border-bottom: 2px solid transparent; }
+.tab-btn.active { color: #1976d2; border-bottom-color: #1976d2; font-weight: 600; }
+.tab-btn:hover { background: #f5f5f5; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+.overview-summary { display: flex; gap: 24px; padding: 12px 0; }
+.kpi { display: flex; flex-direction: column; }
+.kpi-label { font-size: 12px; color: #777; }
+.kpi-value { font-size: 28px; font-weight: 700; color: #1976d2; }
+.phase-bars { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; }
+.phase-row { display: grid; grid-template-columns: 200px 1fr 50px; gap: 8px; align-items: center; }
+.phase-label { font-size: 13px; }
+.phase-track { height: 12px; background: #f3f3f3; border-radius: 3px; overflow: hidden; }
+.phase-fill { height: 100%; border-radius: 3px; transition: width 200ms; }
+.phase-fill.phase-done { background: #4caf50; }
+.phase-fill.phase-partial { background: #2196f3; }
+.phase-fill.phase-not_started { background: #bdbdbd; }
+.phase-fill.phase-blocked { background: #f44336; }
+.phase-fill.phase-deferred { background: #ffc107; }
+.phase-pct { text-align: right; font-size: 12px; color: #555; }
+.features-matrix, .risks-table, .docs-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
+.features-matrix th, .risks-table th, .docs-table th { text-align: left; padding: 6px 8px; background: #fafafa; border-bottom: 1px solid #e0e0e0; }
+.features-matrix td, .risks-table td, .docs-table td { padding: 6px 8px; border-bottom: 1px solid #f0f0f0; }
+.status-cell { text-align: center; font-weight: 500; }
+.status-done { color: #2e7d32; }
+.status-partial { color: #1976d2; }
+.status-not_started { color: #9e9e9e; }
+.status-blocked { color: #c62828; }
+.status-deferred { color: #f57c00; }
+.risk-low { color: #2e7d32; font-weight: 500; }
+.risk-medium { color: #f57c00; font-weight: 500; }
+.risk-high { color: #c62828; font-weight: 600; }
+.stale-yellow { background: #fff8e1; }
+.stale-red { background: #ffebee; }
+.prs-controls { display: flex; gap: 8px; padding: 8px 0; align-items: center; flex-wrap: wrap; }
+.filter-btn { background: #fff; border: 1px solid #e0e0e0; padding: 4px 10px; cursor: pointer; border-radius: 4px; font-size: 12px; }
+.filter-btn.active { background: #1976d2; color: #fff; border-color: #1976d2; }
+.pr-search { flex: 1; min-width: 160px; padding: 4px 8px; border: 1px solid #e0e0e0; border-radius: 4px; }
+@media (max-width: 640px) {
+  .tab-bar { overflow-x: auto; flex-wrap: nowrap; }
+  .phase-row { grid-template-columns: 110px 1fr 40px; }
+  .overview-summary { gap: 12px; }
+  .features-matrix, .risks-table, .docs-table { font-size: 11px; }
+}
+
+
+.gantt { position: relative; padding: 8px 0 16px; }
+.gantt-empty { color: #888; font-style: italic; padding: 12px; }
+.gantt-row { display: grid; grid-template-columns: 140px 1fr; gap: 8px; align-items: center; margin: 4px 0; }
+.gantt-label { font-size: 12px; color: #444; }
+.gantt-track { position: relative; height: 14px; background: #f3f3f3; border-radius: 3px; overflow: hidden; }
+.gantt-bar { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+.gantt-done { background: #4caf50; }
+.gantt-partial { background: #2196f3; }
+.gantt-not_started, .gantt-planned { background: #bdbdbd; }
+.gantt-blocked { background: #f44336; }
+.gantt-deferred { background: #ffc107; }
+.gantt-today { position: absolute; top: 28px; bottom: 16px; width: 2px; background: #f44336; pointer-events: none; left: 0; margin-left: 148px; }
+.readiness-bar { display: flex; gap: 16px; padding: 8px 12px; background: #fafafa; border-radius: 4px; margin: 8px 0; flex-wrap: wrap; }
+.readiness-cell { font-size: 13px; color: #444; }
+.readiness-label { color: #777; }
+.readiness-pct { font-weight: 600; color: #1976d2; }
+.features-summary { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #f8f9fa; border-radius: 6px; margin: 12px 0; flex-wrap: wrap; gap: 12px; }
+.features-summary-overall strong { font-size: 18px; color: #1976d2; }
+.features-summary-overall .features-count { font-size: 13px; color: #666; margin-left: 8px; }
+.features-summary-axes { display: flex; gap: 20px; font-size: 14px; }
+.features-summary-axes strong { color: #333; }
+.progress-cell { min-width: 120px; padding: 6px 8px; }
+.progress-bar { position: relative; height: 18px; background: #f0f0f0; border-radius: 9px; overflow: hidden; }
+.progress-fill { height: 100%; transition: width 0.3s; }
+.progress-done { background: #4caf50; }
+.progress-high { background: #66bb6a; }
+.progress-mid  { background: #2196f3; }
+.progress-low  { background: #ff9800; }
+.progress-none { background: #e0e0e0; }
+.progress-label { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 11px; font-weight: 600; color: #333; pointer-events: none; }
+@media (max-width: 640px) {
+  .gantt-row { grid-template-columns: 90px 1fr; }
+  .gantt-today { margin-left: 98px; }
+  .features-summary { flex-direction: column; align-items: flex-start; }
+  .features-summary-axes { flex-wrap: wrap; gap: 8px 16px; }
+  .progress-cell { min-width: 80px; }
+}
+
+
+.features-view-switcher { display: inline-flex; gap: 4px; margin: 12px 0; background: #f0f0f0; border-radius: 8px; padding: 3px; }
+.features-view-btn { border: 0; background: transparent; padding: 5px 14px; border-radius: 6px; font-size: 13px; cursor: pointer; color: #555; transition: background 0.15s; }
+.features-view-btn:hover { background: rgba(255,255,255,0.5); }
+.features-view-btn.active { background: #fff; color: #111; box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+.features-cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 12px 0; }
+.feature-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 10px; padding: 12px; }
+.feature-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.feature-card-meta { min-width: 0; flex: 1; }
+.feature-card-id { font-size: 11px; color: #999; line-height: 1.2; }
+.feature-card-name { font-size: 13px; font-weight: 500; line-height: 1.3; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feature-card-axes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.features-kanban-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 12px 0; }
+.kanban-col { background: #f7f7f7; border-radius: 8px; padding: 10px 12px; }
+.kanban-col-head { display: flex; justify-content: space-between; font-size: 12px; color: #555; margin-bottom: 8px; }
+.kanban-col-title { font-weight: 500; color: #222; }
+.kanban-col-count { font-size: 11px; color: #888; }
+.kanban-col-body { display: flex; flex-direction: column; gap: 6px; }
+.kanban-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 6px; padding: 6px 8px; }
+.kanban-card-row { display: flex; justify-content: space-between; font-size: 12px; }
+.kanban-card-id { font-weight: 500; color: #222; }
+.kanban-card-pct { color: #555; }
+.kanban-card-name { font-size: 11px; color: #666; margin: 2px 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kanban-bar-track { height: 4px; background: #eee; border-radius: 2px; overflow: hidden; }
+.kanban-bar-fill { height: 100%; transition: width 0.3s; }
+.features-table-list { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+.features-row { background: #fff; border: 1px solid #e8e8e8; border-radius: 6px; padding: 10px 14px; }
+.features-row-head { display: flex; justify-content: space-between; font-size: 13px; align-items: center; }
+.features-row-id { color: #999; margin-right: 8px; font-size: 11px; }
+.features-row-name { flex: 1; font-weight: 500; color: #222; }
+.features-row-meta { color: #555; }
+.features-row-meta strong { color: #111; }
+.features-row-bar { display: flex; gap: 2px; margin-top: 6px; height: 8px; border-radius: 4px; overflow: hidden; }
+.features-seg { flex: 1; }
+.seg-done { background: #2e7d32; }
+.seg-partial { background: #1565c0; }
+.seg-none { background: #e0e0e0; }
+.features-table-legend { display: flex; gap: 14px; font-size: 11px; color: #777; margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee; }
+.legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+.legend-done { background: #2e7d32; }
+.legend-partial { background: #1565c0; }
+.legend-none { background: #e0e0e0; }
+.legend-axes { margin-left: auto; }
+@media (max-width: 640px) {
+  .features-cards-grid { grid-template-columns: 1fr; }
+  .features-kanban-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="page-head">
+  <h1>MyMoneyWent — progress dashboard</h1>
+  <div class="head-meta">
+    <span id="live-indicator" class="live-indicator init">⚪ initializing…</span>
+    <p class="meta">Updated 2026-05-20 15:14 · <code>main</code> · auto-refresh 60s</p>
+  </div>
+</div>
+
+<nav class="tab-bar" role="tablist"><button type="button" class="tab-btn" data-tab="overview">Overview</button><button type="button" class="tab-btn" data-tab="features">Features</button><button type="button" class="tab-btn" data-tab="prs">PRs</button><button type="button" class="tab-btn" data-tab="risks">Risks</button><button type="button" class="tab-btn" data-tab="docs">Docs</button></nav>
+
+<section id="tab-overview" class="tab-panel" role="tabpanel"><div class="overview-summary"><div class="kpi"><div class="kpi-label">Overall</div><div class="kpi-value">30%</div></div><div class="kpi"><div class="kpi-label">MVP</div><div class="kpi-value">17%</div></div></div><div class="phase-bars"><div class="phase-row" data-status="done"><div class="phase-label">Phase 0: Docs &amp; Specs</div><div class="phase-track"><div class="phase-fill phase-done" style="width:100%"></div></div><div class="phase-pct">100%</div></div><div class="phase-row" data-status="partial"><div class="phase-label">Phase 1: Foundation</div><div class="phase-track"><div class="phase-fill phase-partial" style="width:75%"></div></div><div class="phase-pct">75%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 2: Handlers Refactor</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 3: Pricing Logic</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 4: SePay Onboarding</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 5: Email Parsing</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 6: Polish + Deploy</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 7: Closed Beta</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 8: Public Soft Launch</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 9-10: Growth + Business Tier</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 11: Family Plan</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div></div><div class="hero">
+<div class="hero-current empty">
+  <span class="dot not-started"></span>
+  <div class="hero-text">
+    <p class="hero-label">Đang làm</p>
+    <p class="hero-title">Không có PR active</p>
+    <p class="hero-sub">Pick task từ Next strip phía dưới</p>
+  </div>
+</div>
+<div class="hero-kpis">
+  <div class="kpi"><p class="kpi-val">17%</p><p class="kpi-lbl">MVP</p><p class="kpi-sub">6/36</p></div>
+  <div class="kpi"><p class="kpi-val">57%</p><p class="kpi-lbl">Phase 1</p><p class="kpi-sub">4/7</p></div>
+  <div class="kpi"><p class="kpi-val">0</p><p class="kpi-lbl">In flight</p></div>
+  <div class="kpi"><p class="kpi-val">0</p><p class="kpi-lbl">Blocked</p></div>
+  <div class="kpi"><p class="kpi-val">↑0</p><p class="kpi-lbl">Unpushed</p><p class="kpi-sub">0 PR</p></div>
+  <div class="kpi"><p class="kpi-val">↓23</p><p class="kpi-lbl">Unpulled</p><p class="kpi-sub">1 PR</p></div>
+</div>
+</div>
+<div class="chart-section">
+  <p class="chart-title">MVP progress vs target (15/133 days elapsed · launch T9/2026)</p>
+  <canvas id="burndown" role="img" aria-label="Line chart comparing actual MVP completion to target trajectory"></canvas>
+</div>
+<div class="next-strip">
+  <span class="next-label">Next</span>
+  <span class="next-chip">
+  <span class="dot not-started"></span>
+  <span class="pr-id">work-state-engine-1a</span>
+  Work-State Engine — Phase 1a (skeleton…
+</span><span class="next-chip">
+  <span class="dot not-started"></span>
+  <span class="pr-id">W1.1</span>
+  Docker Compose dev + prod
+</span><span class="next-chip">
+  <span class="dot not-started"></span>
+  <span class="pr-id">W1.2</span>
+  Discord adapter (`core/messenger/disco…
+</span><span class="next-chip">
+  <span class="dot not-started"></span>
+  <span class="pr-id">W1.3</span>
+  Phase 1 integration smoke
+</span>
+</div>
+<h3 class="section-h">Timeline (Gantt)</h3>
+<div class="gantt"><div class="gantt-row"><div class="gantt-label">Phase 1: Foundation</div><div class="gantt-track"><div class="gantt-bar gantt-partial" style="left:0.0%;width:12.8%"></div></div></div><div class="gantt-row"><div class="gantt-label">Phase 2: Handlers Refactor</div><div class="gantt-track"><div class="gantt-bar gantt-not_started" style="left:12.8%;width:18.0%"></div></div></div><div class="gantt-row"><div class="gantt-label">Phase 3: Pricing Logic</div><div class="gantt-track"><div class="gantt-bar gantt-not_started" style="left:30.8%;width:7.5%"></div></div></div><div class="gantt-row"><div class="gantt-label">Phase 4: SePay Onboarding</div><div class="gantt-track"><div class="gantt-bar gantt-not_started" style="left:38.3%;width:11.3%"></div></div></div><div class="gantt-row"><div class="gantt-label">Phase 5: Email Parsing</div><div class="gantt-track"><div class="gantt-bar gantt-not_started" style="left:49.6%;width:23.3%"></div></div></div><div class="gantt-row"><div class="gantt-label">Phase 6: Polish + Deploy</div><div class="gantt-track"><div class="gantt-bar gantt-not_started" style="left:72.9%;width:27.1%"></div></div></div><div class="gantt-today" style="left:11.3%"></div></div></section>
+<section id="tab-features" class="tab-panel" role="tabpanel"><div class="features-summary"><div class="features-summary-overall"><strong>Overall 49%</strong><span class="features-count">(20 features)</span></div><div class="features-summary-axes"><span>Spec <strong>90%</strong></span><span>BE Tech <strong>85%</strong></span><span>BE Code <strong>20%</strong></span><span>Bot Code <strong>0%</strong></span></div></div><div class="features-view-switcher" role="tablist" aria-label="Features view"><button type="button" data-view="cards" class="features-view-btn" role="tab">Cards</button><button type="button" data-view="kanban" class="features-view-btn" role="tab">Kanban</button><button type="button" data-view="table" class="features-view-btn" role="tab">Table</button></div><div id="features-view-cards" class="features-view-panel"><div class="features-cards-grid"><div class="feature-card"><div class="feature-card-head"><svg width="40" height="40" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="#e0e0e0" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="var(--color-text-info)" stroke-width="3" stroke-dasharray="59.3 94.2" transform="rotate(-90 18 18)" stroke-linecap="round"/><text x="18" y="22" text-anchor="middle" font-size="11" font-weight="600">63%</text></svg><div class="feature-card-meta"><div class="feature-card-id">onboarding-start · Phase 1,4</div><div class="feature-card-name">3-Path Onboarding</div></div></div><div class="feature-card-axes"><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Spec</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Tech</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-progress" style="color:#1565c0;font-size:14px;"></i><div>Code</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Bot</div></div></div></div><div class="feature-card"><div class="feature-card-head"><svg width="40" height="40" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="#e0e0e0" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="var(--color-text-info)" stroke-width="3" stroke-dasharray="59.3 94.2" transform="rotate(-90 18 18)" stroke-linecap="round"/><text x="18" y="22" text-anchor="middle" font-size="11" font-weight="600">63%</text></svg><div class="feature-card-meta"><div class="feature-card-id">transaction-capture · Phase 1,5</div><div class="feature-card-name">Transaction Capture (SePay + Email)</div></div></div><div class="feature-card-axes"><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Spec</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Tech</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-progress" style="color:#1565c0;font-size:14px;"></i><div>Code</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Bot</div></div></div></div><div class="feature-card"><div class="feature-card-head"><svg width="40" height="40" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="#e0e0e0" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="var(--color-text-info)" stroke-width="3" stroke-dasharray="47.1 94.2" transform="rotate(-90 18 18)" stroke-linecap="round"/><text x="18" y="22" text-anchor="middle" font-size="11" font-weight="600">50%</text></svg><div class="feature-card-meta"><div class="feature-card-id">categorization · Phase 2</div><div class="feature-card-name">Transaction Categorization</div></div></div><div class="feature-card-axes"><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Spec</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Tech</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Code</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Bot</div></div></div></div><div class="feature-card"><div class="feature-card-head"><svg width="40" height="40" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="#e0e0e0" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="var(--color-text-info)" stroke-width="3" stroke-dasharray="47.1 94.2" transform="rotate(-90 18 18)" stroke-linecap="round"/><text x="18" y="22" text-anchor="middle" font-size="11" font-weight="600">50%</text></svg><div class="feature-card-meta"><div class="feature-card-id">category-management · Phase 2</div><div class="feature-card-name">Category Management (/manage)</div></div></div><div class="feature-card-axes"><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Spec</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Tech</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Code</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Bot</div></div></div></div><div class="feature-card"><div class="feature-card-head"><svg width="40" height="40" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="#e0e0e0" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="var(--color-text-info)" stroke-width="3" stroke-dasharray="47.1 94.2" transform="rotate(-90 18 18)" stroke-linecap="round"/><text x="18" y="22" text-anchor="middle" font-size="11" font-weight="600">50%</text></svg><div class="feature-card-meta"><div class="feature-card-id">reports · Phase 2</div><div class="feature-card-name">Reports (/status, /today, /weekly)</div></div></div><div class="feature-card-axes"><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Spec</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Tech</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Code</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Bot</div></div></div></div><div class="feature-card"><div class="feature-card-head"><svg width="40" height="40" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="#e0e0e0" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="var(--color-text-info)" stroke-width="3" stroke-dasharray="47.1 94.2" transform="rotate(-90 18 18)" stroke-linecap="round"/><text x="18" y="22" text-anchor="middle" font-size="11" font-weight="600">50%</text></svg><div class="feature-card-meta"><div class="feature-card-id">pricing-tiers · Phase 3</div><div class="feature-card-name">Pricing, Tier Limits &amp; Trial</div></div></div><div class="feature-card-axes"><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Spec</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Tech</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Code</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Bot</div></div></div></div><div class="feature-card"><div class="feature-card-head"><svg width="40" height="40" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="#e0e0e0" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="var(--color-text-info)" stroke-width="3" stroke-dasharray="47.1 94.2" transform="rotate(-90 18 18)" stroke-linecap="round"/><text x="18" y="22" text-anchor="middle" font-size="11" font-weight="600">50%</text></svg><div class="feature-card-meta"><div class="feature-card-id">settings · Phase 2</div><div class="feature-card-name">Settings (/settings)</div></div></div><div class="feature-card-axes"><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Spec</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Tech</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Code</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Bot</div></div></div></div><div class="feature-card"><div class="feature-card-head"><svg width="40" height="40" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="#e0e0e0" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="var(--color-text-info)" stroke-width="3" stroke-dasharray="59.3 94.2" transform="rotate(-90 18 18)" stroke-linecap="round"/><text x="18" y="22" text-anchor="middle" font-size="11" font-weight="600">63%</text></svg><div class="feature-card-meta"><div class="feature-card-id">funding-sources · Phase 2</div><div class="feature-card-name">Funding Sources</div></div></div><div class="feature-card-axes"><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Spec</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Tech</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-progress" style="color:#1565c0;font-size:14px;"></i><div>Code</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Bot</div></div></div></div><div class="feature-card"><div class="feature-card-head"><svg width="40" height="40" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="#e0e0e0" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="var(--color-text-info)" stroke-width="3" stroke-dasharray="47.1 94.2" transform="rotate(-90 18 18)" stroke-linecap="round"/><text x="18" y="22" text-anchor="middle" font-size="11" font-weight="600">50%</text></svg><div class="feature-card-meta"><div class="feature-card-id">scheduled-jobs · Phase 6</div><div class="feature-card-name">Scheduled Jobs</div></div></div><div class="feature-card-axes"><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Spec</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Tech</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Code</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Bot</div></div></div></div><div class="feature-card"><div class="feature-card-head"><svg width="40" height="40" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="#e0e0e0" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="var(--color-text-info)" stroke-width="3" stroke-dasharray="47.1 94.2" transform="rotate(-90 18 18)" stroke-linecap="round"/><text x="18" y="22" text-anchor="middle" font-size="11" font-weight="600">50%</text></svg><div class="feature-card-meta"><div class="feature-card-id">F10 · Phase 6</div><div class="feature-card-name">Payment (Bank Transfer Auto-Detect)</div></div></div><div class="feature-card-axes"><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Spec</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Tech</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Code</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Bot</div></div></div></div><div class="feature-card"><div class="feature-card-head"><svg width="40" height="40" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="#e0e0e0" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="var(--color-text-info)" stroke-width="3" stroke-dasharray="59.3 94.2" transform="rotate(-90 18 18)" stroke-linecap="round"/><text x="18" y="22" text-anchor="middle" font-size="11" font-weight="600">63%</text></svg><div class="feature-card-meta"><div class="feature-card-id">F11 · Phase 6</div><div class="feature-card-name">Admin Tools &amp; Audit</div></div></div><div class="feature-card-axes"><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Spec</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Tech</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-progress" style="color:#1565c0;font-size:14px;"></i><div>Code</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Bot</div></div></div></div><div class="feature-card"><div class="feature-card-head"><svg width="40" height="40" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="#e0e0e0" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="var(--color-text-info)" stroke-width="3" stroke-dasharray="47.1 94.2" transform="rotate(-90 18 18)" stroke-linecap="round"/><text x="18" y="22" text-anchor="middle" font-size="11" font-weight="600">50%</text></svg><div class="feature-card-meta"><div class="feature-card-id">F12 · Phase 1</div><div class="feature-card-name">Multi-User Data Isolation</div></div></div><div class="feature-card-axes"><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Spec</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Tech</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Code</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Bot</div></div></div></div><div class="feature-card"><div class="feature-card-head"><svg width="40" height="40" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="#e0e0e0" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="var(--color-text-info)" stroke-width="3" stroke-dasharray="47.1 94.2" transform="rotate(-90 18 18)" stroke-linecap="round"/><text x="18" y="22" text-anchor="middle" font-size="11" font-weight="600">50%</text></svg><div class="feature-card-meta"><div class="feature-card-id">messenger-channel · Phase 6</div><div class="feature-card-name">Messenger Channel</div></div></div><div class="feature-card-axes"><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Spec</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Tech</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Code</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Bot</div></div></div></div><div class="feature-card"><div class="feature-card-head"><svg width="40" height="40" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="#e0e0e0" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="var(--color-text-info)" stroke-width="3" stroke-dasharray="47.1 94.2" transform="rotate(-90 18 18)" stroke-linecap="round"/><text x="18" y="22" text-anchor="middle" font-size="11" font-weight="600">50%</text></svg><div class="feature-card-meta"><div class="feature-card-id">F14 · Phase 1</div><div class="feature-card-name">Discord Channel</div></div></div><div class="feature-card-axes"><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Spec</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Tech</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Code</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Bot</div></div></div></div><div class="feature-card"><div class="feature-card-head"><svg width="40" height="40" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="#e0e0e0" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="var(--color-text-info)" stroke-width="3" stroke-dasharray="47.1 94.2" transform="rotate(-90 18 18)" stroke-linecap="round"/><text x="18" y="22" text-anchor="middle" font-size="11" font-weight="600">50%</text></svg><div class="feature-card-meta"><div class="feature-card-id">F15 · Phase 9</div><div class="feature-card-name">Personal vs Business Toggle</div></div></div><div class="feature-card-axes"><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Spec</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Tech</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Code</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Bot</div></div></div></div><div class="feature-card"><div class="feature-card-head"><svg width="40" height="40" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="#e0e0e0" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="var(--color-border-tertiary)" stroke-width="3" stroke-dasharray="0.0 94.2" transform="rotate(-90 18 18)" stroke-linecap="round"/><text x="18" y="22" text-anchor="middle" font-size="11" font-weight="600">0%</text></svg><div class="feature-card-meta"><div class="feature-card-id">F16 · Phase 9</div><div class="feature-card-name">P&amp;L View</div></div></div><div class="feature-card-axes"><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Spec</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Tech</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Code</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Bot</div></div></div></div><div class="feature-card"><div class="feature-card-head"><svg width="40" height="40" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="#e0e0e0" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="var(--color-border-tertiary)" stroke-width="3" stroke-dasharray="0.0 94.2" transform="rotate(-90 18 18)" stroke-linecap="round"/><text x="18" y="22" text-anchor="middle" font-size="11" font-weight="600">0%</text></svg><div class="feature-card-meta"><div class="feature-card-id">F17 · Phase 9</div><div class="feature-card-name">Income Source Attribution</div></div></div><div class="feature-card-axes"><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Spec</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Tech</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Code</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Bot</div></div></div></div><div class="feature-card"><div class="feature-card-head"><svg width="40" height="40" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="#e0e0e0" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="var(--color-text-info)" stroke-width="3" stroke-dasharray="59.3 94.2" transform="rotate(-90 18 18)" stroke-linecap="round"/><text x="18" y="22" text-anchor="middle" font-size="11" font-weight="600">63%</text></svg><div class="feature-card-meta"><div class="feature-card-id">i18n-locale-switcher · Phase 1</div><div class="feature-card-name">Internationalization</div></div></div><div class="feature-card-axes"><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Spec</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Tech</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-progress" style="color:#1565c0;font-size:14px;"></i><div>Code</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Bot</div></div></div></div><div class="feature-card"><div class="feature-card-head"><svg width="40" height="40" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="#e0e0e0" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="var(--color-text-info)" stroke-width="3" stroke-dasharray="59.3 94.2" transform="rotate(-90 18 18)" stroke-linecap="round"/><text x="18" y="22" text-anchor="middle" font-size="11" font-weight="600">63%</text></svg><div class="feature-card-meta"><div class="feature-card-id">F-saas · Phase 1</div><div class="feature-card-name">SaaS Refactor</div></div></div><div class="feature-card-axes"><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Spec</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Tech</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-progress" style="color:#1565c0;font-size:14px;"></i><div>Code</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Bot</div></div></div></div><div class="feature-card"><div class="feature-card-head"><svg width="40" height="40" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="#e0e0e0" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="var(--color-text-info)" stroke-width="3" stroke-dasharray="47.1 94.2" transform="rotate(-90 18 18)" stroke-linecap="round"/><text x="18" y="22" text-anchor="middle" font-size="11" font-weight="600">50%</text></svg><div class="feature-card-meta"><div class="feature-card-id">FAM · Phase 11</div><div class="feature-card-name">Family Plan</div></div></div><div class="feature-card-axes"><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Spec</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-check" style="color:#2e7d32;font-size:14px;"></i><div>Tech</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Code</div></div><div style="text-align:center;font-size:10px;color:#777;"><i class="ti ti-circle" style="color:#999;font-size:14px;"></i><div>Bot</div></div></div></div></div></div><div id="features-view-kanban" class="features-view-panel"><div class="features-kanban-grid"><div class="kanban-col"><div class="kanban-col-head"><span class="kanban-col-title">Phase 1 · Foundation</span><span class="kanban-col-count">6</span></div><div class="kanban-col-body"><div class="kanban-card"><div class="kanban-card-row"><span class="kanban-card-id">onboarding-start</span><span class="kanban-card-pct">63%</span></div><div class="kanban-card-name">3-Path Onboarding</div><div class="kanban-bar-track"><div class="kanban-bar-fill" style="width:63%;background:var(--color-text-info);"></div></div></div><div class="kanban-card"><div class="kanban-card-row"><span class="kanban-card-id">transaction-capture</span><span class="kanban-card-pct">63%</span></div><div class="kanban-card-name">Transaction Capture (SePay + Email)</div><div class="kanban-bar-track"><div class="kanban-bar-fill" style="width:63%;background:var(--color-text-info);"></div></div></div><div class="kanban-card"><div class="kanban-card-row"><span class="kanban-card-id">F12</span><span class="kanban-card-pct">50%</span></div><div class="kanban-card-name">Multi-User Data Isolation</div><div class="kanban-bar-track"><div class="kanban-bar-fill" style="width:50%;background:var(--color-text-info);"></div></div></div><div class="kanban-card"><div class="kanban-card-row"><span class="kanban-card-id">F14</span><span class="kanban-card-pct">50%</span></div><div class="kanban-card-name">Discord Channel</div><div class="kanban-bar-track"><div class="kanban-bar-fill" style="width:50%;background:var(--color-text-info);"></div></div></div><div class="kanban-card"><div class="kanban-card-row"><span class="kanban-card-id">i18n-locale-switcher</span><span class="kanban-card-pct">63%</span></div><div class="kanban-card-name">Internationalization</div><div class="kanban-bar-track"><div class="kanban-bar-fill" style="width:63%;background:var(--color-text-info);"></div></div></div><div class="kanban-card"><div class="kanban-card-row"><span class="kanban-card-id">F-saas</span><span class="kanban-card-pct">63%</span></div><div class="kanban-card-name">SaaS Refactor</div><div class="kanban-bar-track"><div class="kanban-bar-fill" style="width:63%;background:var(--color-text-info);"></div></div></div></div></div><div class="kanban-col"><div class="kanban-col-head"><span class="kanban-col-title">Phase 2 · Handlers</span><span class="kanban-col-count">5</span></div><div class="kanban-col-body"><div class="kanban-card"><div class="kanban-card-row"><span class="kanban-card-id">categorization</span><span class="kanban-card-pct">50%</span></div><div class="kanban-card-name">Transaction Categorization</div><div class="kanban-bar-track"><div class="kanban-bar-fill" style="width:50%;background:var(--color-text-info);"></div></div></div><div class="kanban-card"><div class="kanban-card-row"><span class="kanban-card-id">category-management</span><span class="kanban-card-pct">50%</span></div><div class="kanban-card-name">Category Management (/manage)</div><div class="kanban-bar-track"><div class="kanban-bar-fill" style="width:50%;background:var(--color-text-info);"></div></div></div><div class="kanban-card"><div class="kanban-card-row"><span class="kanban-card-id">reports</span><span class="kanban-card-pct">50%</span></div><div class="kanban-card-name">Reports (/status, /today, /weekly)</div><div class="kanban-bar-track"><div class="kanban-bar-fill" style="width:50%;background:var(--color-text-info);"></div></div></div><div class="kanban-card"><div class="kanban-card-row"><span class="kanban-card-id">settings</span><span class="kanban-card-pct">50%</span></div><div class="kanban-card-name">Settings (/settings)</div><div class="kanban-bar-track"><div class="kanban-bar-fill" style="width:50%;background:var(--color-text-info);"></div></div></div><div class="kanban-card"><div class="kanban-card-row"><span class="kanban-card-id">funding-sources</span><span class="kanban-card-pct">63%</span></div><div class="kanban-card-name">Funding Sources</div><div class="kanban-bar-track"><div class="kanban-bar-fill" style="width:63%;background:var(--color-text-info);"></div></div></div></div></div><div class="kanban-col"><div class="kanban-col-head"><span class="kanban-col-title">Phase 3 · Pricing</span><span class="kanban-col-count">1</span></div><div class="kanban-col-body"><div class="kanban-card"><div class="kanban-card-row"><span class="kanban-card-id">pricing-tiers</span><span class="kanban-card-pct">50%</span></div><div class="kanban-card-name">Pricing, Tier Limits &amp; Trial</div><div class="kanban-bar-track"><div class="kanban-bar-fill" style="width:50%;background:var(--color-text-info);"></div></div></div></div></div><div class="kanban-col"><div class="kanban-col-head"><span class="kanban-col-title">Phase 6 · Deploy + Polish</span><span class="kanban-col-count">4</span></div><div class="kanban-col-body"><div class="kanban-card"><div class="kanban-card-row"><span class="kanban-card-id">scheduled-jobs</span><span class="kanban-card-pct">50%</span></div><div class="kanban-card-name">Scheduled Jobs</div><div class="kanban-bar-track"><div class="kanban-bar-fill" style="width:50%;background:var(--color-text-info);"></div></div></div><div class="kanban-card"><div class="kanban-card-row"><span class="kanban-card-id">F10</span><span class="kanban-card-pct">50%</span></div><div class="kanban-card-name">Payment (Bank Transfer Auto-Detect)</div><div class="kanban-bar-track"><div class="kanban-bar-fill" style="width:50%;background:var(--color-text-info);"></div></div></div><div class="kanban-card"><div class="kanban-card-row"><span class="kanban-card-id">F11</span><span class="kanban-card-pct">63%</span></div><div class="kanban-card-name">Admin Tools &amp; Audit</div><div class="kanban-bar-track"><div class="kanban-bar-fill" style="width:63%;background:var(--color-text-info);"></div></div></div><div class="kanban-card"><div class="kanban-card-row"><span class="kanban-card-id">messenger-channel</span><span class="kanban-card-pct">50%</span></div><div class="kanban-card-name">Messenger Channel</div><div class="kanban-bar-track"><div class="kanban-bar-fill" style="width:50%;background:var(--color-text-info);"></div></div></div></div></div><div class="kanban-col"><div class="kanban-col-head"><span class="kanban-col-title">Phase 9 · Business</span><span class="kanban-col-count">3</span></div><div class="kanban-col-body"><div class="kanban-card"><div class="kanban-card-row"><span class="kanban-card-id">F15</span><span class="kanban-card-pct">50%</span></div><div class="kanban-card-name">Personal vs Business Toggle</div><div class="kanban-bar-track"><div class="kanban-bar-fill" style="width:50%;background:var(--color-text-info);"></div></div></div><div class="kanban-card"><div class="kanban-card-row"><span class="kanban-card-id">F16</span><span class="kanban-card-pct">0%</span></div><div class="kanban-card-name">P&amp;L View</div><div class="kanban-bar-track"><div class="kanban-bar-fill" style="width:0%;background:var(--color-border-tertiary);"></div></div></div><div class="kanban-card"><div class="kanban-card-row"><span class="kanban-card-id">F17</span><span class="kanban-card-pct">0%</span></div><div class="kanban-card-name">Income Source Attribution</div><div class="kanban-bar-track"><div class="kanban-bar-fill" style="width:0%;background:var(--color-border-tertiary);"></div></div></div></div></div><div class="kanban-col"><div class="kanban-col-head"><span class="kanban-col-title">Phase 11 · Family Plan</span><span class="kanban-col-count">1</span></div><div class="kanban-col-body"><div class="kanban-card"><div class="kanban-card-row"><span class="kanban-card-id">FAM</span><span class="kanban-card-pct">50%</span></div><div class="kanban-card-name">Family Plan</div><div class="kanban-bar-track"><div class="kanban-bar-fill" style="width:50%;background:var(--color-text-info);"></div></div></div></div></div></div></div><div id="features-view-table" class="features-view-panel"><div class="features-table-list"><div class="features-row"><div class="features-row-head"><span class="features-row-id">onboarding-start</span><span class="features-row-name">3-Path Onboarding</span><span class="features-row-meta"><strong>63%</strong> · Phase 1,4</span></div><div class="features-row-bar"><div class="features-seg seg-spec seg-done" title="Spec: done"></div><div class="features-seg seg-be_tech seg-done" title="BE Tech: done"></div><div class="features-seg seg-be_code seg-partial" title="BE Code: partial"></div><div class="features-seg seg-bot_code seg-none" title="Bot Code: not_started"></div></div></div><div class="features-row"><div class="features-row-head"><span class="features-row-id">transaction-capture</span><span class="features-row-name">Transaction Capture (SePay + Email)</span><span class="features-row-meta"><strong>63%</strong> · Phase 1,5</span></div><div class="features-row-bar"><div class="features-seg seg-spec seg-done" title="Spec: done"></div><div class="features-seg seg-be_tech seg-done" title="BE Tech: done"></div><div class="features-seg seg-be_code seg-partial" title="BE Code: partial"></div><div class="features-seg seg-bot_code seg-none" title="Bot Code: not_started"></div></div></div><div class="features-row"><div class="features-row-head"><span class="features-row-id">categorization</span><span class="features-row-name">Transaction Categorization</span><span class="features-row-meta"><strong>50%</strong> · Phase 2</span></div><div class="features-row-bar"><div class="features-seg seg-spec seg-done" title="Spec: done"></div><div class="features-seg seg-be_tech seg-done" title="BE Tech: done"></div><div class="features-seg seg-be_code seg-none" title="BE Code: not_started"></div><div class="features-seg seg-bot_code seg-none" title="Bot Code: not_started"></div></div></div><div class="features-row"><div class="features-row-head"><span class="features-row-id">category-management</span><span class="features-row-name">Category Management (/manage)</span><span class="features-row-meta"><strong>50%</strong> · Phase 2</span></div><div class="features-row-bar"><div class="features-seg seg-spec seg-done" title="Spec: done"></div><div class="features-seg seg-be_tech seg-done" title="BE Tech: done"></div><div class="features-seg seg-be_code seg-none" title="BE Code: not_started"></div><div class="features-seg seg-bot_code seg-none" title="Bot Code: not_started"></div></div></div><div class="features-row"><div class="features-row-head"><span class="features-row-id">reports</span><span class="features-row-name">Reports (/status, /today, /weekly)</span><span class="features-row-meta"><strong>50%</strong> · Phase 2</span></div><div class="features-row-bar"><div class="features-seg seg-spec seg-done" title="Spec: done"></div><div class="features-seg seg-be_tech seg-done" title="BE Tech: done"></div><div class="features-seg seg-be_code seg-none" title="BE Code: not_started"></div><div class="features-seg seg-bot_code seg-none" title="Bot Code: not_started"></div></div></div><div class="features-row"><div class="features-row-head"><span class="features-row-id">pricing-tiers</span><span class="features-row-name">Pricing, Tier Limits &amp; Trial</span><span class="features-row-meta"><strong>50%</strong> · Phase 3</span></div><div class="features-row-bar"><div class="features-seg seg-spec seg-done" title="Spec: done"></div><div class="features-seg seg-be_tech seg-done" title="BE Tech: done"></div><div class="features-seg seg-be_code seg-none" title="BE Code: not_started"></div><div class="features-seg seg-bot_code seg-none" title="Bot Code: not_started"></div></div></div><div class="features-row"><div class="features-row-head"><span class="features-row-id">settings</span><span class="features-row-name">Settings (/settings)</span><span class="features-row-meta"><strong>50%</strong> · Phase 2</span></div><div class="features-row-bar"><div class="features-seg seg-spec seg-done" title="Spec: done"></div><div class="features-seg seg-be_tech seg-done" title="BE Tech: done"></div><div class="features-seg seg-be_code seg-none" title="BE Code: not_started"></div><div class="features-seg seg-bot_code seg-none" title="Bot Code: not_started"></div></div></div><div class="features-row"><div class="features-row-head"><span class="features-row-id">funding-sources</span><span class="features-row-name">Funding Sources</span><span class="features-row-meta"><strong>63%</strong> · Phase 2</span></div><div class="features-row-bar"><div class="features-seg seg-spec seg-done" title="Spec: done"></div><div class="features-seg seg-be_tech seg-done" title="BE Tech: done"></div><div class="features-seg seg-be_code seg-partial" title="BE Code: partial"></div><div class="features-seg seg-bot_code seg-none" title="Bot Code: not_started"></div></div></div><div class="features-row"><div class="features-row-head"><span class="features-row-id">scheduled-jobs</span><span class="features-row-name">Scheduled Jobs</span><span class="features-row-meta"><strong>50%</strong> · Phase 6</span></div><div class="features-row-bar"><div class="features-seg seg-spec seg-done" title="Spec: done"></div><div class="features-seg seg-be_tech seg-done" title="BE Tech: done"></div><div class="features-seg seg-be_code seg-none" title="BE Code: not_started"></div><div class="features-seg seg-bot_code seg-none" title="Bot Code: not_started"></div></div></div><div class="features-row"><div class="features-row-head"><span class="features-row-id">F10</span><span class="features-row-name">Payment (Bank Transfer Auto-Detect)</span><span class="features-row-meta"><strong>50%</strong> · Phase 6</span></div><div class="features-row-bar"><div class="features-seg seg-spec seg-done" title="Spec: done"></div><div class="features-seg seg-be_tech seg-done" title="BE Tech: done"></div><div class="features-seg seg-be_code seg-none" title="BE Code: not_started"></div><div class="features-seg seg-bot_code seg-none" title="Bot Code: not_started"></div></div></div><div class="features-row"><div class="features-row-head"><span class="features-row-id">F11</span><span class="features-row-name">Admin Tools &amp; Audit</span><span class="features-row-meta"><strong>63%</strong> · Phase 6</span></div><div class="features-row-bar"><div class="features-seg seg-spec seg-done" title="Spec: done"></div><div class="features-seg seg-be_tech seg-done" title="BE Tech: done"></div><div class="features-seg seg-be_code seg-partial" title="BE Code: partial"></div><div class="features-seg seg-bot_code seg-none" title="Bot Code: not_started"></div></div></div><div class="features-row"><div class="features-row-head"><span class="features-row-id">F12</span><span class="features-row-name">Multi-User Data Isolation</span><span class="features-row-meta"><strong>50%</strong> · Phase 1</span></div><div class="features-row-bar"><div class="features-seg seg-spec seg-done" title="Spec: done"></div><div class="features-seg seg-be_tech seg-none" title="BE Tech: not_started"></div><div class="features-seg seg-be_code seg-done" title="BE Code: done"></div><div class="features-seg seg-bot_code seg-none" title="Bot Code: not_started"></div></div></div><div class="features-row"><div class="features-row-head"><span class="features-row-id">messenger-channel</span><span class="features-row-name">Messenger Channel</span><span class="features-row-meta"><strong>50%</strong> · Phase 6</span></div><div class="features-row-bar"><div class="features-seg seg-spec seg-done" title="Spec: done"></div><div class="features-seg seg-be_tech seg-done" title="BE Tech: done"></div><div class="features-seg seg-be_code seg-none" title="BE Code: not_started"></div><div class="features-seg seg-bot_code seg-none" title="Bot Code: not_started"></div></div></div><div class="features-row"><div class="features-row-head"><span class="features-row-id">F14</span><span class="features-row-name">Discord Channel</span><span class="features-row-meta"><strong>50%</strong> · Phase 1</span></div><div class="features-row-bar"><div class="features-seg seg-spec seg-done" title="Spec: done"></div><div class="features-seg seg-be_tech seg-done" title="BE Tech: done"></div><div class="features-seg seg-be_code seg-none" title="BE Code: not_started"></div><div class="features-seg seg-bot_code seg-none" title="Bot Code: not_started"></div></div></div><div class="features-row"><div class="features-row-head"><span class="features-row-id">F15</span><span class="features-row-name">Personal vs Business Toggle</span><span class="features-row-meta"><strong>50%</strong> · Phase 9</span></div><div class="features-row-bar"><div class="features-seg seg-spec seg-done" title="Spec: done"></div><div class="features-seg seg-be_tech seg-done" title="BE Tech: done"></div><div class="features-seg seg-be_code seg-none" title="BE Code: not_started"></div><div class="features-seg seg-bot_code seg-none" title="Bot Code: not_started"></div></div></div><div class="features-row"><div class="features-row-head"><span class="features-row-id">F16</span><span class="features-row-name">P&amp;L View</span><span class="features-row-meta"><strong>0%</strong> · Phase 9</span></div><div class="features-row-bar"><div class="features-seg seg-spec seg-none" title="Spec: not_started"></div><div class="features-seg seg-be_tech seg-none" title="BE Tech: not_started"></div><div class="features-seg seg-be_code seg-none" title="BE Code: not_started"></div><div class="features-seg seg-bot_code seg-none" title="Bot Code: not_started"></div></div></div><div class="features-row"><div class="features-row-head"><span class="features-row-id">F17</span><span class="features-row-name">Income Source Attribution</span><span class="features-row-meta"><strong>0%</strong> · Phase 9</span></div><div class="features-row-bar"><div class="features-seg seg-spec seg-none" title="Spec: not_started"></div><div class="features-seg seg-be_tech seg-none" title="BE Tech: not_started"></div><div class="features-seg seg-be_code seg-none" title="BE Code: not_started"></div><div class="features-seg seg-bot_code seg-none" title="Bot Code: not_started"></div></div></div><div class="features-row"><div class="features-row-head"><span class="features-row-id">i18n-locale-switcher</span><span class="features-row-name">Internationalization</span><span class="features-row-meta"><strong>63%</strong> · Phase 1</span></div><div class="features-row-bar"><div class="features-seg seg-spec seg-done" title="Spec: done"></div><div class="features-seg seg-be_tech seg-done" title="BE Tech: done"></div><div class="features-seg seg-be_code seg-partial" title="BE Code: partial"></div><div class="features-seg seg-bot_code seg-none" title="Bot Code: not_started"></div></div></div><div class="features-row"><div class="features-row-head"><span class="features-row-id">F-saas</span><span class="features-row-name">SaaS Refactor</span><span class="features-row-meta"><strong>63%</strong> · Phase 1</span></div><div class="features-row-bar"><div class="features-seg seg-spec seg-done" title="Spec: done"></div><div class="features-seg seg-be_tech seg-done" title="BE Tech: done"></div><div class="features-seg seg-be_code seg-partial" title="BE Code: partial"></div><div class="features-seg seg-bot_code seg-none" title="Bot Code: not_started"></div></div></div><div class="features-row"><div class="features-row-head"><span class="features-row-id">FAM</span><span class="features-row-name">Family Plan</span><span class="features-row-meta"><strong>50%</strong> · Phase 11</span></div><div class="features-row-bar"><div class="features-seg seg-spec seg-done" title="Spec: done"></div><div class="features-seg seg-be_tech seg-done" title="BE Tech: done"></div><div class="features-seg seg-be_code seg-none" title="BE Code: not_started"></div><div class="features-seg seg-bot_code seg-none" title="Bot Code: not_started"></div></div></div></div><div class="features-table-legend"><span><span class="legend-dot legend-done"></span>Done</span><span><span class="legend-dot legend-partial"></span>Partial</span><span><span class="legend-dot legend-none"></span>Not started</span><span class="legend-axes">Axes left-to-right: Spec · BE Tech · BE Code · Bot Code</span></div></div><script>
+(function() {
+  var btns = document.querySelectorAll('.features-view-btn');
+  var panels = {
+    cards: document.getElementById('features-view-cards'),
+    kanban: document.getElementById('features-view-kanban'),
+    table: document.getElementById('features-view-table'),
+  };
+  function activate(view) {
+    btns.forEach(function(b) { b.classList.toggle('active', b.dataset.view === view); });
+    Object.keys(panels).forEach(function(k) {
+      if (panels[k]) panels[k].style.display = (k === view) ? '' : 'none';
+    });
+    try { localStorage.setItem('featuresView', view); } catch(e) {}
+  }
+  btns.forEach(function(b) { b.addEventListener('click', function() { activate(b.dataset.view); }); });
+  var saved; try { saved = localStorage.getItem('featuresView'); } catch(e) {}
+  activate(saved || 'cards');
+})();
+</script></section>
+<section id="tab-prs" class="tab-panel" role="tabpanel"><div class="prs-body"><div class="toolbar">
+  <input type="search" id="dashboard-search" class="search-input" placeholder="🔍 Search PR by ID or name...">
+  <button class="filter-btn active" data-filter="all">All</button>
+  <button class="filter-btn" data-filter="in-review">In review</button>
+  <button class="filter-btn" data-filter="in-progress">In progress</button>
+  <button class="filter-btn" data-filter="blocked">Blocked</button>
+  <button class="filter-btn" data-filter="not-started">Not started</button>
+</div>
+<div class="board">
+<div class="phase-card">
+  <div class="phase-card-head">
+    <p class="phase-card-name">Phase 1</p>
+    <span class="phase-card-meta">4/7 · 57%</span>
+  </div>
+  <div class="phase-card-bar"><div class="" style="width:57%;"></div></div>
+  <div class="phase-prs"><div class="pr-row not-started" title="Not started · infra/W1.1-docker-compose">
+  <span class="dot not-started"></span>
+  <span class="pr-id">W1.1</span>
+  <span class="pr-name"><span class="pr-name-text">Docker Compose dev + prod</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/W1.2-discord-adapter">
+  <span class="dot not-started"></span>
+  <span class="pr-id">W1.2</span>
+  <span class="pr-name"><span class="pr-name-text">Discord adapter (`core/messenger/discord.py`)</span></span>
+</div><div class="pr-row not-started" title="Not started · chore/W1.3-phase1-smoke">
+  <span class="dot not-started"></span>
+  <span class="pr-id">W1.3</span>
+  <span class="pr-name"><span class="pr-name-text">Phase 1 integration smoke</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/MYM-1-work-state-engine-1a · remote: not-started">
+  <span class="dot not-started"></span>
+  <span class="pr-id">work-state-engine-1a</span>
+  <span class="pr-name"><span class="pr-name-text">Work-State Engine — Phase 1a (skeleton + filesystem + git)</span></span>
+</div><div class="pr-row merged" title="Merged · feat/dashboard-v3-rich-v2">
+  <span class="dot merged"></span>
+  <span class="pr-id">W0.10</span>
+  <span class="pr-name"><span class="pr-name-text">Dashboard v3 rich UI + click-through + Chart.js</span></span>
+</div><div class="pr-row merged" title="Merged · chore/W0.7-tenant-context-public-api">
+  <span class="dot merged"></span>
+  <span class="pr-id">W0.7</span>
+  <span class="pr-name"><span class="pr-name-text">Public `request_id` helpers + F02 xfail contract pin</span></span>
+</div><div class="pr-row merged" title="Merged · feat/webhook-display-suffix-migration">
+  <span class="dot merged"></span>
+  <span class="pr-id">W0.8</span>
+  <span class="pr-name"><span class="pr-name-text">Webhook `display_suffix VARCHAR(8)` migration (G3 option b)</span></span>
+</div><div class="pr-row merged" title="Merged · feat/dashboard-realtime">
+  <span class="dot merged"></span>
+  <span class="pr-id">W0.9</span>
+  <span class="pr-name"><span class="pr-name-text">Dashboard realtime — auto-rebuild + git-state detect + reconcile</span></span>
+</div></div>
+</div><div class="phase-card">
+  <div class="phase-card-head">
+    <p class="phase-card-name">Phase 2</p>
+    <span class="phase-card-meta">2/10 · 20%</span>
+  </div>
+  <div class="phase-card-bar"><div class="" style="width:20%;"></div></div>
+  <div class="phase-prs"><div class="pr-row not-started" title="Not started · feat/admin-auth">
+  <span class="dot not-started"></span>
+  <span class="pr-id">admin-auth</span>
+  <span class="pr-name"><span class="pr-name-text">Admin auth framework only (commands defer Phase 6)</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/categorization">
+  <span class="dot not-started"></span>
+  <span class="pr-id">categorization</span>
+  <span class="pr-name"><span class="pr-name-text">Categorization auto-rules + manual</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/category-management">
+  <span class="dot not-started"></span>
+  <span class="pr-id">category-management</span>
+  <span class="pr-name"><span class="pr-name-text">Category management (`/manage`)</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/funding-sources">
+  <span class="dot not-started"></span>
+  <span class="pr-id">funding-sources</span>
+  <span class="pr-name"><span class="pr-name-text">Funding sources resolver + handlers</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/i18n-locale-switcher">
+  <span class="dot not-started"></span>
+  <span class="pr-id">i18n-locale-switcher</span>
+  <span class="pr-name"><span class="pr-name-text">VI/EN locale switcher</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/manual-transaction-entry">
+  <span class="dot not-started"></span>
+  <span class="pr-id">manual-transaction-entry</span>
+  <span class="pr-name"><span class="pr-name-text">Manual transaction entry — Channel 3 of transaction-capture</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/reports">
+  <span class="dot not-started"></span>
+  <span class="pr-id">reports</span>
+  <span class="pr-name"><span class="pr-name-text">Reports `/status`, `/today`, `/weekly`</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/transaction-capture">
+  <span class="dot not-started"></span>
+  <span class="pr-id">transaction-capture</span>
+  <span class="pr-name"><span class="pr-name-text">Transaction capture EXPANDED (inherit W0.6 legacy cutover)</span></span>
+</div><div class="pr-row merged" title="Merged · feat/F01-onboarding-start">
+  <span class="dot merged"></span>
+  <span class="pr-id">onboarding-start</span>
+  <span class="pr-name"><span class="pr-name-text">`/start` + user create + trial assign</span></span>
+</div><div class="pr-row merged" title="Merged · feat/F07-settings · remote: in-review">
+  <span class="dot merged"></span>
+  <span class="pr-id">settings</span>
+  <span class="pr-name"><span class="pr-name-text">Settings `/settings`</span><span class="sync-badge unpulled" title="23 commits trên origin chưa pull về local">↓23</span></span>
+</div></div>
+</div><div class="phase-card">
+  <div class="phase-card-head">
+    <p class="phase-card-name">Phase 3</p>
+    <span class="phase-card-meta">0/1 · 0%</span>
+  </div>
+  <div class="phase-card-bar"><div class="zero" style="width:0%;"></div></div>
+  <div class="phase-prs"><div class="pr-row not-started" title="Not started · feat/pricing-tiers">
+  <span class="dot not-started"></span>
+  <span class="pr-id">pricing-tiers</span>
+  <span class="pr-name"><span class="pr-name-text">Tier limits + 14d trial + gating middleware</span></span>
+</div></div>
+</div><div class="phase-card">
+  <div class="phase-card-head">
+    <p class="phase-card-name">Phase 4</p>
+    <span class="phase-card-meta">0/2 · 0%</span>
+  </div>
+  <div class="phase-card-bar"><div class="zero" style="width:0%;"></div></div>
+  <div class="phase-prs"><div class="pr-row not-started" title="Not started · feat/first-tx-celebration">
+  <span class="dot not-started"></span>
+  <span class="pr-id">first-tx-celebration</span>
+  <span class="pr-name"><span class="pr-name-text">First-tx celebration flow</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/sepay-onboarding-paths">
+  <span class="dot not-started"></span>
+  <span class="pr-id">sepay-onboarding-paths</span>
+  <span class="pr-name"><span class="pr-name-text">Path A (Quick connect) + Path B (Wizard)</span></span>
+</div></div>
+</div><div class="phase-card">
+  <div class="phase-card-head">
+    <p class="phase-card-name">Phase 5</p>
+    <span class="phase-card-meta">0/6 · 0%</span>
+  </div>
+  <div class="phase-card-bar"><div class="zero" style="width:0%;"></div></div>
+  <div class="phase-prs"><div class="pr-row not-started" title="Not started · infra/W5.1-postmark-inbound">
+  <span class="dot not-started"></span>
+  <span class="pr-id">W5.1</span>
+  <span class="pr-name"><span class="pr-name-text">Postmark inbound + `/inbound/{token}` route</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/cross-source-dedup">
+  <span class="dot not-started"></span>
+  <span class="pr-id">cross-source-dedup</span>
+  <span class="pr-name"><span class="pr-name-text">Cross-source dedup (SePay + Email)</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/email-forwarding-onboarding">
+  <span class="dot not-started"></span>
+  <span class="pr-id">email-forwarding-onboarding</span>
+  <span class="pr-name"><span class="pr-name-text">Path C onboarding (email forwarding guides)</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/parser-cake-vpbank">
+  <span class="dot not-started"></span>
+  <span class="pr-id">parser-cake-vpbank</span>
+  <span class="pr-name"><span class="pr-name-text">Parser: Cake (VPBank)</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/parser-mbbank">
+  <span class="dot not-started"></span>
+  <span class="pr-id">parser-mbbank</span>
+  <span class="pr-name"><span class="pr-name-text">Parser: MB Bank</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/parser-techcombank">
+  <span class="dot not-started"></span>
+  <span class="pr-id">parser-techcombank</span>
+  <span class="pr-name"><span class="pr-name-text">Parser: Techcombank full extraction</span></span>
+</div><div class="pr-row deferred" title="Deferred · feat/parser-acb">
+  <span class="dot deferred"></span>
+  <span class="pr-id">parser-acb</span>
+  <span class="pr-name"><span class="pr-name-text">Parser: ACB (deferred to Phase 5b)</span></span>
+</div><div class="pr-row deferred" title="Deferred · feat/parser-bidv">
+  <span class="dot deferred"></span>
+  <span class="pr-id">parser-bidv</span>
+  <span class="pr-name"><span class="pr-name-text">Parser: BIDV (deferred to Phase 5b)</span></span>
+</div><div class="pr-row deferred" title="Deferred · feat/parser-sacombank">
+  <span class="dot deferred"></span>
+  <span class="pr-id">parser-sacombank</span>
+  <span class="pr-name"><span class="pr-name-text">Parser: Sacombank (deferred to Phase 5b)</span></span>
+</div></div>
+</div><div class="phase-card">
+  <div class="phase-card-head">
+    <p class="phase-card-name">Phase 6</p>
+    <span class="phase-card-meta">0/10 · 0%</span>
+  </div>
+  <div class="phase-card-bar"><div class="zero" style="width:0%;"></div></div>
+  <div class="phase-prs"><div class="pr-row not-started" title="Not started · infra/W6.1-sentry-alerts">
+  <span class="dot not-started"></span>
+  <span class="pr-id">W6.1</span>
+  <span class="pr-name"><span class="pr-name-text">Sentry alerts — 7 critical (per observability-plan.md)</span></span>
+</div><div class="pr-row not-started" title="Not started · infra/W6.2-railway-deploy">
+  <span class="dot not-started"></span>
+  <span class="pr-id">W6.2</span>
+  <span class="pr-name"><span class="pr-name-text">Railway deploy + custom domain (tienvenoidau.com)</span></span>
+</div><div class="pr-row not-started" title="Not started · infra/W6.3-backup-b2">
+  <span class="dot not-started"></span>
+  <span class="pr-id">W6.3</span>
+  <span class="pr-name"><span class="pr-name-text">Backup automation (B2 + pg_dump daily, SSE-B2)</span></span>
+</div><div class="pr-row not-started" title="Not started · chore/W6.4-dr-restore-test">
+  <span class="dot not-started"></span>
+  <span class="pr-id">W6.4</span>
+  <span class="pr-name"><span class="pr-name-text">DR runbook full validation (test restore)</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/admin-commands">
+  <span class="dot not-started"></span>
+  <span class="pr-id">admin-commands</span>
+  <span class="pr-name"><span class="pr-name-text">Admin commands (`/admin_stats`, `/admin_cost`, `/admin_user`, `/admin_resolve`)</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/messenger-channel">
+  <span class="dot not-started"></span>
+  <span class="pr-id">messenger-channel</span>
+  <span class="pr-name"><span class="pr-name-text">Messenger adapter (feature-flagged `ENABLE_MESSENGER_CHANNEL=false`)</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/payment-email-backup">
+  <span class="dot not-started"></span>
+  <span class="pr-id">payment-email-backup</span>
+  <span class="pr-name"><span class="pr-name-text">Email backup detect (Techcombank email path)</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/payment-recurring">
+  <span class="dot not-started"></span>
+  <span class="pr-id">payment-recurring</span>
+  <span class="pr-name"><span class="pr-name-text">Manual review fallback + recurring billing</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/payment-vietqr">
+  <span class="dot not-started"></span>
+  <span class="pr-id">payment-vietqr</span>
+  <span class="pr-name"><span class="pr-name-text">Payment VietQR + SePay auto-detect (4-layer fuzzy)</span></span>
+</div><div class="pr-row not-started" title="Not started · feat/scheduled-jobs">
+  <span class="dot not-started"></span>
+  <span class="pr-id">scheduled-jobs</span>
+  <span class="pr-name"><span class="pr-name-text">Scheduled jobs (APScheduler, TZ jitter ±5min)</span></span>
+</div><div class="pr-row deferred" title="Deferred · —">
+  <span class="dot deferred"></span>
+  <span class="pr-id">(to be created when Phase W enters implementation planning)</span>
+  <span class="pr-name"><span class="pr-name-text">—</span></span>
+</div><div class="pr-row deferred" title="Deferred · feat/MYM-XXX-parser-evolver-poc">
+  <span class="dot deferred"></span>
+  <span class="pr-id">parser-evolver</span>
+  <span class="pr-name"><span class="pr-name-text">GEPA-style auto-tune cho email parsers (POC: ACB)</span></span>
+</div></div>
+</div>
+</div></div></section>
+<section id="tab-risks" class="tab-panel" role="tabpanel"><table class="risks-table"><thead><tr><th>Risk</th><th>Phase</th><th>Impact</th><th>Mitigation</th></tr></thead><tbody><tr><td class="risk-name">Email parser Phase 5 slip</td><td class="risk-phase">5</td><td class="risk-impact risk-medium">Medium</td><td class="risk-mitigation">Parser shells + plugin framework exist (W0.6). Fallback: giảm scope xuống 3 banks MVP (TCB, Cake, MB)</td></tr><tr><td class="risk-name">Low conversion Free→Pro</td><td class="risk-phase">8+</td><td class="risk-impact risk-medium">Medium</td><td class="risk-mitigation">Monitor hit-limit-rate, adjust 45→60-75 if churn &gt; upgrade</td></tr><tr><td class="risk-name">Business tier validation fail</td><td class="risk-phase">9</td><td class="risk-impact risk-high">High</td><td class="risk-mitigation">Reposition as personal+freelancer tracker</td></tr><tr><td class="risk-name">Railway cost &gt; $50/mo</td><td class="risk-phase">8+</td><td class="risk-impact risk-medium">Medium</td><td class="risk-mitigation">Trigger Hetzner migration</td></tr><tr><td class="risk-name">Family Plan pricing conflict</td><td class="risk-phase">11</td><td class="risk-impact risk-low">Low</td><td class="risk-mitigation">Merge pricing-tiers addendum doc — decision work done</td></tr><tr><td class="risk-name">Legacy handler migration drag</td><td class="risk-phase">2</td><td class="risk-impact risk-medium">Medium</td><td class="risk-mitigation">Each handler = focused PR with isolation tests</td></tr></tbody></table></section>
+<section id="tab-docs" class="tab-panel" role="tabpanel"><table class="docs-table"><thead><tr><th>Document</th><th>Version</th><th>Last Updated</th><th>Staleness</th></tr></thead><tbody><tr class="stale-yellow"><td class="doc-name">brd-vi.md</td><td class="doc-version">v3.1.0</td><td class="doc-updated">2026-05-10</td><td class="doc-stale">10d</td></tr><tr class="stale-yellow"><td class="doc-name">prd-vi.md</td><td class="doc-version">v1.7.1</td><td class="doc-updated">2026-05-10</td><td class="doc-stale">10d</td></tr><tr class="stale-yellow"><td class="doc-name">tdd-vi.md</td><td class="doc-version">v1.8.1</td><td class="doc-updated">2026-05-10</td><td class="doc-stale">10d</td></tr><tr class="stale-yellow"><td class="doc-name">mymoneywent-roadmap.md</td><td class="doc-version">v1.1.0</td><td class="doc-updated">2026-05-12</td><td class="doc-stale">8d</td></tr></tbody></table></section>
+
+<div class="callout warn">
+  <div>
+    <strong>Risk còn active</strong>
+    Legacy handler migration drag (transaction-capture strangler fig) · pricing-tiers Family Plan addendum chờ merge · Meta App Review pages_messaging (messenger-channel flip ON pending)
+  </div>
+</div>
+
+<div class="legend">
+  <span class="item"><span class="dot merged"></span> Merged</span>
+  <span class="item"><span class="dot in-review"></span> In review</span>
+  <span class="item"><span class="dot in-progress"></span> In progress</span>
+  <span class="item"><span class="dot blocked"></span> Blocked</span>
+  <span class="item"><span class="dot not-started"></span> Not started</span>
+  <span class="item"><span class="dot deferred"></span> Deferred</span>
+  <span class="item" style="margin-left:auto;color:var(--text-tertiary);">Click PR → GitHub · Rebuild: <code>python scripts/build-dashboard.py</code></span>
+</div>
+
+<!-- B-2: tab switcher INSIDE .container so refreshDashboardDOM() re-runs it
+     after live refresh. A-P1-4 re-creates <script> nodes within the
+     replaced container; scripts outside it would be orphaned after the
+     first auto-refresh (Codex round 2). -->
+<script class="tab-switcher">
+(function() {
+  var tabs = document.querySelectorAll('.tab-bar [data-tab]');
+  var panels = document.querySelectorAll('.tab-panel');
+  function activate(name) {
+    var found = false;
+    tabs.forEach(function(t) {
+      var active = t.dataset.tab === name;
+      t.classList.toggle('active', active);
+      if (active) found = true;
+    });
+    panels.forEach(function(p) { p.classList.toggle('active', p.id === 'tab-' + name); });
+    if (found) {
+      try { localStorage.setItem('activeTab', name); } catch (e) { /* noop */ }
+    }
+  }
+  tabs.forEach(function(t) {
+    t.addEventListener('click', function() { activate(t.dataset.tab); });
+  });
+  var saved = null;
+  try { saved = localStorage.getItem('activeTab'); } catch (e) { /* noop */ }
+  activate(saved || 'overview');
+})();
+</script>
+
+</div>
+<script>
+(function() {
+  var REPO = 'maingocanh1702/MyMoneyWent';
+  var PAT = null;
+  try { PAT = localStorage.getItem('github_pat'); } catch (e) { /* SecurityError in some sandboxes */ }
+  var POLL_INTERVAL_MS = PAT ? 30000 : 120000;  // 30s authed (5000/hr), 2min unauth (30 req/hr, under 60/hr limit)
+  // Polling docs/dashboard.html alone catches all updates: tracker.md changes
+  // are downstream via the pre-commit build-dashboard hook (regen + auto-stage)
+  // and the GH Action dashboard.yml workflow. Polling both paths would double
+  // API calls (240/hr) and exceed the 60/hr unauth rate limit at 30s interval.
+  // Edge case: tracker committed with `--no-verify` bypasses the hook and would
+  // be missed — but that's user error, not a feature target.
+  var TRACK_PATH = 'docs/dashboard.html';
+
+  var lastKnownSha = null;
+  var lastSyncAt = Date.now();
+  var lastError = null;
+  var paused = false;
+
+  function getIndicator() { return document.getElementById('live-indicator'); }
+
+  function fmtAge(ms) {
+    var s = Math.floor(ms / 1000);
+    if (s < 60) return s + 's';
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + 'm';
+    return Math.floor(m / 60) + 'h';
+  }
+
+  function setIndicator(state, message) {
+    var el = getIndicator();
+    if (!el) return;
+    var age = fmtAge(Date.now() - lastSyncAt);
+    if (state === 'live') {
+      el.textContent = 'Live · last sync ' + age + ' ago';
+      el.className = 'live-indicator ok';
+      el.title = 'Polls GitHub every ' + (POLL_INTERVAL_MS/1000) + 's. Click to refresh now. Pause: Esc.';
+    } else if (state === 'syncing') {
+      el.textContent = '🔵 Syncing…';
+      el.className = 'live-indicator syncing';
+    } else if (state === 'error') {
+      el.textContent = '🔴 ' + (message || 'sync error');
+      el.className = 'live-indicator err';
+      el.title = message || '';
+    } else if (state === 'rate-limit') {
+      el.textContent = '🟡 Rate limit · waiting (set localStorage.github_pat for 5000/hr)';
+      el.className = 'live-indicator warn';
+    } else if (state === 'paused') {
+      el.textContent = '⏸ Paused (click to resume)';
+      el.className = 'live-indicator paused';
+    } else if (state === 'init') {
+      el.textContent = '⚪ initializing…';
+      el.className = 'live-indicator init';
+    }
+  }
+
+  function authHeaders() {
+    var h = { 'Accept': 'application/vnd.github.v3+json' };
+    try {
+      var pat = localStorage.getItem('github_pat');
+      if (pat) h['Authorization'] = 'Bearer ' + pat;
+    } catch (e) { /* SecurityError in some sandboxes */ }
+    return h;
+  }
+
+  function fetchLatestSha() {
+    var url = 'https://api.github.com/repos/' + REPO + '/commits?path=' + TRACK_PATH + '&per_page=1';
+    return fetch(url, { headers: authHeaders() }).then(function(resp) {
+      if (resp.status === 403) {
+        var remaining = resp.headers.get('X-RateLimit-Remaining');
+        if (remaining === '0') {
+          setIndicator('rate-limit');
+          return null;
+        }
+      }
+      if (!resp.ok) throw new Error('GitHub API ' + resp.status);
+      return resp.json();
+    }).then(function(data) {
+      if (!data || !data.length) return null;
+      return data[0].sha;
+    });
+  }
+
+  function refreshDashboardDOM() {
+    setIndicator('syncing');
+    var url = 'https://raw.githubusercontent.com/' + REPO + '/main/docs/dashboard.html?_t=' + Date.now();
+    return fetch(url, { cache: 'no-store' }).then(function(resp) {
+      if (!resp.ok) throw new Error('Fetch raw ' + resp.status);
+      return resp.text();
+    }).then(function(text) {
+      var parser = new DOMParser();
+      var newDoc = parser.parseFromString(text, 'text/html');
+      var newContainer = newDoc.querySelector('.container');
+      var oldContainer = document.querySelector('.container');
+      if (newContainer && oldContainer) {
+        var scrollY = window.scrollY;
+        // Preserve our live-indicator element (template doesn't have current state)
+        var indicator = oldContainer.querySelector('#live-indicator');
+        var indicatorHtml = indicator ? indicator.outerHTML : '';
+        // Script-safe swap: replaceChild + manual <script> re-execution.
+        // Plain innerHTML drops <script> tags silently (browsers refuse to run
+        // them when set via innerHTML), so any inline scripts shipped by v2
+        // (tab switcher, charts) would not re-run after refresh. We deep-clone
+        // the new container, replace the old one in-place, then re-create each
+        // <script> element so the browser executes it.
+        var clone = document.importNode(newContainer, true);
+        oldContainer.parentNode.replaceChild(clone, oldContainer);
+        var scripts = clone.querySelectorAll('script');
+        for (var i = 0; i < scripts.length; i++) {
+          var oldScript = scripts[i];
+          var newScript = document.createElement('script');
+          for (var j = 0; j < oldScript.attributes.length; j++) {
+            var attr = oldScript.attributes[j];
+            newScript.setAttribute(attr.name, attr.value);
+          }
+          newScript.textContent = oldScript.textContent;
+          oldScript.parentNode.replaceChild(newScript, oldScript);
+        }
+        // Re-inject indicator if new content doesn't already have it
+        if (indicatorHtml && !clone.querySelector('#live-indicator')) {
+          var meta = clone.querySelector('.head-meta') || clone.querySelector('.page-head');
+          if (meta) meta.insertAdjacentHTML('afterbegin', indicatorHtml);
+        }
+        window.scrollTo(0, scrollY);
+      }
+    });
+  }
+
+  function check() {
+    if (paused) return;
+    fetchLatestSha().then(function(latestSha) {
+      // null = fetchLatestSha already set a non-live state (rate-limit, etc).
+      // Thread a sentinel through the promise chain so the next .then() does
+      // NOT overwrite the warning with 'live'.
+      if (latestSha === null) return 'skipped';
+      if (lastKnownSha === null) {
+        lastKnownSha = latestSha;
+      } else if (latestSha !== lastKnownSha) {
+        return refreshDashboardDOM().then(function() {
+          lastKnownSha = latestSha;
+        });
+      }
+    }).then(function(outcome) {
+      if (outcome === 'skipped') return;  // preserve rate-limit indicator
+      lastSyncAt = Date.now();
+      lastError = null;
+      if (!paused) setIndicator('live');
+    }).catch(function(e) {
+      lastError = e.message;
+      setIndicator('error', e.message);
+    });
+  }
+
+
+  // Update age text every second
+  setInterval(function() {
+    if (paused) { setIndicator('paused'); return; }
+    if (lastError) setIndicator('error', lastError);
+    else if (lastKnownSha !== null) setIndicator('live');
+  }, 1000);
+
+  // Poll loop
+  setInterval(check, POLL_INTERVAL_MS);
+
+  // Click indicator → toggle pause OR force refresh
+  document.addEventListener('click', function(e) {
+    var t = e.target.closest && e.target.closest('#live-indicator');
+    if (!t) return;
+    if (paused) { paused = false; check(); }
+    else { check(); }
+  });
+
+  // Esc → toggle pause
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') { paused = !paused; setIndicator(paused ? 'paused' : 'live'); }
+  });
+
+  // Initial state + first check
+  setIndicator('init');
+  check();
+})();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+<script>
+const REPO = "maingocanh1702/MyMoneyWent";
+
+// Burndown chart
+const ctx = document.getElementById("burndown");
+if (ctx && window.Chart) {
+  new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: ["Start", "Today", "Launch"],
+      datasets: [
+        {
+          label: "Actual",
+          data: [0, 17, null],
+          borderColor: "#185fa5",
+          backgroundColor: "rgba(24,95,165,0.1)",
+          tension: 0.3,
+          pointRadius: 5,
+          fill: false,
+        },
+        {
+          label: "Target",
+          data: [0, 11.3, 100],
+          borderColor: "#888780",
+          borderDash: [5, 5],
+          tension: 0,
+          pointRadius: 3,
+          fill: false,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: { beginAtZero: true, max: 100, ticks: { callback: v => v + "%", font: { size: 10 } } },
+        x: { ticks: { font: { size: 10 } } },
+      },
+      plugins: {
+        legend: { position: "bottom", labels: { font: { size: 11 }, boxWidth: 12, padding: 8 } },
+      },
+    },
+  });
+}
+
+// Filter + search
+let activeFilter = "all";
+let searchQuery = "";
+const searchInput = document.getElementById("dashboard-search");
+const filterBtns = document.querySelectorAll(".filter-btn");
+
+function applyFilters() {
+  document.querySelectorAll(".pr-row").forEach(row => {
+    const matchesFilter = activeFilter === "all" || row.classList.contains(activeFilter);
+    const matchesSearch = !searchQuery || row.textContent.toLowerCase().includes(searchQuery);
+    row.classList.toggle("hidden", !(matchesFilter && matchesSearch));
+  });
+  document.querySelectorAll(".phase-card").forEach(card => {
+    const visiblePRs = card.querySelectorAll(".pr-row:not(.hidden)").length;
+    card.style.display = visiblePRs === 0 && (activeFilter !== "all" || searchQuery) ? "none" : "";
+  });
+}
+
+if (searchInput) {
+  searchInput.addEventListener("input", e => { searchQuery = e.target.value.toLowerCase(); applyFilters(); });
+}
+filterBtns.forEach(btn => btn.addEventListener("click", () => {
+  filterBtns.forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  activeFilter = btn.dataset.filter;
+  applyFilters();
+}));
+
+// Click PR → open GitHub branch
+document.querySelectorAll(".pr-row").forEach(row => {
+  const m = row.title.match(/(?:feat|infra|chore|fix)\/[\w.-]+/);
+  if (m) {
+    row.addEventListener("click", () => window.open(`https://github.com/${REPO}/tree/${m[0]}`, "_blank"));
+  }
+});
+document.querySelectorAll(".next-chip").forEach(chip => {
+  chip.style.cursor = "pointer";
+  chip.addEventListener("click", () => {
+    const id = chip.querySelector(".pr-id")?.textContent;
+    if (id) window.open(`https://github.com/${REPO}/issues?q=${id}`, "_blank");
+  });
+});
+</script>
+</body>
+</html>
