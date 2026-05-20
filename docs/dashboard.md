@@ -2,7 +2,7 @@
 
 > **Auto-generated** từ [`implementation-tracker.md`](implementation-tracker.md) bằng `scripts/build-dashboard.py`.
 > KHÔNG edit trực tiếp — sửa tracker rồi rebuild.
-> **Cập nhật:** 2026-05-20 19:17 · **Branch hiện tại:** `main`
+> **Cập nhật:** 2026-05-20 19:20 · **Branch hiện tại:** `main`
 
 Để xem dashboard HTML đẹp hơn: mở [`dashboard.html`](dashboard.html) bằng browser.
 
@@ -11,7 +11,7 @@
 ## Tổng quan
 
 - **MVP progress:** **17%** (6/36 PR merged)
-- **In flight:** 1 PR · **Blocked:** 0 · **Deferred:** 0
+- **In flight:** 0 PR · **Blocked:** 0 · **Deferred:** 0
 - **Target launch:** Tháng 9/2026 (~16 weeks runway)
 
 ## Phase progress
@@ -38,7 +38,7 @@
 | `work-state-engine-1a` | Work-State Engine — Phase 1a (skeleton + filesystem + git) | ✅ Merged | `feat/MYM-1-work-state-engine-1a` |
 | `work-state-engine-1b` | Work-State Engine — Phase 1b (github + ci + railway collectors) | ✅ Merged | `feat/MYM-3-work-state-engine-1b` |
 | `work-state-engine-1b'` | Work-State Engine — Phase 1b' (dashboard projection follow-up) | ✅ Merged | `feat/MYM-4-work-state-engine-1b-projection` |
-| `work-state-engine-1c` | Work-State Engine — Phase 1c (driver + aggregation + persistence + workflow) | ⬜ In review | `feat/MYM-5-work-state-engine-1c` |
+| `work-state-engine-1c` | Work-State Engine — Phase 1c (driver + aggregation + persistence + workflow) | ✅ Merged | `feat/MYM-5-work-state-engine-1c` |
 | `W1.1` | Docker Compose dev + prod | ⬜ Not started | `infra/W1.1-docker-compose` |
 | `W1.2` | Discord adapter (`core/messenger/discord.py`) | ⬜ Not started | `feat/W1.2-discord-adapter` |
 | `W1.3` | Phase 1 integration smoke | ⬜ Not started | `chore/W1.3-phase1-smoke` |
@@ -125,14 +125,7 @@ gantt
 
 ## Đang làm
 
-### work-state-engine-1c — Work-State Engine — Phase 1c (driver + aggregation + persistence + workflow)
-
-- **Status:** ⬜ In review
-- **Branch:** `feat/MYM-5-work-state-engine-1c`
-- **Wave:** Wave 0 follow-up
-- **Gates:** 🔒I 🔒X
-- **Phase:** Phase 1
-- **Notes:** **Ready to kickoff post MYM-4 merge.** **Linear:** [MYM-5](https://linear.app/maingocanh/issue/MYM-5) — project `Work-State Engine`, milestone `Phase 1c — Multi-branch aggregation`, P1 Foundation Lane manual_only. **Spec:** `docs/operations/dashboard-engine/dashboard-plan-state-split.md` v1.2.1 §4.1 + §7.4 + §11.4 + §13 (AC11d + AC13 + AC17). **Prereq:** MYM-1 + MYM-3 + MYM-4 all merged ✓. **Prompt:** `docs/autopilot/prompts/work-state-engine-1c-autopilot.md` (13 Steps + 6 Checkpoints A-F + 15 circuit breakers; mega-bundle 4 sub-phases per memory `feedback_megaprompt_with_checkpoints_works`). **Scope (bundle):** Phase A engine driver `scripts/work_state/engine.py` + CLI `python -m scripts.work_state.engine` orchestrating WorkItems → per-branch Signals → status → aggregation → state file. Phase B aggregate_multi_branch_* wired into driver + AC11d matrix tests (5+ cases per §4.1.2). Phase C `.dashboard/` CI persistence via `actions/cache@v4` (AC17) + CACHE_SCHEMA_VERSION. Phase D dashboard.yml triggers extension per §11.4 (PR + reviews + workflow_run + push + schedule + dispatch). Pre-flight gate includes mypy core markets i18n tests scripts/work_state (lesson learnt from MYM-4 CI fix). **Out of scope:** MAX urgency §4.1.3 → Phase 1d, runtime_urgency → Phase 1d, foundation_change milestones → post-shadow, Phase 2 promotion (computed → primary) → 7-day shadow gate. **Scope reality (2026-05-21):** Linear milestone description was "aggregation matrix only" but engine has NO production driver — aggregation cannot be implemented without driver. Bundle locked với founder Option γ. ~2-3 work-days estimated wallclock.
+_Không có PR active._
 
 ## Up next
 
