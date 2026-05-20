@@ -139,6 +139,7 @@ If you need to bridge `core ↔ markets`, the only legal place is `core/handlers
 
 - Line length **100** (black + ruff agree).
 - mypy **strict** on `core|markets|i18n|tests` only. `tools/autopilot/*` is pragmatic-typed (overrides in `pyproject.toml`).
+- **Autopilot prompt pre-flight gates** must run mypy on the FULL strict scope, not just new modules: `mypy core markets i18n tests <new-module-paths>`. Checking only new modules misses test-file variance issues (e.g., `dict[str, list[X]]` not subtype of `dict[str, object]` due to invariance). See memory `feedback_autopilot_preflight_must_include_tests_mypy.md` — past incident 2026-05-21 MYM-4 forced a CI-fix commit.
 - Legacy files are listed in both `[tool.ruff].extend-exclude` and `[tool.black].extend-exclude` + `.force-exclude`. **Black needs `force-exclude` separately** because pre-commit passes file paths explicitly, which bypasses `extend-exclude`. See memory `feedback_black_force_exclude_for_precommit.md` if touching this config.
 - Naming: `kebab-case` for docs files, `snake_case` for Python.
 

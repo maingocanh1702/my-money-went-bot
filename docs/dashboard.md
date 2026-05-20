@@ -2,7 +2,7 @@
 
 > **Auto-generated** từ [`implementation-tracker.md`](implementation-tracker.md) bằng `scripts/build-dashboard.py`.
 > KHÔNG edit trực tiếp — sửa tracker rồi rebuild.
-> **Cập nhật:** 2026-05-20 18:21 · **Branch hiện tại:** `main`
+> **Cập nhật:** 2026-05-21 01:29 · **Branch hiện tại:** `main`
 
 Để xem dashboard HTML đẹp hơn: mở [`dashboard.html`](dashboard.html) bằng browser.
 
@@ -36,7 +36,7 @@
 | `W0.9` | Dashboard realtime — auto-rebuild + git-state detect + reconcile | ✅ Merged | `feat/dashboard-realtime` |
 | `W0.10` | Dashboard v3 rich UI + click-through + Chart.js | ✅ Merged | `feat/dashboard-v3-rich-v2` |
 | `work-state-engine-1a` | Work-State Engine — Phase 1a (skeleton + filesystem + git) | ✅ Merged | `feat/MYM-1-work-state-engine-1a` |
-| `work-state-engine-1b` | Work-State Engine — Phase 1b (github + ci + railway collectors) | ⬜ Not started | `feat/MYM-3-work-state-engine-1b` |
+| `work-state-engine-1b` | Work-State Engine — Phase 1b (github + ci + railway collectors) | ✅ Merged | `feat/MYM-3-work-state-engine-1b` |
 | `work-state-engine-1b'` | Work-State Engine — Phase 1b' (dashboard projection follow-up) | ✅ Merged | `feat/MYM-4-work-state-engine-1b-projection` |
 | `W1.1` | Docker Compose dev + prod | ⬜ Not started | `infra/W1.1-docker-compose` |
 | `W1.2` | Discord adapter (`core/messenger/discord.py`) | ⬜ Not started | `feat/W1.2-discord-adapter` |
@@ -130,11 +130,11 @@ _Không có PR active._
 
 | PR | Feature | Phase | Status |
 |----|---------|-------|--------|
-| `work-state-engine-1b` | Work-State Engine — Phase 1b (github + ci + railway collectors) | Phase 1 | ⬜ Not started |
 | `W1.1` | Docker Compose dev + prod | Phase 1 | ⬜ Not started |
 | `W1.2` | Discord adapter (`core/messenger/discord.py`) | Phase 1 | ⬜ Not started |
 | `W1.3` | Phase 1 integration smoke | Phase 1 | ⬜ Not started |
 | `funding-sources` | Funding sources resolver + handlers | Phase 2 | ⬜ Not started |
+| `transaction-capture` | Transaction capture EXPANDED (inherit W0.6 legacy cutover) | Phase 2 | ⬜ Not started |
 
 ---
 
