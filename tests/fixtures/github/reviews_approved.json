@@ -1,0 +1,9 @@
+[
+  {
+    "id": 1,
+    "user": {"login": "reviewer1"},
+    "state": "APPROVED",
+    "submitted_at": "2026-05-19T12:00:00Z",
+    "commit_id": "abc123"
+  }
+]

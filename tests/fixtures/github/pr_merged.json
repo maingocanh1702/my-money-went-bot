@@ -1,0 +1,19 @@
+{
+  "number": 10,
+  "state": "closed",
+  "draft": false,
+  "title": "feat: onboarding start + user create",
+  "body": "Closes MYM-101\n\nMulti-channel /start.",
+  "html_url": "https://github.com/maingocanh1702/MyMoneyWent/pull/10",
+  "head": {
+    "ref": "feat/F01-onboarding-start",
+    "sha": "9f07c57aaa"
+  },
+  "base": {
+    "ref": "main"
+  },
+  "merged_at": "2026-05-13T08:00:00Z",
+  "closed_at": "2026-05-13T08:00:00Z",
+  "created_at": "2026-05-12T10:00:00Z",
+  "updated_at": "2026-05-13T08:00:00Z"
+}

@@ -1,0 +1,16 @@
+{
+  "data": {
+    "deployments": {
+      "edges": [
+        {
+          "node": {
+            "id": "deploy-003",
+            "status": "FAILED",
+            "createdAt": "2026-05-20T10:00:00Z",
+            "updatedAt": "2026-05-20T10:03:00Z"
+          }
+        }
+      ]
+    }
+  }
+}
