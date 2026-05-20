@@ -4,6 +4,10 @@ on:
     types: [opened, edited, synchronize, ready_for_review]
 jobs:
   validate:
+    # Skip entire workflow for Dependabot — bot PRs use branch pattern
+    # `dependabot/*` and don't write Linear refs in PR body. Manual review
+    # via GitHub UI still gates merge (Codex/CI/founder review unaffected).
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Branch naming
@@ -16,7 +20,7 @@ jobs:
           case "$BRANCH" in
             W0.*|Wave-*|hotfix/*|release/*|fix/*|feat/c1-*|chore/*) exit 0 ;;
           esac
-          if ! echo "$BRANCH" | grep -Eq '^[a-z0-9-]+/MMW-[0-9]+-[a-z0-9-]+$'; then
+          if ! echo "$BRANCH" | grep -Eq '^[a-z0-9-]+/MYM-[0-9]+-[a-z0-9-]+$'; then
             echo "::error::Branch '$BRANCH' must match <dev>/MYM-<id>-<slug>"
             exit 1
           fi
@@ -24,7 +28,7 @@ jobs:
         env:
           PR_BODY: "${{ github.event.pull_request.body }}"
         run: |
-          if echo "$PR_BODY" | grep -Eq '(Closes|Fixes|Ref) MMW-[0-9]+'; then exit 0; fi
+          if echo "$PR_BODY" | grep -Eq '(Closes|Fixes|Ref) MYM-[0-9]+'; then exit 0; fi
           if echo "$PR_BODY" | grep -q 'Linear: N/A'; then exit 0; fi
           echo "::error::PR body missing 'Closes/Fixes/Ref MYM-NNN' or 'Linear: N/A'"
           exit 1
