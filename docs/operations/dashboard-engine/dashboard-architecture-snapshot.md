@@ -6,10 +6,10 @@ date: 2026-05-20
 updated: 2026-05-20
 author: Founder + Claude
 related:
-  - docs/operations/ops-tracker-dashboard-explained.md  # v1.0.0 — mechanism deep-dive (W0.9 + W0.10)
-  - docs/operations/dashboard-plan-state-split.md       # v1.2.1 — target spec (work-state engine)
-  - docs/operations/linear-and-dashboard-workflow.md    # v1.1.0 — Linear ↔ dashboard 2-view layering
-  - docs/operations/phase-0-audit-report-2026-05-20.md  # v1.0.0 — Phase 0 audit complete
+  - docs/operations/dashboard-engine/ops-tracker-dashboard-explained.md  # v1.0.0 — mechanism deep-dive (W0.9 + W0.10)
+  - docs/operations/dashboard-engine/dashboard-plan-state-split.md       # v1.2.1 — target spec (work-state engine)
+  - docs/operations/dashboard-engine/linear-and-dashboard-workflow.md    # v1.1.0 — Linear ↔ dashboard 2-view layering
+  - docs/operations/dashboard-engine/phase-0-audit-report-2026-05-20.md  # v1.0.0 — Phase 0 audit complete
 ---
 
 # Dashboard Architecture Snapshot — 2026-05-20
@@ -171,6 +171,13 @@ Important boundary: target engine **does not mutate tracker plan fields automati
 
 ## 5. Work-State Engine roadmap
 
+> **Note on sub-phase numbering:** Snapshot dưới đây dùng **operational sub-phases 1a/1b/1c/1d** để
+> phản ánh tracker row + Linear milestones thực tế. Spec `dashboard-plan-state-split.md` v1.2.1 §10
+> dùng granularity thô hơn (1a/1b/1c không tách runtime urgency). Sub-phase 1c (multi-branch
+> aggregation) + 1d (runtime urgency) là **operational refinement nội bộ Phase 1**, không thay đổi
+> tổng scope/timeline so với spec (vẫn 5-7 work-days Phase 1 + 7-day shadow monitoring per spec exit
+> criteria). Tracker = working source of truth cho per-feature scheduling.
+
 ```mermaid
 gantt
     title Work-State Engine timeline (estimated 2.5-3 weeks calendar)
@@ -280,38 +287,18 @@ Khi nào đọc file nào:
 
 | Cần hiểu... | Đọc file |
 |-------------|----------|
-| Cơ chế dashboard auto-update hiện tại (v2.2) | `ops-tracker-dashboard-explained.md` |
-| Spec target architecture của engine | `dashboard-plan-state-split.md` v1.2.1 |
-| Linear ↔ dashboard 2-view layering | `linear-and-dashboard-workflow.md` v1.1.0 |
-| Audit kết quả + defaults strategy | `phase-0-audit-report-2026-05-20.md` |
-| Foundation Lane workflow gates | `walkthrough-foundation-lane-example.md` v1.0.1 |
-| Cross-model review prompt template | `codex-review-prompt-work-state-engine-v1.2.0.md` (historical artifact) |
+| Cơ chế dashboard auto-update hiện tại (v2.2) | `docs/operations/dashboard-engine/ops-tracker-dashboard-explained.md` |
+| Spec target architecture của engine | `docs/operations/dashboard-engine/dashboard-plan-state-split.md` v1.2.1 |
+| Linear ↔ dashboard 2-view layering | `docs/operations/dashboard-engine/linear-and-dashboard-workflow.md` v1.1.0 |
+| Audit kết quả + defaults strategy | `docs/operations/dashboard-engine/phase-0-audit-report-2026-05-20.md` |
+| Foundation Lane workflow gates | `docs/operations/dashboard-engine/walkthrough-foundation-lane-example.md` v1.0.1 |
+| Cross-model review prompt template | `docs/operations/dashboard-engine/codex-review-prompt-work-state-engine-v1.2.0.md` (historical artifact) |
 | Master status board | `docs/implementation-tracker.md` |
-| 3-lane risk-based workflow | `fast-quality-workflow.md` |
+| 3-lane risk-based workflow | *(reference `fast-quality-workflow.md` đã bị move/rename — pending repo-wide cleanup; xem CLAUDE.md + 5 docs khác đang cite path cũ)* |
 
 ---
 
-## 8. SVG diagram appendix (rendered visualization)
-
-Nguyên bản SVG dùng trong Cowork visualization khi giải thích cho founder. Embed inline để portability cross-tool:
-
-```html
-<!-- See dashboard-architecture-snapshot-diagram.svg or render via:
-     python scripts/render-dashboard-snapshot.py (future TODO post Phase 1b)
--->
-```
-
-**Visual structure:**
-
-- **Top half:** 3 trigger paths (A/B/C left column) → build-dashboard.py center → 3 outputs (html/md/json right column)
-- **Bottom half:** Roadmap timeline 5 phases với status pills (✅ DONE green / 🟠 RUNNING orange / ⬜ PENDING grey)
-- **Bottom box:** Sau Phase 2 payoff statement
-
-Mermaid diagrams ở §1, §3, §5, §6 cover same content và render trong GitHub markdown + md2html HTML output.
-
----
-
-## 9. Changelog
+## 8. Changelog
 
 ### v1.0.1 — 2026-05-20
 
