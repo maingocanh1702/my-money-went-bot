@@ -2,7 +2,7 @@
 
 > **Auto-generated** từ [`implementation-tracker.md`](implementation-tracker.md) bằng `scripts/build-dashboard.py`.
 > KHÔNG edit trực tiếp — sửa tracker rồi rebuild.
-> **Cập nhật:** 2026-05-19 09:43 · **Branch hiện tại:** `main`
+> **Cập nhật:** 2026-05-20 16:17 · **Branch hiện tại:** `main`
 
 Để xem dashboard HTML đẹp hơn: mở [`dashboard.html`](dashboard.html) bằng browser.
 
@@ -35,6 +35,7 @@
 | `W0.8` | Webhook `display_suffix VARCHAR(8)` migration (G3 option b) | ✅ Merged | `feat/webhook-display-suffix-migration` |
 | `W0.9` | Dashboard realtime — auto-rebuild + git-state detect + reconcile | ✅ Merged | `feat/dashboard-realtime` |
 | `W0.10` | Dashboard v3 rich UI + click-through + Chart.js | ✅ Merged | `feat/dashboard-v3-rich-v2` |
+| `work-state-engine-1a` | Work-State Engine — Phase 1a (skeleton + filesystem + git) | ⬜ Not started | `feat/MYM-1-work-state-engine-1a` |
 | `W1.1` | Docker Compose dev + prod | ⬜ Not started | `infra/W1.1-docker-compose` |
 | `W1.2` | Discord adapter (`core/messenger/discord.py`) | ⬜ Not started | `feat/W1.2-discord-adapter` |
 | `W1.3` | Phase 1 integration smoke | ⬜ Not started | `chore/W1.3-phase1-smoke` |
@@ -96,6 +97,7 @@
 | `W6.3` | Backup automation (B2 + pg_dump daily, SSE-B2) | ⬜ Not started | `infra/W6.3-backup-b2` |
 | `W6.4` | DR runbook full validation (test restore) | ⬜ Not started | `chore/W6.4-dr-restore-test` |
 | `(to be created when Phase W enters implementation planning)` | — | ⏸️ Deferred | `—` |
+| `parser-evolver` | GEPA-style auto-tune cho email parsers (POC: ACB) | ⏸️ Deferred | `feat/MYM-XXX-parser-evolver-poc` |
 
 ## Timeline
 
@@ -126,11 +128,11 @@ _Không có PR active._
 
 | PR | Feature | Phase | Status |
 |----|---------|-------|--------|
+| `work-state-engine-1a` | Work-State Engine — Phase 1a (skeleton + filesystem + git) | Phase 1 | ⬜ Not started |
 | `W1.1` | Docker Compose dev + prod | Phase 1 | ⬜ Not started |
 | `W1.2` | Discord adapter (`core/messenger/discord.py`) | Phase 1 | ⬜ Not started |
 | `W1.3` | Phase 1 integration smoke | Phase 1 | ⬜ Not started |
 | `funding-sources` | Funding sources resolver + handlers | Phase 2 | ⬜ Not started |
-| `transaction-capture` | Transaction capture EXPANDED (inherit W0.6 legacy cutover) | Phase 2 | ⬜ Not started |
 
 ---
 
