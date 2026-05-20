@@ -1,0 +1,80 @@
+"""Canonical dataclass models per spec §11.2.
+
+Overlay names: kebab-case (UI-visible).
+Warning codes: snake_case (machine detail).
+Per spec §8.2.1 naming convention.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+
+@dataclass(frozen=True)
+class ManualOverride:
+    status: str
+    reason: str
+    until: str  # ISO date
+
+
+@dataclass(frozen=True)
+class WorkItem:
+    id: str
+    linear_id: str | None
+    feature_id: str
+    title: str
+    type: str
+    phase: str
+    priority: str
+    risk_tier: str
+    lane: str
+    owner: str
+    deadline: str | None
+    specs: dict[str, str | None]
+    branches: list[str]
+    acceptance: list[str]
+    dependencies: list[str]
+    external_blockers: list[str]
+    decision_needed: str | None
+    progress_profile: str
+    manual_state_override: ManualOverride | None = None
+
+
+@dataclass
+class Signals:
+    spec_exists: bool
+    tech_exists: bool
+    branch_exists: bool
+    commits_count: int
+    last_commit_sha: str | None
+    pr_state: str
+    pr_number: int | None
+    review_state: str
+    ci_state: str
+    deploy_state: str
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass
+class CurrentState:
+    item_id: str
+    status: str
+    human_status: str
+    progress: int
+    runtime_urgency: str
+    overlays: list[str]
+    signals: Signals
+    last_event_ts: str | None
+
+
+@dataclass(frozen=True)
+class Event:
+    ts: str
+    item: str
+    event: str
+    from_status: str | None
+    to_status: str | None
+    source: str
+    artifact: str | None = None
+    pr_number: int | None = None
+    overlay: str | None = None
