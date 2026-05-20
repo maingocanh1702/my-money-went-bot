@@ -53,6 +53,11 @@ class Signals:
     ci_state: str
     deploy_state: str
     warnings: list[str] = field(default_factory=list)
+    # Phase 1b APPEND-ONLY extensions
+    pr_url: str | None = None
+    ci_check_run_count: int = 0
+    last_review_at: str | None = None
+    last_deploy_at: str | None = None
 
 
 @dataclass

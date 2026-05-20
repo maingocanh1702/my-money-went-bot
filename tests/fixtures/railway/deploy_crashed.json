@@ -1,0 +1,16 @@
+{
+  "data": {
+    "deployments": {
+      "edges": [
+        {
+          "node": {
+            "id": "deploy-004",
+            "status": "CRASHED",
+            "createdAt": "2026-05-20T08:00:00Z",
+            "updatedAt": "2026-05-20T08:10:00Z"
+          }
+        }
+      ]
+    }
+  }
+}

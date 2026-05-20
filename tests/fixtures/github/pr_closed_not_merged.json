@@ -1,0 +1,19 @@
+{
+  "number": 99,
+  "state": "closed",
+  "draft": false,
+  "title": "feat: abandoned experiment",
+  "body": "Ref MYM-999\n\nAbandoned.",
+  "html_url": "https://github.com/maingocanh1702/MyMoneyWent/pull/99",
+  "head": {
+    "ref": "feat/MYM-999-abandoned",
+    "sha": "dead000"
+  },
+  "base": {
+    "ref": "main"
+  },
+  "merged_at": null,
+  "closed_at": "2026-05-15T12:00:00Z",
+  "created_at": "2026-05-14T10:00:00Z",
+  "updated_at": "2026-05-15T12:00:00Z"
+}

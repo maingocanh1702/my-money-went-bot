@@ -1,0 +1,29 @@
+{
+  "total_count": 3,
+  "check_runs": [
+    {
+      "id": 1,
+      "name": "test",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-05-19T10:00:00Z",
+      "completed_at": "2026-05-19T10:05:00Z"
+    },
+    {
+      "id": 2,
+      "name": "dashboard",
+      "status": "completed",
+      "conclusion": "skipped",
+      "started_at": "2026-05-19T10:00:00Z",
+      "completed_at": "2026-05-19T10:00:01Z"
+    },
+    {
+      "id": 3,
+      "name": "pre-commit",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-05-19T10:00:00Z",
+      "completed_at": "2026-05-19T10:03:00Z"
+    }
+  ]
+}
