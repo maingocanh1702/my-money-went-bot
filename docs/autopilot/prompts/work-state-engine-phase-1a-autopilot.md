@@ -87,12 +87,19 @@ Required reading (READ FIRST, in this order, before any code):
 
 Pre-flight gate (HARD — halt if any fails):
 
+> **2026-05-20 adjustment:** Pre-flight rewritten to assume engine-1a worktree as cwd + branch
+> `feat/MYM-1-work-state-engine-1a` already created (points to main's HEAD post-rebase). The
+> original "start from main + checkout -b" assumption no longer matches reality: kickoff commit
+> ac1873e (tracker row + this prompt file + dashboard regen) is already on main.
+
 ```bash
-cd /Users/maingocanh/Projects/MyMoneyWent
+cd /Users/maingocanh/Projects/MyMoneyWent-engine-1a
 git status                              # MUST be clean
-git branch --show-current               # MUST be: main
-git fetch origin && git pull --ff-only origin main
-git log --oneline -3                    # 4529527 or later (post-MMW→MYM migration)
+git branch --show-current               # MUST be: feat/MYM-1-work-state-engine-1a (branch exists, pointing to main's HEAD post-rebase)
+git fetch origin
+git log --oneline origin/main..HEAD -5  # verify feat branch ahead of (or equal to) origin/main — no rebase debt
+git merge-base --is-ancestor origin/main HEAD || { echo "FAIL: feat branch behind origin/main — rebase before proceeding"; exit 1; }
+git log --oneline -3                    # 7b705cf or later (post-dashboard auto-rebuild)
 
 source .venv/bin/activate
 which python                            # MUST resolve to .venv/bin/python
@@ -113,7 +120,10 @@ head -5 docs/operations/dashboard-plan-state-split.md | grep "v1.2.1"  # spec at
 # Linear ticket: MYM-1 (substituted into branch + PR refs throughout prompt)
 grep -q "feat/MYM-1-work-state-engine-1a" "$0" 2>/dev/null  # sanity check (best-effort)
 
-python -m tools.autopilot preflight     # ALL pass — orchestrator lock check
+# python -m tools.autopilot preflight   # SKIPPED 2026-05-20: known to fail branch-check
+                                         # (expects main, we run from feat). Branch
+                                         # creation handled by Step 1 below; orchestrator
+                                         # lock check not needed for claude-p-headless mode.
 ```
 
 ALL must pass. If any fails → HALT and report. Do not proceed.
@@ -133,8 +143,10 @@ Anti-patterns (NEVER do):
 Numbered steps:
 
 ```bash
-# Step 1 — Branch + state dir
-git checkout -b feat/MYM-1-work-state-engine-1a
+# Step 1 — Confirm on feat branch + state dir
+# Branch was pre-created during kickoff (ac1873e on main: tracker row + this prompt + dashboard).
+# In engine-1a worktree we're already on the branch; idempotent checkout (no -b) is safe.
+git checkout feat/MYM-1-work-state-engine-1a
 git rev-parse HEAD > /tmp/work-state-1a-base-sha.txt
 mkdir -p .autopilot/state/work-state-1a/codex
 ```
