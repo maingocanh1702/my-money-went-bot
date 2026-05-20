@@ -1071,6 +1071,13 @@ Exit criteria:
 
 Realistic total Phase 1: **5-7 work days** + 7-day monitoring window.
 
+> **Operational sub-phase note (2026-05-20):** Tracker + `dashboard-architecture-snapshot.md` v1.0.1
+> dùng thêm sub-phases **1c (multi-branch aggregation)** và **1d (runtime urgency)** để track per-feature
+> Linear milestones. Hai sub-phases này là **operational refinement nội bộ Phase 1** — implement
+> dùng cùng module skeleton + collectors trong 1a/1b, không expand scope so với spec này. Tổng
+> Phase 1 envelope (5-7 work days + 7-day shadow) giữ nguyên. Spec §10 (canonical) vẫn dùng
+> 1a/1b/1c granularity; snapshot extends with finer breakdown để align với tracker row schedule.
+
 ### Phase 2 — Projection promotion (1-2 days)
 
 - Dashboard primary status becomes computed status.
