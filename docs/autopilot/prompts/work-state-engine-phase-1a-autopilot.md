@@ -124,6 +124,11 @@ grep -q "feat/MYM-1-work-state-engine-1a" "$0" 2>/dev/null  # sanity check (best
                                          # (expects main, we run from feat). Branch
                                          # creation handled by Step 1 below; orchestrator
                                          # lock check not needed for claude-p-headless mode.
+
+# ===== PRE-FLIGHT CHECKPOINT — sentinel for claude self-anchor =====
+echo ""
+echo "✓✓✓ PRE-FLIGHT PASSED — proceeding to Phase A (Step 1)"
+echo ""
 ```
 
 ALL must pass. If any fails → HALT and report. Do not proceed.
@@ -318,6 +323,57 @@ git add tests/integration/work_state/test_engine_e2e.py
 git commit -m "test(work-state): integration e2e — tracker → engine → current_state.json"
 ```
 
+---
+
+### ✅ CHECKPOINT A — Phase A Codegen complete (MANDATORY gate)
+
+**Do NOT proceed to Step 14 unless ALL 6 checks below pass.** Run as one block. ANY failure → emit `HALT: CHECKPOINT_A_FAILED <reason>`, write `.autopilot/state/work-state-1a/halt-report.md` per "Halt report shape" section below, then STOP (do not continue Phase B).
+
+```bash
+echo "=== CHECKPOINT A — Phase A Codegen complete ==="
+
+# 1. All 10 module files present
+for f in __init__.py models.py plan_reader.py event_engine.py status_machine.py \
+         progress.py state_store.py signal_collectors/__init__.py \
+         signal_collectors/filesystem.py signal_collectors/git.py; do
+  test -f "scripts/work_state/$f" \
+    || { echo "HALT CHECKPOINT_A: scripts/work_state/$f MISSING"; exit 1; }
+done
+echo "✓ all 10 module files present"
+
+# 2. All Phase A unit + integration tests pass
+pytest tests/unit/work_state/ tests/integration/work_state/ -q --tb=short \
+  || { echo "HALT CHECKPOINT_A: pytest FAILED"; exit 1; }
+echo "✓ pytest unit + integration passed"
+
+# 3. mypy strict clean on new module
+mypy scripts/work_state/ \
+  || { echo "HALT CHECKPOINT_A: mypy strict FAILED"; exit 1; }
+echo "✓ mypy strict clean"
+
+# 4. lint-imports clean (no boundary violations)
+lint-imports \
+  || { echo "HALT CHECKPOINT_A: lint-imports FAILED"; exit 1; }
+echo "✓ lint-imports clean"
+
+# 5. Branch ahead of base by ≥13 atomic commits (1 per Step × 13 steps)
+COMMITS_AHEAD=$(git rev-list --count "$(cat /tmp/work-state-1a-base-sha.txt)..HEAD")
+test "$COMMITS_AHEAD" -ge 13 \
+  || { echo "HALT CHECKPOINT_A: only $COMMITS_AHEAD commits, expected ≥13"; exit 1; }
+echo "✓ $COMMITS_AHEAD commits ahead of base"
+
+# 6. Working tree clean (all changes committed atomically)
+test -z "$(git status --porcelain)" \
+  || { echo "HALT CHECKPOINT_A: working tree DIRTY"; git status --short; exit 1; }
+echo "✓ working tree clean"
+
+echo ""
+echo "✓✓✓ CHECKPOINT A PASSED — proceeding to Phase B (Codex Review)"
+echo ""
+```
+
+---
+
 Step 14 — Inline Codex review with ≤5 fix rounds (P1 Standard Lane max 5 per CLAUDE.md hard rule #8)
 
 Round 1:
@@ -343,6 +399,58 @@ Round 2: repeat. MUST be clean for P1 manual_only merge gate.
 
 If round 5 hit without 2× consecutive clean → MAX_ROUNDS circuit → HALT.
 
+---
+
+### ✅ CHECKPOINT B — Phase B Codex Review complete (MANDATORY gate)
+
+**Do NOT proceed to Step 15 unless ALL 5 checks below pass.** Track `clean_streak` counter throughout Step 14 (increment on clean round, reset to 0 on any finding). Exit Step 14 ONLY when `clean_streak >= 2`.
+
+```bash
+echo "=== CHECKPOINT B — Codex Review complete ==="
+
+# 1. At least 2 codex round artifacts exist
+ROUND_COUNT=$(ls .autopilot/state/work-state-1a/codex/round-*.txt 2>/dev/null | wc -l | tr -d ' ')
+test "$ROUND_COUNT" -ge 2 \
+  || { echo "HALT CHECKPOINT_B: only $ROUND_COUNT codex round artifacts, expected ≥2"; exit 1; }
+echo "✓ $ROUND_COUNT codex round artifacts captured"
+
+# 2. Last 2 rounds BOTH clean (2× consecutive requirement)
+LAST_ROUND=$(ls -1 .autopilot/state/work-state-1a/codex/round-*.txt | tail -1)
+PREV_ROUND=$(ls -1 .autopilot/state/work-state-1a/codex/round-*.txt | tail -2 | head -1)
+for r in "$LAST_ROUND" "$PREV_ROUND"; do
+  # "clean" = LGTM | "no issues" | "approve" | "no recommendations" | no P0/P1 findings
+  if grep -qiE "(P0|P1)[: ]|finding|issue" "$r" \
+     && ! grep -qiE "lgtm|no issues|approve|no recommendations|clean" "$r"; then
+    echo "HALT CHECKPOINT_B: round artifact $r appears to have UNRESOLVED findings"
+    exit 1
+  fi
+done
+echo "✓ last 2 rounds both clean (2× consecutive)"
+
+# 3. All tests still green post-fixes (Step 14 fix commits may regress)
+pytest tests/unit/work_state/ tests/integration/work_state/ -q --tb=short \
+  || { echo "HALT CHECKPOINT_B: pytest REGRESSED after fix commits"; exit 1; }
+echo "✓ pytest still green post-fixes"
+
+# 4. No `# type: ignore` introduced (TYPE_IGNORE circuit)
+NEW_IGNORES=$(git diff "$(cat /tmp/work-state-1a-base-sha.txt)..HEAD" -- scripts/ tests/ \
+  | grep -c "^+.*type: ignore" || true)
+test "$NEW_IGNORES" -eq 0 \
+  || { echo "HALT CHECKPOINT_B: $NEW_IGNORES new # type: ignore introduced (founder approval needed)"; exit 1; }
+echo "✓ no new # type: ignore introduced"
+
+# 5. Working tree clean (fix commits all atomic)
+test -z "$(git status --porcelain)" \
+  || { echo "HALT CHECKPOINT_B: working tree DIRTY after fix rounds"; git status --short; exit 1; }
+echo "✓ working tree clean"
+
+echo ""
+echo "✓✓✓ CHECKPOINT B PASSED — proceeding to Phase C (Final Verify + Push)"
+echo ""
+```
+
+---
+
 Step 15 — Final verification + STOP_AT_READY
 
 ```bash
@@ -357,6 +465,60 @@ python -c "from scripts.work_state.plan_reader import read_tracker; print(read_t
 
 git push -u origin feat/MYM-1-work-state-engine-1a
 ```
+
+---
+
+### ✅ CHECKPOINT C — Final state verified (MANDATORY gate before READY report)
+
+**Do NOT emit READY_FOR_MANUAL_MERGE unless ALL 5 checks below pass.**
+
+```bash
+echo "=== CHECKPOINT C — Final state verified ==="
+
+# 1. Local branch and origin tip match (push succeeded)
+LOCAL_SHA=$(git rev-parse HEAD)
+REMOTE_SHA=$(git rev-parse "origin/feat/MYM-1-work-state-engine-1a" 2>/dev/null \
+  || { echo "HALT CHECKPOINT_C: origin branch missing — push failed?"; exit 1; })
+test "$LOCAL_SHA" = "$REMOTE_SHA" \
+  || { echo "HALT CHECKPOINT_C: local $LOCAL_SHA ≠ origin $REMOTE_SHA (push incomplete)"; exit 1; }
+echo "✓ local & origin both at $LOCAL_SHA"
+
+# 2. Working tree + index clean (nothing dangling)
+test -z "$(git status --porcelain)" \
+  || { echo "HALT CHECKPOINT_C: working tree DIRTY"; git status --short; exit 1; }
+echo "✓ working tree clean"
+
+# 3. Branch ahead of base by realistic commit count (codegen ≥13 + fix rounds ≥0)
+COMMITS_AHEAD=$(git rev-list --count "$(cat /tmp/work-state-1a-base-sha.txt)..HEAD")
+test "$COMMITS_AHEAD" -ge 13 \
+  || { echo "HALT CHECKPOINT_C: only $COMMITS_AHEAD commits, expected ≥13"; exit 1; }
+echo "✓ $COMMITS_AHEAD commits ahead of base"
+
+# 4. Dogfood smoke: engine produces non-empty output without crashing
+python -c "
+from scripts.work_state.plan_reader import read_tracker
+items = read_tracker('docs/implementation-tracker.md')
+assert len(items) > 0, 'plan_reader returned empty'
+print(f'dogfood OK: {len(items)} work items parsed')
+" \
+  || { echo "HALT CHECKPOINT_C: dogfood smoke FAILED"; exit 1; }
+echo "✓ dogfood smoke passed"
+
+# 5. All 5 verify tools clean (final sweep)
+ruff check scripts/work_state/ tests/unit/work_state/ tests/integration/work_state/ \
+  && black --check scripts/work_state/ tests/unit/work_state/ tests/integration/work_state/ \
+  && mypy scripts/work_state/ \
+  && lint-imports \
+  && pytest tests/unit/work_state/ tests/integration/work_state/ -q --tb=short \
+  || { echo "HALT CHECKPOINT_C: final verify sweep FAILED"; exit 1; }
+echo "✓ ruff + black + mypy + lint-imports + pytest all green"
+
+echo ""
+echo "✓✓✓ CHECKPOINT C PASSED — emitting READY_FOR_MANUAL_MERGE report below"
+echo ""
+```
+
+---
 
 Report READY_FOR_MANUAL_MERGE — founder reviews + squash-merges manually per CLAUDE.md hard
 rule #6. Do NOT auto-merge.
