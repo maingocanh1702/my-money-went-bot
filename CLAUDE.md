@@ -26,7 +26,7 @@ FastAPI backend, Python 3.11+, Postgres (asyncpg + SQLAlchemy 2.x async), Alembi
 | 10-step per-feature workflow (Standard/Foundation) | `docs/operations/development-workflow.md` |
 | **Manual fallback (Codex down / autopilot halt)** | `docs/operations/manual-fallback-playbook.md` |
 | Autopilot orchestrator | `docs/autopilot/orchestrator-usage.md` |
-| Autopilot prompt skeleton | `docs/operations/autopilot-prompt-template.md` |
+| Autopilot prompt skeleton | `docs/autopilot/autopilot-prompt-template.md` |
 | ADRs | `docs/adr/` |
 
 Auto-generated views (never hand-edit, rebuild via `scripts/build-dashboard.py`): `docs/dashboard.{html,md,json}`.
