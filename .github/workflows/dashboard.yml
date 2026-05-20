@@ -4,6 +4,13 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    types: [opened, closed, reopened, synchronize, ready_for_review, converted_to_draft, review_requested, labeled, unlabeled]
+  pull_request_review:
+    types: [submitted, dismissed]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
   schedule:
     - cron: '0 6 * * *'   # daily 6 AM UTC (1 PM Vietnam time), down from hourly
   workflow_dispatch:
@@ -15,10 +22,21 @@ concurrency:
   group: dashboard-rebuild
   cancel-in-progress: true
 
+env:
+  CACHE_SCHEMA_VERSION: v1
+
 jobs:
   rebuild:
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, 'auto-rebuild') }}
+    if: >-
+      github.event_name == 'schedule'
+      || github.event_name == 'workflow_dispatch'
+      || github.event_name == 'pull_request'
+      || github.event_name == 'pull_request_review'
+      || (github.event_name == 'workflow_run'
+          && !contains(github.event.workflow_run.head_commit.message, 'auto-rebuild'))
+      || (github.event_name == 'push'
+          && !contains(github.event.head_commit.message, 'auto-rebuild'))
     steps:
       # Pinned to full commit SHA (not floating tags) per supply-chain best practice.
       # Same pin as ci.yml — keep in sync via Dependabot.
@@ -30,6 +48,15 @@ jobs:
 
       - name: Fetch all branches + tags
         run: git fetch --all --prune --tags
+
+      - name: Restore .dashboard/ state cache
+        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf  # v4.2.0
+        with:
+          path: .dashboard/
+          key: dashboard-state-v${{ env.CACHE_SCHEMA_VERSION }}-${{ github.event_name == 'pull_request' && format('pr-{0}-{1}', github.event.pull_request.number, github.sha) || 'main' }}
+          restore-keys: |
+            dashboard-state-v${{ env.CACHE_SCHEMA_VERSION }}-main
+            dashboard-state-v${{ env.CACHE_SCHEMA_VERSION }}-
 
       - name: Check if build script is on main
         id: check
