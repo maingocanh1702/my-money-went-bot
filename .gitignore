@@ -9,7 +9,9 @@ PRIVATE_SETUP.md
 __pycache__/
 *.py[cod]
 *.pyo
-.venv/
+# .venv pattern without trailing slash to match BOTH directory AND symlink
+# (worktrees often symlink `.venv -> ../main-repo/.venv` for shared deps)
+.venv
 venv/
 env/
 *.egg-info/
