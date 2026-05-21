@@ -681,6 +681,10 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
 .sync-badge.unpulled { background: var(--bg-info); color: var(--text-info); }
 .state-badge { font-size: 9px; font-family: var(--font-mono); padding: 1px 5px; border-radius: 999px; flex-shrink: 0; line-height: 1.3; background: #e8eaf6; color: #3949ab; margin-left: 4px; }
 .state-overlay { font-size: 8px; margin-left: 2px; opacity: 0.8; }
+.state-overlay.spec-modified { color: #e65100; font-weight: 600; }
+.state-overlay.tech-modified { color: #e65100; font-weight: 600; }
+.state-overlay.tracker-modified { color: #bf360c; font-weight: 600; }
+.state-overlay.post-ship-doc-change { color: #b71c1c; font-weight: 700; }
 .engine-warning { font-size: 11px; color: var(--text-warning); padding: 6px 10px; background: var(--bg-warning); border-radius: 6px; margin: 8px 0; }
 
 /* Risk callout */
@@ -1069,7 +1073,7 @@ def render_html(
                 human = html.escape(str(st.get("human_status", "")))
                 overlays = st.get("overlays", [])
                 overlay_html = "".join(
-                    f'<span class="state-overlay">{html.escape(str(o))}</span>'
+                    f'<span class="state-overlay {html.escape(str(o))}">{html.escape(str(o))}</span>'
                     for o in overlays
                     if o
                 )

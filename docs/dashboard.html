@@ -128,6 +128,10 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
 .sync-badge.unpulled { background: var(--bg-info); color: var(--text-info); }
 .state-badge { font-size: 9px; font-family: var(--font-mono); padding: 1px 5px; border-radius: 999px; flex-shrink: 0; line-height: 1.3; background: #e8eaf6; color: #3949ab; margin-left: 4px; }
 .state-overlay { font-size: 8px; margin-left: 2px; opacity: 0.8; }
+.state-overlay.spec-modified { color: #e65100; font-weight: 600; }
+.state-overlay.tech-modified { color: #e65100; font-weight: 600; }
+.state-overlay.tracker-modified { color: #bf360c; font-weight: 600; }
+.state-overlay.post-ship-doc-change { color: #b71c1c; font-weight: 700; }
 .engine-warning { font-size: 11px; color: var(--text-warning); padding: 6px 10px; background: var(--bg-warning); border-radius: 6px; margin: 8px 0; }
 
 /* Risk callout */
@@ -329,7 +333,7 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <h1>MyMoneyWent — progress dashboard</h1>
   <div class="head-meta">
     <span id="live-indicator" class="live-indicator init">⚪ initializing…</span>
-    <p class="meta">Updated 2026-05-21 10:31 · <code>main</code> · auto-refresh 60s</p>
+    <p class="meta">Updated 2026-05-21 17:18 · <code>feat/MYM-7-dashboard-live-view-B</code> · auto-refresh 60s</p>
   </div>
 </div>
 
@@ -339,11 +343,11 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
 
 <section id="tab-overview" class="tab-panel" role="tabpanel"><div class="overview-summary"><div class="kpi"><div class="kpi-label">Overall</div><div class="kpi-value">30%</div></div><div class="kpi"><div class="kpi-label">MVP</div><div class="kpi-value">17%</div></div></div><div class="phase-bars"><div class="phase-row" data-status="done"><div class="phase-label">Phase 0: Docs &amp; Specs</div><div class="phase-track"><div class="phase-fill phase-done" style="width:100%"></div></div><div class="phase-pct">100%</div></div><div class="phase-row" data-status="partial"><div class="phase-label">Phase 1: Foundation</div><div class="phase-track"><div class="phase-fill phase-partial" style="width:75%"></div></div><div class="phase-pct">75%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 2: Handlers Refactor</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 3: Pricing Logic</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 4: SePay Onboarding</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 5: Email Parsing</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 6: Polish + Deploy</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 7: Closed Beta</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 8: Public Soft Launch</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 9-10: Growth + Business Tier</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 11: Family Plan</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div></div><div class="hero">
 <div class="hero-current">
-  <span class="dot in-review"></span>
+  <span class="dot in-progress"></span>
   <div class="hero-text">
     <p class="hero-label">Đang làm</p>
     <p class="hero-title">dashboard-live-view-B · Dashboard Live View — Phase B (doc-change awareness)</p>
-    <p class="hero-sub">In review · feat/MYM-7-dashboard-live-view-B</p>
+    <p class="hero-sub">In progress · feat/MYM-7-dashboard-live-view-B</p>
   </div>
 </div>
 <div class="hero-kpis">
@@ -351,8 +355,8 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <div class="kpi"><p class="kpi-val">57%</p><p class="kpi-lbl">Phase 1</p><p class="kpi-sub">4/7</p></div>
   <div class="kpi"><p class="kpi-val">1</p><p class="kpi-lbl">In flight</p></div>
   <div class="kpi"><p class="kpi-val">0</p><p class="kpi-lbl">Blocked</p></div>
-  <div class="kpi"><p class="kpi-val">↑0</p><p class="kpi-lbl">Unpushed</p><p class="kpi-sub">0 PR</p></div>
-  <div class="kpi"><p class="kpi-val">↓28</p><p class="kpi-lbl">Unpulled</p><p class="kpi-sub">2 PR</p></div>
+  <div class="kpi alert"><p class="kpi-val">↑5</p><p class="kpi-lbl">Unpushed</p><p class="kpi-sub">1 PR</p></div>
+  <div class="kpi"><p class="kpi-val">↓43</p><p class="kpi-lbl">Unpulled</p><p class="kpi-sub">4 PR</p></div>
 </div>
 </div>
 <div class="chart-section">
@@ -416,10 +420,10 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
     <span class="phase-card-meta">4/7 · 57%</span>
   </div>
   <div class="phase-card-bar"><div class="" style="width:57%;"></div></div>
-  <div class="phase-prs"><div class="pr-row in-review" title="In review · feat/MYM-7-dashboard-live-view-B · remote: in-review">
-  <span class="dot in-review"></span>
+  <div class="phase-prs"><div class="pr-row in-progress current" title="In progress · feat/MYM-7-dashboard-live-view-B · local: in-progress">
+  <span class="dot in-progress"></span>
   <span class="pr-id">dashboard-live-view-B</span>
-  <span class="pr-name"><span class="pr-name-text">Dashboard Live View — Phase B (doc-change awareness)</span><span class="sync-badge unpulled" title="5 commits trên origin chưa pull về local">↓5</span><span class="state-badge" title="Engine: IN_PROGRESS">IN_PROGRESS</span></span>
+  <span class="pr-name"><span class="pr-name-text">Dashboard Live View — Phase B (doc-change awareness)</span><span class="sync-badge unpushed" title="5 commits chưa push lên origin">↑5</span><span class="state-badge" title="Engine: WAITING">WAITING</span></span>
 </div><div class="pr-row not-started" title="Not started · infra/W1.1-docker-compose">
   <span class="dot not-started"></span>
   <span class="pr-id">W1.1</span>
@@ -435,11 +439,11 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
 </div><div class="pr-row merged" title="Merged · feat/dashboard-v3-rich-v2">
   <span class="dot merged"></span>
   <span class="pr-id">W0.10</span>
-  <span class="pr-name"><span class="pr-name-text">Dashboard v3 rich UI + click-through + Chart.js</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
+  <span class="pr-name"><span class="pr-name-text">Dashboard v3 rich UI + click-through + Chart.js</span><span class="state-badge" title="Engine: WAITING">WAITING</span></span>
 </div><div class="pr-row merged" title="Merged · chore/W0.7-tenant-context-public-api">
   <span class="dot merged"></span>
   <span class="pr-id">W0.7</span>
-  <span class="pr-name"><span class="pr-name-text">Public `request_id` helpers + F02 xfail contract pin</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
+  <span class="pr-name"><span class="pr-name-text">Public `request_id` helpers + F02 xfail contract pin</span><span class="state-badge" title="Engine: WAITING">WAITING</span></span>
 </div><div class="pr-row merged" title="Merged · feat/webhook-display-suffix-migration">
   <span class="dot merged"></span>
   <span class="pr-id">W0.8</span>
@@ -447,27 +451,27 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
 </div><div class="pr-row merged" title="Merged · feat/dashboard-realtime">
   <span class="dot merged"></span>
   <span class="pr-id">W0.9</span>
-  <span class="pr-name"><span class="pr-name-text">Dashboard realtime — auto-rebuild + git-state detect + reconcile</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
-</div><div class="pr-row merged" title="Merged · feat/MYM-6-dashboard-live-view-A">
+  <span class="pr-name"><span class="pr-name-text">Dashboard realtime — auto-rebuild + git-state detect + reconcile</span><span class="state-badge" title="Engine: WAITING">WAITING</span></span>
+</div><div class="pr-row merged" title="Merged · feat/MYM-6-dashboard-live-view-A · remote: in-review">
   <span class="dot merged"></span>
   <span class="pr-id">dashboard-live-view-A</span>
-  <span class="pr-name"><span class="pr-name-text">Dashboard Live View — Phase A (engine→build wire)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
+  <span class="pr-name"><span class="pr-name-text">Dashboard Live View — Phase A (engine→build wire)</span><span class="sync-badge unpulled" title="6 commits trên origin chưa pull về local">↓6</span><span class="state-badge" title="Engine: WAITING">WAITING</span></span>
 </div><div class="pr-row merged" title="Merged · feat/MYM-1-work-state-engine-1a">
   <span class="dot merged"></span>
   <span class="pr-id">work-state-engine-1a</span>
-  <span class="pr-name"><span class="pr-name-text">Work-State Engine — Phase 1a (skeleton + filesystem + git)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
+  <span class="pr-name"><span class="pr-name-text">Work-State Engine — Phase 1a (skeleton + filesystem + git)</span><span class="state-badge" title="Engine: WAITING">WAITING</span></span>
 </div><div class="pr-row merged" title="Merged · feat/MYM-3-work-state-engine-1b">
   <span class="dot merged"></span>
   <span class="pr-id">work-state-engine-1b</span>
-  <span class="pr-name"><span class="pr-name-text">Work-State Engine — Phase 1b (github + ci + railway collectors)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
-</div><div class="pr-row merged" title="Merged · feat/MYM-4-work-state-engine-1b-projection">
+  <span class="pr-name"><span class="pr-name-text">Work-State Engine — Phase 1b (github + ci + railway collectors)</span><span class="state-badge" title="Engine: WAITING">WAITING</span></span>
+</div><div class="pr-row merged" title="Merged · feat/MYM-4-work-state-engine-1b-projection · remote: in-review">
   <span class="dot merged"></span>
   <span class="pr-id">work-state-engine-1b&#x27;</span>
-  <span class="pr-name"><span class="pr-name-text">Work-State Engine — Phase 1b&#x27; (dashboard projection follow-up)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
-</div><div class="pr-row merged" title="Merged · feat/MYM-5-work-state-engine-1c">
+  <span class="pr-name"><span class="pr-name-text">Work-State Engine — Phase 1b&#x27; (dashboard projection follow-up)</span><span class="sync-badge unpulled" title="5 commits trên origin chưa pull về local">↓5</span><span class="state-badge" title="Engine: WAITING">WAITING</span></span>
+</div><div class="pr-row merged" title="Merged · feat/MYM-5-work-state-engine-1c · remote: in-review">
   <span class="dot merged"></span>
   <span class="pr-id">work-state-engine-1c</span>
-  <span class="pr-name"><span class="pr-name-text">Work-State Engine — Phase 1c (driver + aggregation + persistence + workflow)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
+  <span class="pr-name"><span class="pr-name-text">Work-State Engine — Phase 1c (driver + aggregation + persistence + workflow)</span><span class="sync-badge unpulled" title="9 commits trên origin chưa pull về local">↓9</span><span class="state-badge" title="Engine: WAITING">WAITING</span></span>
 </div></div>
 </div><div class="phase-card">
   <div class="phase-card-head">
@@ -490,7 +494,7 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
 </div><div class="pr-row not-started" title="Not started · feat/funding-sources">
   <span class="dot not-started"></span>
   <span class="pr-id">funding-sources</span>
-  <span class="pr-name"><span class="pr-name-text">Funding sources resolver + handlers</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
+  <span class="pr-name"><span class="pr-name-text">Funding sources resolver + handlers</span><span class="state-badge" title="Engine: WAITING">WAITING</span></span>
 </div><div class="pr-row not-started" title="Not started · feat/i18n-locale-switcher">
   <span class="dot not-started"></span>
   <span class="pr-id">i18n-locale-switcher</span>
@@ -502,7 +506,7 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
 </div><div class="pr-row not-started" title="Not started · feat/reports">
   <span class="dot not-started"></span>
   <span class="pr-id">reports</span>
-  <span class="pr-name"><span class="pr-name-text">Reports `/status`, `/today`, `/weekly`</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
+  <span class="pr-name"><span class="pr-name-text">Reports `/status`, `/today`, `/weekly`</span><span class="state-badge" title="Engine: WAITING">WAITING</span></span>
 </div><div class="pr-row not-started" title="Not started · feat/transaction-capture">
   <span class="dot not-started"></span>
   <span class="pr-id">transaction-capture</span>
@@ -525,7 +529,7 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <div class="phase-prs"><div class="pr-row not-started" title="Not started · feat/pricing-tiers">
   <span class="dot not-started"></span>
   <span class="pr-id">pricing-tiers</span>
-  <span class="pr-name"><span class="pr-name-text">Tier limits + 14d trial + gating middleware</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
+  <span class="pr-name"><span class="pr-name-text">Tier limits + 14d trial + gating middleware</span><span class="state-badge" title="Engine: WAITING">WAITING</span></span>
 </div></div>
 </div><div class="phase-card">
   <div class="phase-card-head">

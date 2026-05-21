@@ -58,6 +58,12 @@ class Signals:
     ci_check_run_count: int = 0
     last_review_at: str | None = None
     last_deploy_at: str | None = None
+    # Phase B APPEND-ONLY extensions (doc-change awareness)
+    spec_hash: str | None = None
+    spec_modified_at: str | None = None
+    tech_hash: str | None = None
+    tech_modified_at: str | None = None
+    tracker_row_hash: str | None = None
 
 
 @dataclass

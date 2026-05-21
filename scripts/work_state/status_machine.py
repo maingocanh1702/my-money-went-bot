@@ -20,6 +20,70 @@ STATUS_RANK: dict[str, int] = {
 
 TERMINAL_STATUSES = {"deployed", "merged", "abandoned"}
 
+CANONICAL_OVERLAYS: frozenset[str] = frozenset(
+    {
+        "blocked",
+        "ci-failing",
+        "deploy-failed",
+        "unknown",
+        "artifact-drift",
+        "ambiguous-pr-mapping",
+        "review-requested",
+        "stale",
+        "partial-progress",
+        "multi-branch",
+        "manual-override",
+        "ci-running",
+        "deploy-in-progress",
+        "no-ci",
+        "spec-modified",
+        "tech-modified",
+        "tracker-modified",
+        "post-ship-doc-change",
+    }
+)
+
+
+def compute_overlays(
+    signals: Signals,
+    base_status: str,
+    *,
+    prev_spec_hash: str | None = None,
+    prev_tech_hash: str | None = None,
+    prev_tracker_row_hash: str | None = None,
+) -> list[str]:
+    """Compute doc-change overlays per spec §8.2 Phase B rules."""
+    overlays: list[str] = []
+
+    spec_changed = (
+        prev_spec_hash is not None
+        and signals.spec_hash is not None
+        and signals.spec_hash != prev_spec_hash
+    )
+    tech_changed = (
+        prev_tech_hash is not None
+        and signals.tech_hash is not None
+        and signals.tech_hash != prev_tech_hash
+    )
+    tracker_changed = (
+        prev_tracker_row_hash is not None
+        and signals.tracker_row_hash is not None
+        and signals.tracker_row_hash != prev_tracker_row_hash
+    )
+
+    if spec_changed:
+        overlays.append("spec-modified")
+    if tech_changed:
+        overlays.append("tech-modified")
+    if tracker_changed:
+        overlays.append("tracker-modified")
+
+    any_doc_change = spec_changed or tech_changed or tracker_changed
+    if any_doc_change and base_status in TERMINAL_STATUSES:
+        overlays.append("post-ship-doc-change")
+
+    return sorted(overlays)
+
 
 def compute_status(s: Signals) -> str:
     """First-match priority per spec §8.1."""
