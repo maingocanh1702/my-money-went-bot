@@ -2,7 +2,7 @@
 
 > **Auto-generated** từ [`implementation-tracker.md`](implementation-tracker.md) bằng `scripts/build-dashboard.py`.
 > KHÔNG edit trực tiếp — sửa tracker rồi rebuild.
-> **Cập nhật:** 2026-05-21 06:36 · **Branch hiện tại:** `main`
+> **Cập nhật:** 2026-05-21 08:02 · **Branch hiện tại:** `main`
 
 Để xem dashboard HTML đẹp hơn: mở [`dashboard.html`](dashboard.html) bằng browser.
 
@@ -11,7 +11,7 @@
 ## Tổng quan
 
 - **MVP progress:** **17%** (6/36 PR merged)
-- **In flight:** 0 PR · **Blocked:** 0 · **Deferred:** 0
+- **In flight:** 1 PR · **Blocked:** 0 · **Deferred:** 0
 - **Target launch:** Tháng 9/2026 (~16 weeks runway)
 
 ## Phase progress
@@ -39,7 +39,7 @@
 | `work-state-engine-1b` | Work-State Engine — Phase 1b (github + ci + railway collectors) | ✅ Merged | `feat/MYM-3-work-state-engine-1b` |
 | `work-state-engine-1b'` | Work-State Engine — Phase 1b' (dashboard projection follow-up) | ✅ Merged | `feat/MYM-4-work-state-engine-1b-projection` |
 | `work-state-engine-1c` | Work-State Engine — Phase 1c (driver + aggregation + persistence + workflow) | ✅ Merged | `feat/MYM-5-work-state-engine-1c` |
-| `dashboard-live-view-A` | Dashboard Live View — Phase A (engine→build wire) | ⬜ Not started | `feat/MYM-6-dashboard-live-view-A` |
+| `dashboard-live-view-A` | Dashboard Live View — Phase A (engine→build wire) | ⬜ In review | `feat/MYM-6-dashboard-live-view-A` |
 | `W1.1` | Docker Compose dev + prod | ⬜ Not started | `infra/W1.1-docker-compose` |
 | `W1.2` | Discord adapter (`core/messenger/discord.py`) | ⬜ Not started | `feat/W1.2-discord-adapter` |
 | `W1.3` | Phase 1 integration smoke | ⬜ Not started | `chore/W1.3-phase1-smoke` |
@@ -126,17 +126,24 @@ gantt
 
 ## Đang làm
 
-_Không có PR active._
+### dashboard-live-view-A — Dashboard Live View — Phase A (engine→build wire)
+
+- **Status:** ⬜ In review
+- **Branch:** `feat/MYM-6-dashboard-live-view-A`
+- **Wave:** Wave 0 follow-up
+- **Gates:** 🔒I 🔒X
+- **Phase:** Phase 1
+- **Notes:** **Ready to kickoff post MYM-5 merge.** **Linear:** [MYM-6](https://linear.app/maingocanh/issue/MYM-6) — project `Work-State Engine`, P1 Foundation Lane manual_only (shadow scope; cutover → P0 Phase 2). **Plan:** `docs/operations/dashboard-engine/dashboard-live-view-plan.md` v0.2.1 §3 Phase A. **Vision:** `docs/operations/dashboard-engine/product-vision.md` v0.1.0 (WorkState product framing 2026-05-21). **Prereq:** MYM-1 + MYM-3 + MYM-4 + MYM-5 all merged ✓. **Prompt:** `docs/autopilot/prompts/dashboard-live-view-A-autopilot.md` (TBD ~7 Steps + 2 Checkpoints; pre-flight gate includes full mypy scope per MYM-4 lesson). **Scope:** Modify `scripts/build-dashboard.py` to invoke `scripts.work_state.engine.run_engine` + `scripts.work_state.projections.dashboard.enrich_dashboard`. HTML/MD/JSON templates render `state.human_status` side-by-side với manual status (shadow mode, NO cutover per MYM-4 AC6 precedent). `--no-network` propagation. **A8 critical**: engine failure NOT break dashboard generation in shadow mode; warning rendered + build exits 0 unless `--strict-engine` opt-in. ACs A1-A8. ~0.5-1 work-day estimated. Codex 2× consecutive clean required. Out of scope: doc-awareness (Phase B), event feed (Phase C), client poll upgrade (Phase D), latency tuning (Phase E optional), Phase 2 promotion (gated by 7-day shadow ≥95% + validation checklist).
 
 ## Up next
 
 | PR | Feature | Phase | Status |
 |----|---------|-------|--------|
-| `dashboard-live-view-A` | Dashboard Live View — Phase A (engine→build wire) | Phase 1 | ⬜ Not started |
 | `W1.1` | Docker Compose dev + prod | Phase 1 | ⬜ Not started |
 | `W1.2` | Discord adapter (`core/messenger/discord.py`) | Phase 1 | ⬜ Not started |
 | `W1.3` | Phase 1 integration smoke | Phase 1 | ⬜ Not started |
 | `funding-sources` | Funding sources resolver + handlers | Phase 2 | ⬜ Not started |
+| `transaction-capture` | Transaction capture EXPANDED (inherit W0.6 legacy cutover) | Phase 2 | ⬜ Not started |
 
 ---
 
