@@ -290,3 +290,76 @@ class TestMultiBranchAggregation:
 
         result = aggregate_multi_branch_overlays([("deployed", []), ("in-progress", [])])
         assert "partial-progress" in result
+
+
+class TestCanonicalOverlaysSpecParity:
+    """MYM-11: enforce CANONICAL_OVERLAYS code ≡ spec §8.2 single source of truth.
+
+    Per spec line 781: '§8.2 = single source of truth' — code must mirror spec list exactly.
+    Spec v1.5.0 (2026-05-21) reconciled to 21 overlays (added multi-branch,
+    deploy-in-progress, no-ci per Linear MYM-11 Option A). These 3 are declared in
+    `CANONICAL_OVERLAYS` but emit logic is reserved for future wiring per §8.2 footer.
+    """
+
+    def test_canonical_overlays_count_matches_spec_8_2(self) -> None:
+        """Spec v1.5.0 §8.2 table has 21 overlay rows. Code must match."""
+        from scripts.work_state.status_machine import CANONICAL_OVERLAYS
+
+        assert len(CANONICAL_OVERLAYS) == 21, (
+            f"CANONICAL_OVERLAYS has {len(CANONICAL_OVERLAYS)} entries; "
+            "spec v1.5.0 §8.2 declares exactly 21. Update spec OR code to maintain parity."
+        )
+
+    def test_canonical_overlays_exact_set_matches_spec(self) -> None:
+        """Exhaustive set match against spec v1.5.0 §8.2 (21 rows)."""
+        from scripts.work_state.status_machine import CANONICAL_OVERLAYS
+
+        spec_8_2_overlays = frozenset(
+            {
+                "blocked",
+                "stale",
+                "ci-running",
+                "ci-failing",
+                "review-requested",
+                "deploy-failed",
+                "unknown",
+                "artifact-drift",
+                "ambiguous-pr-mapping",
+                "partial-progress",
+                "stale-cache",
+                "cache-warmup",
+                "risk-tier-inferred",
+                "manual-override",
+                "spec-modified",
+                "tech-modified",
+                "tracker-modified",
+                "post-ship-doc-change",
+                # v1.5.0 additions (MYM-11 Option A — emit logic reserved for future wiring)
+                "multi-branch",
+                "deploy-in-progress",
+                "no-ci",
+            }
+        )
+        assert CANONICAL_OVERLAYS == spec_8_2_overlays, (
+            f"Drift detected. Only in code: {CANONICAL_OVERLAYS - spec_8_2_overlays}. "
+            f"Only in spec: {spec_8_2_overlays - CANONICAL_OVERLAYS}. "
+            "Reconcile per spec §8.2 = single source of truth."
+        )
+
+    def test_v1_5_0_legitimized_overlays_present(self) -> None:
+        """Regression guard: 3 overlays legitimized by MYM-11 Option A must stay in CANONICAL_OVERLAYS.
+
+        These were originally declared in code without spec backing. MYM-11 chose
+        Option A (spec amendment) over Option B (code removal) because `multi-branch`
+        is needed by projection to mark aggregated rows per Linear ticket. Removing
+        them would break future projection work; spec amendment legitimizes the contract.
+        """
+        from scripts.work_state.status_machine import CANONICAL_OVERLAYS
+
+        legitimized = {"multi-branch", "deploy-in-progress", "no-ci"}
+        missing = legitimized - CANONICAL_OVERLAYS
+        assert not missing, (
+            f"v1.5.0 legitimized overlays missing from CANONICAL_OVERLAYS: {missing}. "
+            "Per MYM-11 Option A, these are part of the 21-overlay canonical set. "
+            "If removing intentionally, also remove from spec v1.5.0 §8.2 table + bump version."
+        )
