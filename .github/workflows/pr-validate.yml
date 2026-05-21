@@ -20,8 +20,8 @@ jobs:
           case "$BRANCH" in
             W0.*|Wave-*|hotfix/*|release/*|fix/*|feat/c1-*|chore/*) exit 0 ;;
           esac
-          if ! echo "$BRANCH" | grep -Eq '^[a-z0-9-]+/MYM-[0-9]+-[a-z0-9-]+$'; then
-            echo "::error::Branch '$BRANCH' must match <dev>/MYM-<id>-<slug>"
+          if ! echo "$BRANCH" | grep -Eq '^[a-z0-9-]+/MYM-[0-9]+-[a-zA-Z0-9-]+$'; then
+            echo "::error::Branch '$BRANCH' must match <dev>/MYM-<id>-<slug> (slug may contain a-zA-Z0-9-)"
             exit 1
           fi
       - name: PR body magic word
