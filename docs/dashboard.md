@@ -2,7 +2,7 @@
 
 > **Auto-generated** từ [`implementation-tracker.md`](implementation-tracker.md) bằng `scripts/build-dashboard.py`.
 > KHÔNG edit trực tiếp — sửa tracker rồi rebuild.
-> **Cập nhật:** 2026-05-21 17:45 · **Branch hiện tại:** `main`
+> **Cập nhật:** 2026-05-21 17:57 · **Branch hiện tại:** `main`
 
 Để xem dashboard HTML đẹp hơn: mở [`dashboard.html`](dashboard.html) bằng browser.
 
@@ -41,6 +41,7 @@
 | `work-state-engine-1c` | Work-State Engine — Phase 1c (driver + aggregation + persistence + workflow) | ✅ Merged | WAITING | `feat/MYM-5-work-state-engine-1c` |
 | `dashboard-live-view-A` | Dashboard Live View — Phase A (engine→build wire) | ✅ Merged | WAITING | `feat/MYM-6-dashboard-live-view-A` |
 | `dashboard-live-view-B` | Dashboard Live View — Phase B (doc-change awareness) | ✅ Merged | WAITING | `feat/MYM-7-dashboard-live-view-B` |
+| `work-state-engine-1d` | Work-State Engine — Phase 1d (urgency + MAX agg + foundation_change + projection) | ⬜ Not started | BACKLOG | `feat/MYM-10-work-state-1d-urgency-bundle` |
 | `W1.1` | Docker Compose dev + prod | ⬜ Not started | BACKLOG | `infra/W1.1-docker-compose` |
 | `W1.2` | Discord adapter (`core/messenger/discord.py`) | ⬜ Not started | BACKLOG | `feat/W1.2-discord-adapter` |
 | `W1.3` | Phase 1 integration smoke | ⬜ Not started | BACKLOG | `chore/W1.3-phase1-smoke` |
@@ -133,11 +134,11 @@ _Không có PR active._
 
 | PR | Feature | Phase | Status |
 |----|---------|-------|--------|
+| `work-state-engine-1d` | Work-State Engine — Phase 1d (urgency + MAX agg + foundation_change + projection) | Phase 1 | ⬜ Not started |
 | `W1.1` | Docker Compose dev + prod | Phase 1 | ⬜ Not started |
 | `W1.2` | Discord adapter (`core/messenger/discord.py`) | Phase 1 | ⬜ Not started |
 | `W1.3` | Phase 1 integration smoke | Phase 1 | ⬜ Not started |
 | `funding-sources` | Funding sources resolver + handlers | Phase 2 | ⬜ Not started |
-| `transaction-capture` | Transaction capture EXPANDED (inherit W0.6 legacy cutover) | Phase 2 | ⬜ Not started |
 
 ---
 
