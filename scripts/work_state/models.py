@@ -64,6 +64,9 @@ class Signals:
     tech_hash: str | None = None
     tech_modified_at: str | None = None
     tracker_row_hash: str | None = None
+    # Phase 1d APPEND-ONLY extensions (foundation_change milestone signals)
+    foundation_codex_approved: bool | None = None
+    foundation_founder_signoff: bool | None = None
 
 
 @dataclass

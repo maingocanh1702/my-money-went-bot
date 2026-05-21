@@ -32,6 +32,8 @@ def _github_signals_for_item(item_id: str) -> GithubSignals:
             "review_state": "approved",
             "last_review_at": "2026-05-13T08:00:00Z",
             "warnings": [],
+            "foundation_codex_approved": None,
+            "foundation_founder_signoff": None,
         }
     return {
         "pr_state": "open",
@@ -40,6 +42,8 @@ def _github_signals_for_item(item_id: str) -> GithubSignals:
         "review_state": "none",
         "last_review_at": None,
         "warnings": [],
+        "foundation_codex_approved": None,
+        "foundation_founder_signoff": None,
     }
 
 

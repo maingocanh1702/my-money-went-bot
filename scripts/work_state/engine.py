@@ -23,9 +23,11 @@ from scripts.work_state.state_store import read_current_state, write_current_sta
 from scripts.work_state.status_machine import (
     aggregate_multi_branch_overlays,
     aggregate_multi_branch_status,
+    aggregate_multi_branch_urgency,
     compute_human_status,
     compute_overlays,
     compute_status,
+    derive_urgency,
 )
 
 logger = logging.getLogger(__name__)
@@ -98,6 +100,8 @@ def _collect_branch_signals(
         tech_hash=fs["tech_hash"],
         tech_modified_at=fs["tech_modified_at"],
         tracker_row_hash=fs["tracker_row_hash"],
+        foundation_codex_approved=gh["foundation_codex_approved"],
+        foundation_founder_signoff=gh["foundation_founder_signoff"],
     )
     return signals, overlays
 
@@ -177,6 +181,9 @@ def run_engine(
 
         prev_spec_h, prev_tech_h, prev_tracker_h = prev_hashes.get(item.id, (None, None, None))
 
+        _priority = item.priority if item.priority else "P2"
+        _risk_tier = item.risk_tier if item.risk_tier else "P2"
+
         if len(item.branches) == 1:
             signals, overlays = _collect_branch_signals(
                 item.branches[0], item, repo_root, no_network=no_network
@@ -191,6 +198,7 @@ def run_engine(
             )
             overlays = sorted(set(overlays) | set(doc_overlays))
             human = compute_human_status(status, overlays, signals.deploy_state)
+            runtime_urgency = derive_urgency(status, overlays, _priority, _risk_tier)
             try:
                 progress = compute_progress(signals, item.progress_profile)
             except NotImplementedError:
@@ -221,6 +229,10 @@ def run_engine(
             )
             overlays = sorted(set(overlays) | set(doc_overlays))
             human = compute_human_status(status, overlays, signals.deploy_state)
+            per_branch_urgencies = [
+                derive_urgency(bs, bo, _priority, _risk_tier) for bs, bo in branch_data
+            ]
+            runtime_urgency = aggregate_multi_branch_urgency(per_branch_urgencies)
             try:
                 progress = compute_progress(signals, item.progress_profile)
             except NotImplementedError:
@@ -231,7 +243,7 @@ def run_engine(
             status=status,
             human_status=human,
             progress=progress,
-            runtime_urgency="normal",
+            runtime_urgency=runtime_urgency,
             overlays=overlays,
             signals=signals,
             last_event_ts=None,

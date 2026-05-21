@@ -12,6 +12,7 @@ Outputs:
     docs/dashboard.html  — visual HTML dashboard, open in browser
     docs/dashboard.md    — markdown view with Mermaid Gantt, renders on GitHub
 """
+
 from __future__ import annotations
 
 import argparse
@@ -1077,9 +1078,11 @@ def render_html(
                     for o in overlays
                     if o
                 )
+                urgency_str = str(st.get("urgency", "normal"))
+                urgency_emoji = html.escape(str(st.get("urgency_emoji", "✓")))
                 state_badge_html = (
-                    f'<span class="state-badge" title="Engine: {human}">'
-                    f"{human}{overlay_html}</span>"
+                    f'<span class="state-badge" title="Engine: {human} · {urgency_str}">'
+                    f"{human} {urgency_emoji}{overlay_html}</span>"
                 )
 
             pr_rows.append(
@@ -1407,8 +1410,11 @@ def render_md(prs, stats, mvp, active, in_flight, upcoming, branch, state_map=No
             if has_any_state:
                 st = state_map.get(pr.pr_id, {}) if state_map else {}
                 computed = st.get("human_status", "—") if st else "—"
+                urgency = st.get("urgency", "normal") if st else "normal"
+                urgency_emoji = st.get("urgency_emoji", "✓") if st else "✓"
+                computed_cell = f"{computed} {urgency_emoji} {urgency}" if st else "—"
                 lines.append(
-                    f"| `{pr.pr_id}` | {feat} | {pr.status_emoji} {pr.status_label} | {computed} | {branch_cell} |"
+                    f"| `{pr.pr_id}` | {feat} | {pr.status_emoji} {pr.status_label} | {computed_cell} | {branch_cell} |"
                 )
             else:
                 lines.append(
