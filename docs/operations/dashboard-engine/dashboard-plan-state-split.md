@@ -1,7 +1,7 @@
 ---
 title: Dashboard Plan/State Split — Auto-Progress Work Engine Design
 status: Accepted (Founder sign-off 2026-05-20)
-version: v1.4.0
+version: v1.5.0
 date: 2026-05-19
 updated: 2026-05-21
 author: Founder + Claude
@@ -800,8 +800,13 @@ Do not overload base status with operational warnings. **All overlay references 
 | `tech-modified` | tech spec file content hash changed since last engine collect | Tech spec edited — verify alignment with implementation | (annotation) |
 | `tracker-modified` | tracker row semantic hash changed (branch, linear_id, feature_id, specs, acceptance) | Tracker row edited semantically — review intent change | (annotation) |
 | `post-ship-doc-change` | spec/tech/tracker edited AFTER feature reached terminal state (merged/deployed/abandoned) | Post-ship doc change — review whether shipped feature needs update | (warning, stronger) |
+| `multi-branch` | item has multiple branches tracked per §4.1 multi-branch aggregation | Marker for aggregated rows (UNION overlays + MIN-progressed base + MAX urgency rules apply) | (annotation, no rollup change) |
+| `deploy-in-progress` | Railway/CI deploy in flight (deploy_state=`deploying` on at least one branch); distinct from base status `deploying` to surface as overlay in multi-branch contexts where aggregated base may differ | Deploy in flight — wait for outcome before re-evaluating | (annotation, no human-status change beyond base `deploying`) |
+| `no-ci` | no CI workflow detected for branch (ci_state=`none` + branch_exists=`true`) | Branch has no CI configured — coverage gap | (annotation) |
 
 Important: CI fail streak or PR age should not auto-become `blocked`. They become `ci-failing` or `stale` overlays. `blocked` requires explicit human intent (label or override). Engine emit `deploy-failed` overlay khi `deploy_state=deploy-failed`; base status vẫn `merged`.
+
+**Emission status (v1.5.0 reconcile):** All 21 overlays are declared in `CANONICAL_OVERLAYS` frozenset. Emit logic for `multi-branch`, `deploy-in-progress`, `no-ci` is **reserved for future wiring** (declared in code but not yet emitted by collectors/aggregators). Listing them in §8.2 legitimizes the declarations and locks the contract — future tickets wire emission against this spec. Code ↔ spec parity now 21 = 21 (locked by `TestCanonicalOverlaysSpecParity` in MYM-11).
 
 ### 8.2.1 Naming conventions — overlay (kebab-case) vs warning (snake_case)
 
@@ -1290,7 +1295,7 @@ Anti-loop guard stays mandatory.
 - [ ] **AC7** — PR resolution handles branch deleted after merge via cached PR number or fallback search.
 - [ ] **AC8** — CI state reads required checks for PR/branch head SHA, not arbitrary latest workflow run.
 - [ ] **AC9** — Deploy signal can be `unknown`; engine remains useful without Railway API.
-- [ ] **AC10** — Overlays implemented separately from base status. §8.2 is canonical source of overlay enum (18 overlays: `blocked`, `stale`, `ci-running`, `ci-failing`, `review-requested`, `deploy-failed`, `unknown`, `artifact-drift`, `ambiguous-pr-mapping`, `partial-progress`, `stale-cache`, `cache-warmup`, `risk-tier-inferred`, `manual-override`, `spec-modified`, `tech-modified`, `tracker-modified`, `post-ship-doc-change`). All overlay references trong spec phải dùng tên từ §8.2 (no inventing new overlay names). Subset references OK theo context:
+- [ ] **AC10** — Overlays implemented separately from base status. §8.2 is canonical source of overlay enum (**21 overlays**: `blocked`, `stale`, `ci-running`, `ci-failing`, `review-requested`, `deploy-failed`, `unknown`, `artifact-drift`, `ambiguous-pr-mapping`, `partial-progress`, `stale-cache`, `cache-warmup`, `risk-tier-inferred`, `manual-override`, `spec-modified`, `tech-modified`, `tracker-modified`, `post-ship-doc-change`, `multi-branch`, `deploy-in-progress`, `no-ci`). All overlay references trong spec phải dùng tên từ §8.2 (no inventing new overlay names). Subset references OK theo context:
   - §7.2 event map references ONLY event-derived overlays (subset: `ci-running`, `ci-failing`, `review-requested`, `deploy-failed`, `stale`)
   - §8.0 human projection maps overlays → human status (annotation-only overlays like `cache-warmup` don't change human status, only render as badge)
   - §10 Phase 2 implementation list = full enum (all 14 must be implementable)
@@ -1515,6 +1520,7 @@ Spec status transition: **Proposed → Accepted (2026-05-20)**.
 
 | Version | Date | Author | Notes |
 |---|---|---|---|
+| v1.5.0 | 2026-05-21 | Founder + Claude | **MYM-11 spec amendment (Option A per Linear ticket recommendation) — follow-up after PR #34 shipped tests-only.** §8.2 overlay enum extended 18 → 21 — added `multi-branch` (multi-branch aggregation marker per §4.1), `deploy-in-progress` (Railway/CI deploy in flight, distinct from base `deploying` for multi-branch contexts), `no-ci` (no CI workflow detected for branch). §8.2 footer added "Emission status" note documenting 3 new overlays are declared in `CANONICAL_OVERLAYS` (since MYM-10) but emit logic reserved for future wiring. AC10 list updated 18 → 21. Restores spec ↔ code parity at 21 = 21 (code already had 21 entries from MYM-10; spec was lagging). Option A chosen over Option B per Linear ticket warning: `multi-branch` overlay needed by future projection to mark aggregated rows. Pure docs change, no code touch. Locked by `TestCanonicalOverlaysSpecParity` shipped in PR #34. Additive — backwards compatible. |
 | v1.4.0 | 2026-05-21 | Founder + Claude | MYM-8 Scope B — Hash-aware doc-change dedup + emission wire. §7.2.1 de-dup table gains row for `spec_modified` / `tech_modified` / `tracker_row_modified` with identity `(item, event, artifact, content_hash)`. §11.2 Event dataclass sketch added (was missing) with APPEND-ONLY `+content_hash: str | None`. Engine emits doc-change events when `prev_content_hash is not None AND current != prev` (first-run bootstrap noise prevention). Backward-compat: legacy tail entries without `content_hash` compare as `""`. Additive — backwards compatible. `last_event_ts` deliberately preserved as `None` (shadow window safety; out-of-scope this PR). |
 | v1.3.0 | 2026-05-21 | Founder + Claude | Phase B doc-change awareness: §8.2 overlay enum extended 14 → 18 (added `spec-modified`, `tech-modified`, `tracker-modified`, `post-ship-doc-change`). §6.1 filesystem signals extended with spec/tech hash tracking + tracker row semantic hash. §7.1 event log extended with 3 new event types (`spec_modified`, `tech_modified`, `tracker_row_modified`). Signals dataclass APPEND-ONLY +5 fields. Additive changes only — backwards compatible. |
 | v1.2.1 | 2026-05-20 | Founder + Claude | Codex cross-model review consolidated (3 rounds, 23 findings total addressed). Round 1: 15 findings (10 MAJOR + 5 MINOR) — linear_id field, deploy-failed overlay, canonical overlay enum, multi-branch lattice, runtime urgency deterministic algorithm, per-event-type dedup, CI cache key strategy, force-pr-resolve as CLI, foundation_change milestone signals, critical misclassification defined, spec move detection, phase rollup counts, exempt branch behavior, Phase 1 estimate revised 5-7 days, rollback runbook completeness. Round 2: 7 findings (4 MAJOR + 3 MINOR) — AC10 "mirror exactly" softened, P2 blocked → warning fallback, §8.0 explicit mappings for changes-requested/merged/abandoned (new ABANDONED bucket), §8.2.1 naming convention (kebab overlays vs snake warnings), partial-progress wording tightened, AC9a typo, rollback hard-rule #2 guard. Round 3: 1 finding (1 MAJOR) — convention_drift info-only consistency. 30 ACs (added AC11c-AC11e, AC19-AC25). 1076 → 1426 lines (+32%). Verdict: APPROVE WITH CHANGES → all resolved → Founder sign-off 2026-05-20 → Status: **Accepted**. |
