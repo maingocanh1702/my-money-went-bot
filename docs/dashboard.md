@@ -2,7 +2,7 @@
 
 > **Auto-generated** từ [`implementation-tracker.md`](implementation-tracker.md) bằng `scripts/build-dashboard.py`.
 > KHÔNG edit trực tiếp — sửa tracker rồi rebuild.
-> **Cập nhật:** 2026-05-21 09:47 · **Branch hiện tại:** `main`
+> **Cập nhật:** 2026-05-21 10:29 · **Branch hiện tại:** `main`
 
 Để xem dashboard HTML đẹp hơn: mở [`dashboard.html`](dashboard.html) bằng browser.
 
@@ -11,7 +11,7 @@
 ## Tổng quan
 
 - **MVP progress:** **17%** (6/36 PR merged)
-- **In flight:** 0 PR · **Blocked:** 0 · **Deferred:** 0
+- **In flight:** 1 PR · **Blocked:** 0 · **Deferred:** 0
 - **Target launch:** Tháng 9/2026 (~16 weeks runway)
 
 ## Phase progress
@@ -40,7 +40,7 @@
 | `work-state-engine-1b'` | Work-State Engine — Phase 1b' (dashboard projection follow-up) | ✅ Merged | BACKLOG | `feat/MYM-4-work-state-engine-1b-projection` |
 | `work-state-engine-1c` | Work-State Engine — Phase 1c (driver + aggregation + persistence + workflow) | ✅ Merged | BACKLOG | `feat/MYM-5-work-state-engine-1c` |
 | `dashboard-live-view-A` | Dashboard Live View — Phase A (engine→build wire) | ✅ Merged | BACKLOG | `feat/MYM-6-dashboard-live-view-A` |
-| `dashboard-live-view-B` | Dashboard Live View — Phase B (doc-change awareness) | ⬜ Not started | BACKLOG | `feat/MYM-7-dashboard-live-view-B` |
+| `dashboard-live-view-B` | Dashboard Live View — Phase B (doc-change awareness) | ⬜ In review | IN_PROGRESS | `feat/MYM-7-dashboard-live-view-B` |
 | `W1.1` | Docker Compose dev + prod | ⬜ Not started | BACKLOG | `infra/W1.1-docker-compose` |
 | `W1.2` | Discord adapter (`core/messenger/discord.py`) | ⬜ Not started | BACKLOG | `feat/W1.2-discord-adapter` |
 | `W1.3` | Phase 1 integration smoke | ⬜ Not started | BACKLOG | `chore/W1.3-phase1-smoke` |
@@ -127,17 +127,24 @@ gantt
 
 ## Đang làm
 
-_Không có PR active._
+### dashboard-live-view-B — Dashboard Live View — Phase B (doc-change awareness)
+
+- **Status:** ⬜ In review
+- **Branch:** `feat/MYM-7-dashboard-live-view-B`
+- **Wave:** Wave 0 follow-up
+- **Gates:** 🔒I 🔒X
+- **Phase:** Phase 1
+- **Notes:** **Ready to kickoff post MYM-6 merge.** **Linear:** [MYM-7](https://linear.app/maingocanh/issue/MYM-7) — project `Work-State Engine`, P1 Foundation Lane manual_only. **Plan:** `docs/operations/dashboard-engine/dashboard-live-view-plan.md` v0.2.1 §3 Phase B. **Vision:** `docs/operations/dashboard-engine/product-vision.md` v0.1.0. **Prereq:** MYM-1 + MYM-3 + MYM-4 + MYM-5 + MYM-6 all merged ✓. **Prompt:** `docs/autopilot/prompts/dashboard-live-view-B-autopilot.md` (TBD ~8 Steps + 2 Checkpoints; pre-flight gate full mypy scope per MYM-4 lesson). **Scope:** Extend `scripts/work_state/signal_collectors/filesystem.py` to track spec SHA256 + mtime + tracker row semantic hash. Signals dataclass APPEND-ONLY +5 fields (spec_hash, spec_modified_at, tech_hash, tech_modified_at, tracker_row_hash). 3 new events (spec_modified, tech_modified, tracker_row_modified). 4 new overlays (spec-modified, tech-modified, tracker-modified, post-ship-doc-change) — 14 → 18 canonical §8.2. Spec v1.2.1 → v1.3.0 bump (Codex re-review §8.2 only). Dashboard HTML badge rendering. **Semantic hash spec**: include (branch, linear_id, feature_id, specs path, acceptance) only; exclude status/notes/gates/changelog/formatting — avoid false-positive drift on status auto-flip. ACs B1-B10. ~1-1.5 work-days. Codex 2× consecutive clean required. Out of scope: Phase C event feed (SPA decision blocked), Phase D client polling, Phase 1d engine urgency (parallel ticket).
 
 ## Up next
 
 | PR | Feature | Phase | Status |
 |----|---------|-------|--------|
-| `dashboard-live-view-B` | Dashboard Live View — Phase B (doc-change awareness) | Phase 1 | ⬜ Not started |
 | `W1.1` | Docker Compose dev + prod | Phase 1 | ⬜ Not started |
 | `W1.2` | Discord adapter (`core/messenger/discord.py`) | Phase 1 | ⬜ Not started |
 | `W1.3` | Phase 1 integration smoke | Phase 1 | ⬜ Not started |
 | `funding-sources` | Funding sources resolver + handlers | Phase 2 | ⬜ Not started |
+| `transaction-capture` | Transaction capture EXPANDED (inherit W0.6 legacy cutover) | Phase 2 | ⬜ Not started |
 
 ---
 
