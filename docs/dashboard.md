@@ -2,7 +2,7 @@
 
 > **Auto-generated** từ [`implementation-tracker.md`](implementation-tracker.md) bằng `scripts/build-dashboard.py`.
 > KHÔNG edit trực tiếp — sửa tracker rồi rebuild.
-> **Cập nhật:** 2026-05-21 11:21 · **Branch hiện tại:** `main`
+> **Cập nhật:** 2026-05-21 13:14 · **Branch hiện tại:** `main`
 
 Để xem dashboard HTML đẹp hơn: mở [`dashboard.html`](dashboard.html) bằng browser.
 
@@ -11,7 +11,7 @@
 ## Tổng quan
 
 - **MVP progress:** **17%** (6/36 PR merged)
-- **In flight:** 0 PR · **Blocked:** 0 · **Deferred:** 0
+- **In flight:** 1 PR · **Blocked:** 0 · **Deferred:** 0
 - **Target launch:** Tháng 9/2026 (~16 weeks runway)
 
 ## Phase progress
@@ -41,7 +41,7 @@
 | `work-state-engine-1c` | Work-State Engine — Phase 1c (driver + aggregation + persistence + workflow) | ✅ Merged | BACKLOG | `feat/MYM-5-work-state-engine-1c` |
 | `dashboard-live-view-A` | Dashboard Live View — Phase A (engine→build wire) | ✅ Merged | BACKLOG | `feat/MYM-6-dashboard-live-view-A` |
 | `dashboard-live-view-B` | Dashboard Live View — Phase B (doc-change awareness) | ✅ Merged | BACKLOG | `feat/MYM-7-dashboard-live-view-B` |
-| `work-state-engine-1d` | Work-State Engine — Phase 1d (urgency + MAX agg + foundation_change + projection) | ⬜ Not started | BACKLOG | `feat/MYM-10-work-state-1d-urgency-bundle` |
+| `work-state-engine-1d` | Work-State Engine — Phase 1d (urgency + MAX agg + foundation_change + projection) | ⬜ In review | IN_PROGRESS | `feat/MYM-10-work-state-1d-urgency-bundle` |
 | `W1.1` | Docker Compose dev + prod | ⬜ Not started | BACKLOG | `infra/W1.1-docker-compose` |
 | `W1.2` | Discord adapter (`core/messenger/discord.py`) | ⬜ Not started | BACKLOG | `feat/W1.2-discord-adapter` |
 | `W1.3` | Phase 1 integration smoke | ⬜ Not started | BACKLOG | `chore/W1.3-phase1-smoke` |
@@ -128,17 +128,24 @@ gantt
 
 ## Đang làm
 
-_Không có PR active._
+### work-state-engine-1d — Work-State Engine — Phase 1d (urgency + MAX agg + foundation_change + projection)
+
+- **Status:** ⬜ In review
+- **Branch:** `feat/MYM-10-work-state-1d-urgency-bundle`
+- **Wave:** Wave 0 follow-up
+- **Gates:** 🔒I 🔒X
+- **Phase:** Phase 1
+- **Notes:** **Ready to kickoff post MYM-7 merge.** **Linear:** [MYM-10](https://linear.app/maingocanh/issue/MYM-10) — project `Work-State Engine`, milestone `Phase 1d — Runtime urgency model`, P1 Foundation Lane manual_only. **Spec:** `docs/operations/dashboard-engine/dashboard-plan-state-split.md` v1.3.0 §9.4 + §4.1.3 + §9.1 (AC11b + AC11c + AC11d + AC10 verify). **Prereq:** MYM-1+3+4+5+6+7 all merged ✓. **Prompt:** `docs/autopilot/prompts/work-state-1d-autopilot.md` (~10 Steps + 4 Checkpoints A-D + 15 circuit breakers; mega-bundle 4 sub-phases per memory `feedback_megaprompt_with_checkpoints_works`). **Scope:** Phase A `derive_urgency` per §9.4.1 (4-tier first-match-wins) trong `status_machine.py`. Phase B MAX urgency aggregation per §9.4.2 (critical>elevated>warning>normal) trong multi-branch wire. Phase C `foundation_change` milestone signal detection trong `signal_collectors/github.py` (codex-approved label + founder sign-off comment marker), Signals APPEND-ONLY +2 fields. Phase D HTML/MD/JSON urgency badge rendering trong `projections/dashboard.py` + `build-dashboard.py`. **Quality gates:** Codex 2× consecutive clean, pre-flight FULL mypy scope (MYM-4 lesson), branch lowercase (avoid MYM-9 regex), dogfood ≥1 urgency badge per state row. ACs D1-D12 (3 per sub-phase). ~8-12h autopilot. **Out of scope:** docs_only/dashboard_engine profile refinement (separate ticket), 7-day shadow validation (parallel), Phase 2 promotion (post-shadow).
 
 ## Up next
 
 | PR | Feature | Phase | Status |
 |----|---------|-------|--------|
-| `work-state-engine-1d` | Work-State Engine — Phase 1d (urgency + MAX agg + foundation_change + projection) | Phase 1 | ⬜ Not started |
 | `W1.1` | Docker Compose dev + prod | Phase 1 | ⬜ Not started |
 | `W1.2` | Discord adapter (`core/messenger/discord.py`) | Phase 1 | ⬜ Not started |
 | `W1.3` | Phase 1 integration smoke | Phase 1 | ⬜ Not started |
 | `funding-sources` | Funding sources resolver + handlers | Phase 2 | ⬜ Not started |
+| `transaction-capture` | Transaction capture EXPANDED (inherit W0.6 legacy cutover) | Phase 2 | ⬜ Not started |
 
 ---
 
