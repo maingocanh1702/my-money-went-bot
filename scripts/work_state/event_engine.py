@@ -21,6 +21,8 @@ _ONE_SHOT_EVENTS = {
     "closed",
 }
 
+_DOC_CHANGE_EVENTS = {"spec_modified", "tech_modified", "tracker_row_modified"}
+
 _TIME_WINDOWED_EVENTS = {"stale_detected"}
 
 _CI_EVENTS = {"ci_running", "ci_failed", "ci_passed"}
@@ -30,6 +32,8 @@ _DEPLOY_EVENTS = {"deploy_started", "deployed", "deploy_failed"}
 def _dedup_key(event: Event) -> tuple[str, ...]:
     """Per-event-type dedup identity per spec §7.2.1."""
     if event.event in _ONE_SHOT_EVENTS:
+        return (event.item, event.event, event.artifact or "")
+    if event.event in _DOC_CHANGE_EVENTS:
         return (event.item, event.event, event.artifact or "")
     if event.event in _CI_EVENTS:
         return (event.item, event.event, event.artifact or "", str(event.pr_number))
@@ -79,6 +83,8 @@ def is_duplicate(
 
         existing_key: tuple[str, ...]
         if event.event in _ONE_SHOT_EVENTS:
+            existing_key = (existing_item, existing_event_type, existing_artifact)
+        elif event.event in _DOC_CHANGE_EVENTS:
             existing_key = (existing_item, existing_event_type, existing_artifact)
         elif event.event in _CI_EVENTS:
             existing_key = (

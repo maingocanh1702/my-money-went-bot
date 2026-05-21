@@ -19,11 +19,12 @@ from scripts.work_state.signal_collectors.filesystem import collect_filesystem_s
 from scripts.work_state.signal_collectors.git import GitSignals, collect_git_signals
 from scripts.work_state.signal_collectors.github import collect_github_signals
 from scripts.work_state.signal_collectors.railway import collect_railway_signals
-from scripts.work_state.state_store import write_current_state
+from scripts.work_state.state_store import read_current_state, write_current_state
 from scripts.work_state.status_machine import (
     aggregate_multi_branch_overlays,
     aggregate_multi_branch_status,
     compute_human_status,
+    compute_overlays,
     compute_status,
 )
 
@@ -92,6 +93,11 @@ def _collect_branch_signals(
         ci_check_run_count=ci["ci_check_run_count"],
         last_review_at=gh["last_review_at"],
         last_deploy_at=rw["last_deploy_at"],
+        spec_hash=fs["spec_hash"],
+        spec_modified_at=fs["spec_modified_at"],
+        tech_hash=fs["tech_hash"],
+        tech_modified_at=fs["tech_modified_at"],
+        tracker_row_hash=fs["tracker_row_hash"],
     )
     return signals, overlays
 
@@ -114,6 +120,37 @@ def _pick_representative_branch(statuses: list[str], aggregated: str) -> int:
     return 0
 
 
+def _load_prev_hashes(
+    dashboard_dir: Path,
+) -> dict[str, tuple[str | None, str | None, str | None]]:
+    """Load previous spec_hash, tech_hash, tracker_row_hash per item_id."""
+    prev = read_current_state(dashboard_dir)
+    if prev is None:
+        return {}
+    items = prev.get("items", [])
+    if not isinstance(items, list):
+        return {}
+    result: dict[str, tuple[str | None, str | None, str | None]] = {}
+    for entry in items:
+        if not isinstance(entry, dict):
+            continue
+        item_id = entry.get("item_id")
+        if not isinstance(item_id, str):
+            continue
+        signals = entry.get("signals", {})
+        if not isinstance(signals, dict):
+            signals = {}
+        spec_h = signals.get("spec_hash")
+        tech_h = signals.get("tech_hash")
+        tracker_h = signals.get("tracker_row_hash")
+        result[item_id] = (
+            spec_h if isinstance(spec_h, str) else None,
+            tech_h if isinstance(tech_h, str) else None,
+            tracker_h if isinstance(tracker_h, str) else None,
+        )
+    return result
+
+
 def run_engine(
     tracker_path: str,
     dashboard_dir: Path,
@@ -126,6 +163,7 @@ def run_engine(
         return []
 
     _validate_cache_schema(dashboard_dir)
+    prev_hashes = _load_prev_hashes(dashboard_dir)
 
     parsed_items = read_tracker(tracker_path)
     repo_root = Path.cwd()
@@ -137,11 +175,21 @@ def run_engine(
             logger.info("Skipping %s — no branches", item.id)
             continue
 
+        prev_spec_h, prev_tech_h, prev_tracker_h = prev_hashes.get(item.id, (None, None, None))
+
         if len(item.branches) == 1:
             signals, overlays = _collect_branch_signals(
                 item.branches[0], item, repo_root, no_network=no_network
             )
             status = compute_status(signals)
+            doc_overlays = compute_overlays(
+                signals,
+                status,
+                prev_spec_hash=prev_spec_h,
+                prev_tech_hash=prev_tech_h,
+                prev_tracker_row_hash=prev_tracker_h,
+            )
+            overlays = sorted(set(overlays) | set(doc_overlays))
             human = compute_human_status(status, overlays, signals.deploy_state)
             try:
                 progress = compute_progress(signals, item.progress_profile)
@@ -164,6 +212,14 @@ def run_engine(
             overlays = aggregate_multi_branch_overlays(branch_data)
             representative_idx = _pick_representative_branch(statuses, status)
             signals = branch_signals_list[representative_idx]
+            doc_overlays = compute_overlays(
+                signals,
+                status,
+                prev_spec_hash=prev_spec_h,
+                prev_tech_hash=prev_tech_h,
+                prev_tracker_row_hash=prev_tracker_h,
+            )
+            overlays = sorted(set(overlays) | set(doc_overlays))
             human = compute_human_status(status, overlays, signals.deploy_state)
             try:
                 progress = compute_progress(signals, item.progress_profile)
