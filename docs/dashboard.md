@@ -2,7 +2,7 @@
 
 > **Auto-generated** từ [`implementation-tracker.md`](implementation-tracker.md) bằng `scripts/build-dashboard.py`.
 > KHÔNG edit trực tiếp — sửa tracker rồi rebuild.
-> **Cập nhật:** 2026-05-21 08:02 · **Branch hiện tại:** `main`
+> **Cập nhật:** 2026-05-21 14:52 · **Branch hiện tại:** `feat/MYM-6-dashboard-live-view-A`
 
 Để xem dashboard HTML đẹp hơn: mở [`dashboard.html`](dashboard.html) bằng browser.
 
@@ -29,79 +29,79 @@
 
 ### Phase 1 — 4/7 · 57% `█████░░░░░`
 
-| PR | Feature | Status | Branch |
-|----|---------|:------:|--------|
-| `W0.7` | Public `request_id` helpers + F02 xfail contract pin | ✅ Merged | `chore/W0.7-tenant-context-public-api` |
-| `W0.8` | Webhook `display_suffix VARCHAR(8)` migration (G3 option b) | ✅ Merged | `feat/webhook-display-suffix-migration` |
-| `W0.9` | Dashboard realtime — auto-rebuild + git-state detect + reconcile | ✅ Merged | `feat/dashboard-realtime` |
-| `W0.10` | Dashboard v3 rich UI + click-through + Chart.js | ✅ Merged | `feat/dashboard-v3-rich-v2` |
-| `work-state-engine-1a` | Work-State Engine — Phase 1a (skeleton + filesystem + git) | ✅ Merged | `feat/MYM-1-work-state-engine-1a` |
-| `work-state-engine-1b` | Work-State Engine — Phase 1b (github + ci + railway collectors) | ✅ Merged | `feat/MYM-3-work-state-engine-1b` |
-| `work-state-engine-1b'` | Work-State Engine — Phase 1b' (dashboard projection follow-up) | ✅ Merged | `feat/MYM-4-work-state-engine-1b-projection` |
-| `work-state-engine-1c` | Work-State Engine — Phase 1c (driver + aggregation + persistence + workflow) | ✅ Merged | `feat/MYM-5-work-state-engine-1c` |
-| `dashboard-live-view-A` | Dashboard Live View — Phase A (engine→build wire) | ⬜ In review | `feat/MYM-6-dashboard-live-view-A` |
-| `W1.1` | Docker Compose dev + prod | ⬜ Not started | `infra/W1.1-docker-compose` |
-| `W1.2` | Discord adapter (`core/messenger/discord.py`) | ⬜ Not started | `feat/W1.2-discord-adapter` |
-| `W1.3` | Phase 1 integration smoke | ⬜ Not started | `chore/W1.3-phase1-smoke` |
+| PR | Feature | Status | Computed | Branch |
+|----|---------|:------:|:--------:|--------|
+| `W0.7` | Public `request_id` helpers + F02 xfail contract pin | ✅ Merged | WAITING | `chore/W0.7-tenant-context-public-api` |
+| `W0.8` | Webhook `display_suffix VARCHAR(8)` migration (G3 option b) | ✅ Merged | BACKLOG | `feat/webhook-display-suffix-migration` |
+| `W0.9` | Dashboard realtime — auto-rebuild + git-state detect + reconcile | ✅ Merged | WAITING | `feat/dashboard-realtime` |
+| `W0.10` | Dashboard v3 rich UI + click-through + Chart.js | ✅ Merged | WAITING | `feat/dashboard-v3-rich-v2` |
+| `work-state-engine-1a` | Work-State Engine — Phase 1a (skeleton + filesystem + git) | ✅ Merged | WAITING | `feat/MYM-1-work-state-engine-1a` |
+| `work-state-engine-1b` | Work-State Engine — Phase 1b (github + ci + railway collectors) | ✅ Merged | WAITING | `feat/MYM-3-work-state-engine-1b` |
+| `work-state-engine-1b'` | Work-State Engine — Phase 1b' (dashboard projection follow-up) | ✅ Merged | WAITING | `feat/MYM-4-work-state-engine-1b-projection` |
+| `work-state-engine-1c` | Work-State Engine — Phase 1c (driver + aggregation + persistence + workflow) | ✅ Merged | WAITING | `feat/MYM-5-work-state-engine-1c` |
+| `dashboard-live-view-A` | Dashboard Live View — Phase A (engine→build wire) | ⬜ In progress | BACKLOG | `feat/MYM-6-dashboard-live-view-A` |
+| `W1.1` | Docker Compose dev + prod | ⬜ Not started | BACKLOG | `infra/W1.1-docker-compose` |
+| `W1.2` | Discord adapter (`core/messenger/discord.py`) | ⬜ Not started | BACKLOG | `feat/W1.2-discord-adapter` |
+| `W1.3` | Phase 1 integration smoke | ⬜ Not started | BACKLOG | `chore/W1.3-phase1-smoke` |
 
 ### Phase 2 — 2/10 · 20% `██░░░░░░░░`
 
-| PR | Feature | Status | Branch |
-|----|---------|:------:|--------|
-| `onboarding-start` | `/start` + user create + trial assign | ✅ Merged | `feat/F01-onboarding-start` |
-| `funding-sources` | Funding sources resolver + handlers | ⬜ Not started | `feat/funding-sources` |
-| `transaction-capture` | Transaction capture EXPANDED (inherit W0.6 legacy cutover) | ⬜ Not started | `feat/transaction-capture` |
-| `manual-transaction-entry` | Manual transaction entry — Channel 3 of transaction-capture | ⬜ Not started | `feat/manual-transaction-entry` |
-| `category-management` | Category management (`/manage`) | ⬜ Not started | `feat/category-management` |
-| `categorization` | Categorization auto-rules + manual | ⬜ Not started | `feat/categorization` |
-| `reports` | Reports `/status`, `/today`, `/weekly` | ⬜ Not started | `feat/reports` |
-| `settings` | Settings `/settings` | ✅ Merged | `feat/F07-settings` |
-| `admin-auth` | Admin auth framework only (commands defer Phase 6) | ⬜ Not started | `feat/admin-auth` |
-| `i18n-locale-switcher` | VI/EN locale switcher | ⬜ Not started | `feat/i18n-locale-switcher` |
+| PR | Feature | Status | Computed | Branch |
+|----|---------|:------:|:--------:|--------|
+| `onboarding-start` | `/start` + user create + trial assign | ✅ Merged | BACKLOG | `feat/F01-onboarding-start` |
+| `funding-sources` | Funding sources resolver + handlers | ⬜ Not started | WAITING | `feat/funding-sources` |
+| `transaction-capture` | Transaction capture EXPANDED (inherit W0.6 legacy cutover) | ⬜ Not started | BACKLOG | `feat/transaction-capture` |
+| `manual-transaction-entry` | Manual transaction entry — Channel 3 of transaction-capture | ⬜ Not started | BACKLOG | `feat/manual-transaction-entry` |
+| `category-management` | Category management (`/manage`) | ⬜ Not started | BACKLOG | `feat/category-management` |
+| `categorization` | Categorization auto-rules + manual | ⬜ Not started | BACKLOG | `feat/categorization` |
+| `reports` | Reports `/status`, `/today`, `/weekly` | ⬜ Not started | WAITING | `feat/reports` |
+| `settings` | Settings `/settings` | ✅ Merged | IN_PROGRESS | `feat/F07-settings` |
+| `admin-auth` | Admin auth framework only (commands defer Phase 6) | ⬜ Not started | BACKLOG | `feat/admin-auth` |
+| `i18n-locale-switcher` | VI/EN locale switcher | ⬜ Not started | BACKLOG | `feat/i18n-locale-switcher` |
 
 ### Phase 3 — 0/1 · 0% `░░░░░░░░░░`
 
-| PR | Feature | Status | Branch |
-|----|---------|:------:|--------|
-| `pricing-tiers` | Tier limits + 14d trial + gating middleware | ⬜ Not started | `feat/pricing-tiers` |
+| PR | Feature | Status | Computed | Branch |
+|----|---------|:------:|:--------:|--------|
+| `pricing-tiers` | Tier limits + 14d trial + gating middleware | ⬜ Not started | WAITING | `feat/pricing-tiers` |
 
 ### Phase 4 — 0/2 · 0% `░░░░░░░░░░`
 
-| PR | Feature | Status | Branch |
-|----|---------|:------:|--------|
-| `sepay-onboarding-paths` | Path A (Quick connect) + Path B (Wizard) | ⬜ Not started | `feat/sepay-onboarding-paths` |
-| `first-tx-celebration` | First-tx celebration flow | ⬜ Not started | `feat/first-tx-celebration` |
+| PR | Feature | Status | Computed | Branch |
+|----|---------|:------:|:--------:|--------|
+| `sepay-onboarding-paths` | Path A (Quick connect) + Path B (Wizard) | ⬜ Not started | BACKLOG | `feat/sepay-onboarding-paths` |
+| `first-tx-celebration` | First-tx celebration flow | ⬜ Not started | BACKLOG | `feat/first-tx-celebration` |
 
 ### Phase 5 — 0/6 · 0% `░░░░░░░░░░`
 
-| PR | Feature | Status | Branch |
-|----|---------|:------:|--------|
-| `W5.1` | Postmark inbound + `/inbound/{token}` route | ⬜ Not started | `infra/W5.1-postmark-inbound` |
-| `email-forwarding-onboarding` | Path C onboarding (email forwarding guides) | ⬜ Not started | `feat/email-forwarding-onboarding` |
-| `parser-techcombank` | Parser: Techcombank full extraction | ⬜ Not started | `feat/parser-techcombank` |
-| `parser-cake-vpbank` | Parser: Cake (VPBank) | ⬜ Not started | `feat/parser-cake-vpbank` |
-| `parser-mbbank` | Parser: MB Bank | ⬜ Not started | `feat/parser-mbbank` |
-| `parser-acb` | Parser: ACB (deferred to Phase 5b) | ⏸️ Deferred | `feat/parser-acb` |
-| `parser-sacombank` | Parser: Sacombank (deferred to Phase 5b) | ⏸️ Deferred | `feat/parser-sacombank` |
-| `parser-bidv` | Parser: BIDV (deferred to Phase 5b) | ⏸️ Deferred | `feat/parser-bidv` |
-| `cross-source-dedup` | Cross-source dedup (SePay + Email) | ⬜ Not started | `feat/cross-source-dedup` |
+| PR | Feature | Status | Computed | Branch |
+|----|---------|:------:|:--------:|--------|
+| `W5.1` | Postmark inbound + `/inbound/{token}` route | ⬜ Not started | BACKLOG | `infra/W5.1-postmark-inbound` |
+| `email-forwarding-onboarding` | Path C onboarding (email forwarding guides) | ⬜ Not started | BACKLOG | `feat/email-forwarding-onboarding` |
+| `parser-techcombank` | Parser: Techcombank full extraction | ⬜ Not started | BACKLOG | `feat/parser-techcombank` |
+| `parser-cake-vpbank` | Parser: Cake (VPBank) | ⬜ Not started | BACKLOG | `feat/parser-cake-vpbank` |
+| `parser-mbbank` | Parser: MB Bank | ⬜ Not started | BACKLOG | `feat/parser-mbbank` |
+| `parser-acb` | Parser: ACB (deferred to Phase 5b) | ⏸️ Deferred | BACKLOG | `feat/parser-acb` |
+| `parser-sacombank` | Parser: Sacombank (deferred to Phase 5b) | ⏸️ Deferred | BACKLOG | `feat/parser-sacombank` |
+| `parser-bidv` | Parser: BIDV (deferred to Phase 5b) | ⏸️ Deferred | BACKLOG | `feat/parser-bidv` |
+| `cross-source-dedup` | Cross-source dedup (SePay + Email) | ⬜ Not started | BACKLOG | `feat/cross-source-dedup` |
 
 ### Phase 6 — 0/10 · 0% `░░░░░░░░░░`
 
-| PR | Feature | Status | Branch |
-|----|---------|:------:|--------|
-| `scheduled-jobs` | Scheduled jobs (APScheduler, TZ jitter ±5min) | ⬜ Not started | `feat/scheduled-jobs` |
-| `payment-vietqr` | Payment VietQR + SePay auto-detect (4-layer fuzzy) | ⬜ Not started | `feat/payment-vietqr` |
-| `payment-email-backup` | Email backup detect (Techcombank email path) | ⬜ Not started | `feat/payment-email-backup` |
-| `payment-recurring` | Manual review fallback + recurring billing | ⬜ Not started | `feat/payment-recurring` |
-| `admin-commands` | Admin commands (`/admin_stats`, `/admin_cost`, `/admin_user`, `/admin_resolve`) | ⬜ Not started | `feat/admin-commands` |
-| `W6.1` | Sentry alerts — 7 critical (per observability-plan.md) | ⬜ Not started | `infra/W6.1-sentry-alerts` |
-| `messenger-channel` | Messenger adapter (feature-flagged `ENABLE_MESSENGER_CHANNEL=false`) | ⬜ Not started | `feat/messenger-channel` |
-| `W6.2` | Railway deploy + custom domain (tienvenoidau.com) | ⬜ Not started | `infra/W6.2-railway-deploy` |
-| `W6.3` | Backup automation (B2 + pg_dump daily, SSE-B2) | ⬜ Not started | `infra/W6.3-backup-b2` |
-| `W6.4` | DR runbook full validation (test restore) | ⬜ Not started | `chore/W6.4-dr-restore-test` |
-| `(to be created when Phase W enters implementation planning)` | — | ⏸️ Deferred | `—` |
-| `parser-evolver` | GEPA-style auto-tune cho email parsers (POC: ACB) | ⏸️ Deferred | `feat/MYM-XXX-parser-evolver-poc` |
+| PR | Feature | Status | Computed | Branch |
+|----|---------|:------:|:--------:|--------|
+| `scheduled-jobs` | Scheduled jobs (APScheduler, TZ jitter ±5min) | ⬜ Not started | BACKLOG | `feat/scheduled-jobs` |
+| `payment-vietqr` | Payment VietQR + SePay auto-detect (4-layer fuzzy) | ⬜ Not started | BACKLOG | `feat/payment-vietqr` |
+| `payment-email-backup` | Email backup detect (Techcombank email path) | ⬜ Not started | BACKLOG | `feat/payment-email-backup` |
+| `payment-recurring` | Manual review fallback + recurring billing | ⬜ Not started | BACKLOG | `feat/payment-recurring` |
+| `admin-commands` | Admin commands (`/admin_stats`, `/admin_cost`, `/admin_user`, `/admin_resolve`) | ⬜ Not started | BACKLOG | `feat/admin-commands` |
+| `W6.1` | Sentry alerts — 7 critical (per observability-plan.md) | ⬜ Not started | BACKLOG | `infra/W6.1-sentry-alerts` |
+| `messenger-channel` | Messenger adapter (feature-flagged `ENABLE_MESSENGER_CHANNEL=false`) | ⬜ Not started | BACKLOG | `feat/messenger-channel` |
+| `W6.2` | Railway deploy + custom domain (tienvenoidau.com) | ⬜ Not started | BACKLOG | `infra/W6.2-railway-deploy` |
+| `W6.3` | Backup automation (B2 + pg_dump daily, SSE-B2) | ⬜ Not started | BACKLOG | `infra/W6.3-backup-b2` |
+| `W6.4` | DR runbook full validation (test restore) | ⬜ Not started | BACKLOG | `chore/W6.4-dr-restore-test` |
+| `(to be created when Phase W enters implementation planning)` | — | ⏸️ Deferred | — | `—` |
+| `parser-evolver` | GEPA-style auto-tune cho email parsers (POC: ACB) | ⏸️ Deferred | BACKLOG | `feat/MYM-XXX-parser-evolver-poc` |
 
 ## Timeline
 
@@ -128,7 +128,7 @@ gantt
 
 ### dashboard-live-view-A — Dashboard Live View — Phase A (engine→build wire)
 
-- **Status:** ⬜ In review
+- **Status:** ⬜ In progress · 🌿 đang trên branch này
 - **Branch:** `feat/MYM-6-dashboard-live-view-A`
 - **Wave:** Wave 0 follow-up
 - **Gates:** 🔒I 🔒X

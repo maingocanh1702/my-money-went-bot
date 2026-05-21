@@ -77,7 +77,17 @@
       "id": "onboarding-start",
       "name": "3-Path Onboarding",
       "phase": "1,4",
-      "spec": "done"
+      "spec": "done",
+      "state": {
+        "ci_state": "unknown",
+        "computed_status": "not-started",
+        "deploy_state": "unknown",
+        "human_status": "BACKLOG",
+        "last_event_ts": null,
+        "overlays": [],
+        "pr_state": "none",
+        "review_state": "none"
+      }
     },
     {
       "be_code": "partial",
@@ -86,7 +96,17 @@
       "id": "transaction-capture",
       "name": "Transaction Capture (SePay + Email)",
       "phase": "1,5",
-      "spec": "done"
+      "spec": "done",
+      "state": {
+        "ci_state": "unknown",
+        "computed_status": "not-started",
+        "deploy_state": "unknown",
+        "human_status": "BACKLOG",
+        "last_event_ts": null,
+        "overlays": [],
+        "pr_state": "none",
+        "review_state": "none"
+      }
     },
     {
       "be_code": "not_started",
@@ -95,7 +115,17 @@
       "id": "categorization",
       "name": "Transaction Categorization",
       "phase": "2",
-      "spec": "done"
+      "spec": "done",
+      "state": {
+        "ci_state": "unknown",
+        "computed_status": "not-started",
+        "deploy_state": "unknown",
+        "human_status": "BACKLOG",
+        "last_event_ts": null,
+        "overlays": [],
+        "pr_state": "none",
+        "review_state": "none"
+      }
     },
     {
       "be_code": "not_started",
@@ -104,7 +134,17 @@
       "id": "category-management",
       "name": "Category Management (/manage)",
       "phase": "2",
-      "spec": "done"
+      "spec": "done",
+      "state": {
+        "ci_state": "unknown",
+        "computed_status": "not-started",
+        "deploy_state": "unknown",
+        "human_status": "BACKLOG",
+        "last_event_ts": null,
+        "overlays": [],
+        "pr_state": "none",
+        "review_state": "none"
+      }
     },
     {
       "be_code": "not_started",
@@ -113,7 +153,17 @@
       "id": "reports",
       "name": "Reports (/status, /today, /weekly)",
       "phase": "2",
-      "spec": "done"
+      "spec": "done",
+      "state": {
+        "ci_state": "unknown",
+        "computed_status": "merged",
+        "deploy_state": "unknown",
+        "human_status": "WAITING",
+        "last_event_ts": null,
+        "overlays": [],
+        "pr_state": "merged",
+        "review_state": "none"
+      }
     },
     {
       "be_code": "not_started",
@@ -122,7 +172,17 @@
       "id": "pricing-tiers",
       "name": "Pricing, Tier Limits & Trial",
       "phase": "3",
-      "spec": "done"
+      "spec": "done",
+      "state": {
+        "ci_state": "unknown",
+        "computed_status": "merged",
+        "deploy_state": "unknown",
+        "human_status": "WAITING",
+        "last_event_ts": null,
+        "overlays": [],
+        "pr_state": "merged",
+        "review_state": "none"
+      }
     },
     {
       "be_code": "not_started",
@@ -131,7 +191,17 @@
       "id": "settings",
       "name": "Settings (/settings)",
       "phase": "2",
-      "spec": "done"
+      "spec": "done",
+      "state": {
+        "ci_state": "unknown",
+        "computed_status": "in-progress",
+        "deploy_state": "unknown",
+        "human_status": "IN_PROGRESS",
+        "last_event_ts": null,
+        "overlays": [],
+        "pr_state": "none",
+        "review_state": "none"
+      }
     },
     {
       "be_code": "partial",
@@ -140,7 +210,17 @@
       "id": "funding-sources",
       "name": "Funding Sources",
       "phase": "2",
-      "spec": "done"
+      "spec": "done",
+      "state": {
+        "ci_state": "unknown",
+        "computed_status": "merged",
+        "deploy_state": "unknown",
+        "human_status": "WAITING",
+        "last_event_ts": null,
+        "overlays": [],
+        "pr_state": "merged",
+        "review_state": "none"
+      }
     },
     {
       "be_code": "not_started",
@@ -149,7 +229,17 @@
       "id": "scheduled-jobs",
       "name": "Scheduled Jobs",
       "phase": "6",
-      "spec": "done"
+      "spec": "done",
+      "state": {
+        "ci_state": "unknown",
+        "computed_status": "not-started",
+        "deploy_state": "unknown",
+        "human_status": "BACKLOG",
+        "last_event_ts": null,
+        "overlays": [],
+        "pr_state": "none",
+        "review_state": "none"
+      }
     },
     {
       "be_code": "not_started",
@@ -185,7 +275,17 @@
       "id": "messenger-channel",
       "name": "Messenger Channel",
       "phase": "6",
-      "spec": "done"
+      "spec": "done",
+      "state": {
+        "ci_state": "unknown",
+        "computed_status": "not-started",
+        "deploy_state": "unknown",
+        "human_status": "BACKLOG",
+        "last_event_ts": null,
+        "overlays": [],
+        "pr_state": "none",
+        "review_state": "none"
+      }
     },
     {
       "be_code": "not_started",
@@ -230,7 +330,17 @@
       "id": "i18n-locale-switcher",
       "name": "Internationalization",
       "phase": "1",
-      "spec": "done"
+      "spec": "done",
+      "state": {
+        "ci_state": "unknown",
+        "computed_status": "not-started",
+        "deploy_state": "unknown",
+        "human_status": "BACKLOG",
+        "last_event_ts": null,
+        "overlays": [],
+        "pr_state": "none",
+        "review_state": "none"
+      }
     },
     {
       "be_code": "partial",
@@ -251,7 +361,7 @@
       "spec": "done"
     }
   ],
-  "generated_at": "2026-05-21T06:33:33+00:00",
+  "generated_at": "2026-05-21T07:52:40+00:00",
   "overall": {
     "mvp_merged": 6,
     "mvp_percent": 17,

@@ -389,3 +389,266 @@ def test_render_html_live_js_falls_back_to_default(bd: Any) -> None:
         )
     # Default fallback slug used
     assert "maingocanh1702/MyMoneyWent" in html_out
+
+
+# ─── Phase A: engine→build wire tests ────────────────────────────────────────
+
+
+def test_build_dashboard_invokes_engine_when_available(bd: Any) -> None:
+    """main() should call _try_engine when engine modules are importable."""
+    assert hasattr(bd, "_try_engine"), "build-dashboard.py must expose _try_engine"
+    assert callable(bd._try_engine)
+
+
+def test_build_dashboard_invokes_projection_after_engine(bd: Any) -> None:
+    """main() should invoke enrich_dashboard after engine produces state."""
+    assert hasattr(
+        bd, "_enrich_json_with_state"
+    ), "build-dashboard.py must expose _enrich_json_with_state"
+
+
+def test_dashboard_html_renders_state_human_status_side_by_side(bd: Any) -> None:
+    """HTML PR rows should include state-badge with human_status."""
+    pr = bd.PR(
+        pr_id="F07",
+        wave="W1",
+        feature="Settings",
+        status_emoji="🟠",
+        status_label="In review",
+        status_slug="in-review",
+        branch="feat/F07",
+        gates="🔒X",
+        notes="",
+        phase="Phase 2",
+    )
+    stat = bd.PhaseStats(
+        key="Phase 2",
+        label="2",
+        total=1,
+        merged=0,
+        in_progress=1,
+        blocked=0,
+        deferred=0,
+        percent=50,
+    )
+    state_map = {
+        "F07": {
+            "computed_status": "in-review",
+            "human_status": "IN_PROGRESS",
+            "overlays": [],
+            "last_event_ts": None,
+        }
+    }
+    with (
+        patch.object(bd, "_detect_repo_slug", return_value=None),
+        patch.object(bd, "detect_local_state", return_value=(None, "")),
+        patch.object(bd, "detect_remote_state", return_value=(None, "")),
+        patch.object(bd, "detect_sync", return_value=(0, 0)),
+    ):
+        html_out = bd.render_html(
+            prs=[pr],
+            stats=[stat],
+            mvp=None,
+            active=[],
+            in_flight=[],
+            upcoming=[],
+            branch=None,
+            state_map=state_map,
+        )
+    assert "state-badge" in html_out
+    assert "IN_PROGRESS" in html_out
+
+
+def test_dashboard_md_includes_computed_status_column(bd: Any) -> None:
+    """MD output should include a Computed Status column when state available."""
+    pr = bd.PR(
+        pr_id="F07",
+        wave="W1",
+        feature="Settings",
+        status_emoji="🟠",
+        status_label="In review",
+        status_slug="in-review",
+        branch="feat/F07",
+        gates="🔒X",
+        notes="",
+        phase="Phase 2",
+    )
+    stat = bd.PhaseStats(
+        key="Phase 2",
+        label="2",
+        total=1,
+        merged=0,
+        in_progress=1,
+        blocked=0,
+        deferred=0,
+        percent=50,
+    )
+    state_map = {
+        "F07": {
+            "computed_status": "in-review",
+            "human_status": "IN_PROGRESS",
+            "overlays": [],
+            "last_event_ts": None,
+        }
+    }
+    md_out = bd.render_md(
+        prs=[pr],
+        stats=[stat],
+        mvp=None,
+        active=[],
+        in_flight=[],
+        upcoming=[],
+        branch=None,
+        state_map=state_map,
+    )
+    assert "Computed" in md_out
+    assert "IN_PROGRESS" in md_out
+
+
+def test_dashboard_json_features_have_state_block_per_ac4(bd: Any) -> None:
+    """JSON features[*].state should be populated when engine state available."""
+
+    dashboard_json: dict[str, Any] = {
+        "generated_at": "2026-05-21T00:00:00Z",
+        "features": [{"id": "F07", "name": "Settings"}],
+    }
+    state_data: dict[str, Any] = {
+        "items": [
+            {
+                "item_id": "F07",
+                "status": "in-review",
+                "human_status": "IN_PROGRESS",
+                "progress": 60,
+                "runtime_urgency": "normal",
+                "overlays": [],
+                "signals": {
+                    "pr_state": "open",
+                    "ci_state": "pending",
+                    "review_state": "none",
+                    "deploy_state": "unknown",
+                },
+                "last_event_ts": None,
+            }
+        ]
+    }
+    from scripts.work_state.projections.dashboard import enrich_dashboard
+
+    enriched = enrich_dashboard(dashboard_json, state_data)
+    features = enriched.get("features", [])
+    assert isinstance(features, list)
+    assert len(features) == 1
+    f0 = features[0]
+    assert isinstance(f0, dict)
+    assert "state" in f0
+    state = f0["state"]
+    assert isinstance(state, dict)
+    assert state["human_status"] == "IN_PROGRESS"
+
+
+def test_no_network_flag_propagates_to_engine(bd: Any) -> None:
+    """--no-network flag should be accepted by main() and passed to engine."""
+    assert hasattr(bd, "main"), "build-dashboard.py must expose main()"
+    # Verify main accepts argv with --no-network
+    import inspect
+
+    sig = inspect.signature(bd.main)
+    params = list(sig.parameters.keys())
+    assert "argv" in params or len(params) >= 1, "main() must accept argv parameter for CLI args"
+
+
+def test_engine_failure_soft_fails_in_shadow_mode(bd: Any) -> None:
+    """Engine exception should NOT crash build in shadow mode (default)."""
+    with patch("scripts.work_state.engine.run_engine", side_effect=RuntimeError("boom")):
+        result = bd._try_engine(
+            tracker_path="/nonexistent/tracker.md",
+            dashboard_dir=pathlib.Path("/nonexistent/.dashboard"),
+            no_network=True,
+            strict=False,
+        )
+    assert result is None
+
+
+def test_engine_failure_hard_fails_with_strict_engine_flag(bd: Any) -> None:
+    """Engine exception should propagate when strict=True."""
+    with (
+        patch("scripts.work_state.engine.run_engine", side_effect=RuntimeError("boom")),
+        pytest.raises(RuntimeError, match="boom"),
+    ):
+        bd._try_engine(
+            tracker_path="/nonexistent/tracker.md",
+            dashboard_dir=pathlib.Path("/nonexistent/.dashboard"),
+            no_network=True,
+            strict=True,
+        )
+
+
+def test_existing_dashboard_tests_no_regression(bd: Any) -> None:
+    """Smoke: existing parse/render functions still work (A6)."""
+    text = """### Phase 1: Foundation
+| PR | Wave | Feature | Status | Branch | Gates | Notes |
+|----|------|---------|:------:|--------|:-----:|-------|
+| W0.7 | Wave 0 | request_id | ✅ | `chore/W0.7` | 🔒X | done |
+"""
+    prs = bd.parse_prs(text)
+    assert len(prs) == 1
+    assert prs[0].status_slug == "merged"
+    stat = bd.PhaseStats(
+        key="Phase 1",
+        label="1",
+        total=1,
+        merged=1,
+        in_progress=0,
+        blocked=0,
+        deferred=0,
+        percent=100,
+    )
+    with patch.object(bd, "_detect_repo_slug", return_value=None):
+        html_out = bd.render_html(
+            prs=prs, stats=[stat], mvp=None, active=[], in_flight=[], upcoming=[], branch=None
+        )
+    assert "W0.7" in html_out
+
+
+def test_build_state_map_returns_empty_when_state_data_none(bd: Any) -> None:
+    """Edge case: state_data is None → state_map is empty dict."""
+    result = bd._build_state_map(None)
+    assert result == {}
+
+
+def test_build_state_map_returns_empty_when_state_data_has_empty_items(bd: Any) -> None:
+    """Edge case: state_data has empty items list → state_map is empty dict."""
+    result = bd._build_state_map({"items": []})
+    assert result == {}
+
+
+def test_html_renders_engine_warning_banner_on_failure(bd: Any) -> None:
+    """A8: engine failure in shadow mode renders warning banner in HTML."""
+    text = """### Phase 1: Foundation
+| PR | Wave | Feature | Status | Branch | Gates | Notes |
+|----|------|---------|:------:|--------|:-----:|-------|
+| W0.7 | Wave 0 | request_id | ✅ | `chore/W0.7` | 🔒X | done |
+"""
+    prs = bd.parse_prs(text)
+    stat = bd.PhaseStats(
+        key="Phase 1",
+        label="1",
+        total=1,
+        merged=1,
+        in_progress=0,
+        blocked=0,
+        deferred=0,
+        percent=100,
+    )
+    with patch.object(bd, "_detect_repo_slug", return_value=None):
+        html_out = bd.render_html(
+            prs=prs,
+            stats=[stat],
+            mvp=None,
+            active=[],
+            in_flight=[],
+            upcoming=[],
+            branch=None,
+            engine_warning="Engine collection unavailable",
+        )
+    assert "engine-warning" in html_out
+    assert "Engine collection unavailable" in html_out

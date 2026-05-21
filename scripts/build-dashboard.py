@@ -6,7 +6,7 @@ PR merge to refresh the dashboard views (per development-workflow.md §2.7
 Post-merge updates).
 
 Usage:
-    python scripts/build-dashboard.py
+    python scripts/build-dashboard.py [--no-network] [--strict-engine]
 
 Outputs:
     docs/dashboard.html  — visual HTML dashboard, open in browser
@@ -14,8 +14,10 @@ Outputs:
 """
 from __future__ import annotations
 
+import argparse
 import html
 import json
+import logging
 import re
 import subprocess
 import sys
@@ -66,6 +68,78 @@ TRACKED_DOCS = [
     ROOT / "docs" / "tdd-vi.md",
     ROOT / "docs" / "mymoneywent-roadmap.md",
 ]
+
+_bd_logger = logging.getLogger("build-dashboard")
+
+
+# ─── Work-state engine integration (Phase A) ────────────────────────────────
+
+
+def _try_engine(
+    tracker_path: str,
+    dashboard_dir: Path,
+    no_network: bool,
+    strict: bool,
+) -> list[Any] | None:
+    """Invoke work-state engine; soft-fail unless strict.
+
+    Phase A shadow mode: engine errors produce a warning and return None.
+    Phase 2 promotion will flip default to strict (computed → primary status).
+    """
+    try:
+        from scripts.work_state.engine import run_engine
+
+        return run_engine(tracker_path, dashboard_dir, no_network=no_network)
+    except Exception as exc:
+        if strict:
+            raise
+        _bd_logger.warning("Engine collection failed: %s — continuing in shadow mode", exc)
+        return None
+
+
+def _read_state_data(dashboard_dir: Path) -> dict[str, Any] | None:
+    """Single read of current_state.json — shared by state_map + JSON enrichment."""
+    try:
+        from scripts.work_state.state_store import read_current_state
+    except ImportError:
+        return None
+    return read_current_state(dashboard_dir)
+
+
+def _build_state_map(
+    state_data: dict[str, Any] | None,
+) -> dict[str, dict[str, Any]]:
+    """Build {item_id: state_block} lookup from pre-read state data."""
+    if state_data is None:
+        return {}
+    try:
+        from scripts.work_state.projections.dashboard import build_state_block
+    except ImportError:
+        return {}
+
+    items = state_data.get("items", [])
+    if not isinstance(items, list):
+        return {}
+
+    result: dict[str, dict[str, Any]] = {}
+    for item in items:
+        if isinstance(item, dict):
+            item_id = item.get("item_id")
+            if isinstance(item_id, str):
+                result[item_id] = build_state_block(item)
+    return result
+
+
+def _enrich_json_with_state(
+    dashboard_json: dict[str, Any],
+    state_data: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Enrich dashboard JSON payload with engine state blocks per feature."""
+    try:
+        from scripts.work_state.projections.dashboard import enrich_dashboard
+    except ImportError:
+        return dashboard_json
+    return enrich_dashboard(dashboard_json, state_data)
 
 
 # Status emoji → (label, css/slug)
@@ -605,6 +679,9 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
 .sync-badge { font-size: 10px; font-family: var(--font-mono); padding: 1px 5px; border-radius: 999px; flex-shrink: 0; line-height: 1.3; }
 .sync-badge.unpushed { background: var(--bg-warning); color: var(--text-warning); }
 .sync-badge.unpulled { background: var(--bg-info); color: var(--text-info); }
+.state-badge { font-size: 9px; font-family: var(--font-mono); padding: 1px 5px; border-radius: 999px; flex-shrink: 0; line-height: 1.3; background: #e8eaf6; color: #3949ab; margin-left: 4px; }
+.state-overlay { font-size: 8px; margin-left: 2px; opacity: 0.8; }
+.engine-warning { font-size: 11px; color: var(--text-warning); padding: 6px 10px; background: var(--bg-warning); border-radius: 6px; margin: 8px 0; }
 
 /* Risk callout */
 .callout { padding: 10px 14px; border-radius: var(--radius-md); display: flex; gap: 10px; align-items: flex-start; font-size: 12px; margin-top: 14px; }
@@ -864,6 +941,8 @@ def render_html(
     branch,
     roadmap_data=None,
     doc_versions=None,
+    state_map=None,
+    engine_warning=None,
 ) -> str:
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     branch_tag = f" · <code>{html.escape(branch)}</code>" if branch else ""
@@ -984,11 +1063,26 @@ def render_html(
                 tooltip_parts.append(f"remote: {pr.remote_slug}")
             tooltip = " · ".join(tooltip_parts)
 
+            state_badge_html = ""
+            if state_map and pr.pr_id in state_map:
+                st = state_map[pr.pr_id]
+                human = html.escape(str(st.get("human_status", "")))
+                overlays = st.get("overlays", [])
+                overlay_html = "".join(
+                    f'<span class="state-overlay">{html.escape(str(o))}</span>'
+                    for o in overlays
+                    if o
+                )
+                state_badge_html = (
+                    f'<span class="state-badge" title="Engine: {human}">'
+                    f"{human}{overlay_html}</span>"
+                )
+
             pr_rows.append(
                 f"""<div class="{row_cls}" title="{html.escape(tooltip)}">
   <span class="dot {pr.status_slug}"></span>
   <span class="pr-id">{html.escape(pr.pr_id)}</span>
-  <span class="pr-name"><span class="pr-name-text">{html.escape(feat)}</span>{sync_badges}</span>
+  <span class="pr-name"><span class="pr-name-text">{html.escape(feat)}</span>{sync_badges}{state_badge_html}</span>
 </div>"""
             )
         rows_html = (
@@ -1167,6 +1261,10 @@ document.querySelectorAll(".next-chip").forEach(chip => {{
     risks_tab = render_risks_tab(rd.get("risks", []))
     docs_tab = render_docs_tab(doc_versions or [])
     tab_bar = render_tab_bar()
+    engine_warning_banner = ""
+    if engine_warning:
+        ew = html.escape(engine_warning)
+        engine_warning_banner = f'<div class="engine-warning">{ew}</div>'
 
     return f"""<!DOCTYPE html>
 <html lang="vi">
@@ -1190,6 +1288,8 @@ document.querySelectorAll(".next-chip").forEach(chip => {{
     <p class="meta">Updated {now}{branch_tag} · auto-refresh 60s</p>
   </div>
 </div>
+
+{engine_warning_banner}
 
 {tab_bar}
 
@@ -1233,7 +1333,7 @@ document.querySelectorAll(".next-chip").forEach(chip => {{
 # ---------- rendering: Markdown ----------
 
 
-def render_md(prs, stats, mvp, active, in_flight, upcoming, branch) -> str:
+def render_md(prs, stats, mvp, active, in_flight, upcoming, branch, state_map=None) -> str:
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     lines: list[str] = [
         "# MyMoneyWent — Progress Dashboard",
@@ -1286,16 +1386,30 @@ def render_md(prs, stats, mvp, active, in_flight, upcoming, branch) -> str:
         if not phase_prs:
             lines += ["_(no PRs in this phase)_", ""]
             continue
-        lines += [
-            "| PR | Feature | Status | Branch |",
-            "|----|---------|:------:|--------|",
-        ]
+        has_any_state = bool(state_map)
+        if has_any_state:
+            lines += [
+                "| PR | Feature | Status | Computed | Branch |",
+                "|----|---------|:------:|:--------:|--------|",
+            ]
+        else:
+            lines += [
+                "| PR | Feature | Status | Branch |",
+                "|----|---------|:------:|--------|",
+            ]
         for pr in phase_prs:
             feat = _strip_id_prefix(pr.feature, pr.pr_id)
             branch_cell = f"`{pr.branch}`" if pr.branch else "—"
-            lines.append(
-                f"| `{pr.pr_id}` | {feat} | {pr.status_emoji} {pr.status_label} | {branch_cell} |"
-            )
+            if has_any_state:
+                st = state_map.get(pr.pr_id, {}) if state_map else {}
+                computed = st.get("human_status", "—") if st else "—"
+                lines.append(
+                    f"| `{pr.pr_id}` | {feat} | {pr.status_emoji} {pr.status_label} | {computed} | {branch_cell} |"
+                )
+            else:
+                lines.append(
+                    f"| `{pr.pr_id}` | {feat} | {pr.status_emoji} {pr.status_label} | {branch_cell} |"
+                )
         lines.append("")
 
     # Mermaid Gantt
@@ -1407,7 +1521,39 @@ def _collect_doc_versions() -> list[dict]:
     return [parse_doc_version_header(p, today) for p in TRACKED_DOCS if p.exists()]
 
 
-def main() -> None:
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Build dashboard.html/md/json from tracker + work-state engine",
+    )
+    parser.add_argument(
+        "--no-network",
+        action="store_true",
+        help="Skip network calls in engine (use cached signals)",
+    )
+    parser.add_argument(
+        "--strict-engine",
+        action="store_true",
+        help="Hard-fail on engine errors instead of shadow-mode soft-fail",
+    )
+    parser.add_argument(
+        "--dashboard-dir",
+        type=Path,
+        default=ROOT / ".dashboard",
+        help="Path to .dashboard/ state directory",
+    )
+    parser.add_argument("--output-html", type=Path, default=None)
+    parser.add_argument("--output-md", type=Path, default=None)
+    parser.add_argument("--output-json", type=Path, default=None)
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = _parse_args(argv)
+    html_out = args.output_html or HTML_OUT
+    md_out = args.output_md or MD_OUT
+    json_out = args.output_json or JSON_OUT
+    dashboard_dir: Path = args.dashboard_dir
+
     if not TRACKER.exists():
         raise SystemExit(f"Tracker not found: {TRACKER}")
     text = TRACKER.read_text(encoding="utf-8")
@@ -1424,6 +1570,19 @@ def main() -> None:
     if not stats:
         print("Warning: no phase summary stats parsed (§5 table missing or shape changed).")
 
+    # Phase A: invoke work-state engine to refresh .dashboard/current_state.json
+    engine_states = _try_engine(
+        tracker_path=str(TRACKER),
+        dashboard_dir=dashboard_dir,
+        no_network=args.no_network,
+        strict=args.strict_engine,
+    )
+    state_data = _read_state_data(dashboard_dir) if engine_states is not None else None
+    state_map = _build_state_map(state_data)
+    engine_warning = None
+    if engine_states is None:
+        engine_warning = "Engine collection unavailable — showing manual status only"
+
     # Enrich PR status from git reality. Tracker remains source-of-truth for
     # terminal states (merged/deferred/blocked); git wins for ⬜→active transitions.
     drift = enrich_with_git_state(prs)
@@ -1436,7 +1595,7 @@ def main() -> None:
     roadmap_data = _collect_roadmap_data()
     doc_versions = _collect_doc_versions()
 
-    HTML_OUT.write_text(
+    html_out.write_text(
         render_html(
             prs,
             stats,
@@ -1447,25 +1606,32 @@ def main() -> None:
             branch,
             roadmap_data=roadmap_data,
             doc_versions=doc_versions,
+            state_map=state_map,
+            engine_warning=engine_warning,
         ),
         encoding="utf-8",
     )
-    MD_OUT.write_text(
-        render_md(prs, stats, mvp, active, in_flight, upcoming, branch),
+    md_out.write_text(
+        render_md(prs, stats, mvp, active, in_flight, upcoming, branch, state_map=state_map),
         encoding="utf-8",
     )
     tracker_data = {"mvp": mvp or {}, "phases": [s.__dict__ for s in stats]}
     payload = build_dashboard_json(tracker_data, roadmap_data, doc_versions)
-    JSON_OUT.write_text(
+    payload = _enrich_json_with_state(payload, state_data)
+    json_out.write_text(
         json.dumps(payload, indent=2, default=str, sort_keys=True) + "\n",
         encoding="utf-8",
     )
 
-    print(f"✓ {HTML_OUT.relative_to(ROOT)}  ({len(prs)} PRs, {len(stats)} phases)")
-    print(f"✓ {MD_OUT.relative_to(ROOT)}")
+    print(f"✓ {html_out.name}  ({len(prs)} PRs, {len(stats)} phases)")
+    print(f"✓ {md_out.name}")
     print(
-        f"✓ {JSON_OUT.relative_to(ROOT)}  ({len(roadmap_data['features'])} features, {len(doc_versions)} docs)"
+        f"✓ {json_out.name}  ({len(roadmap_data['features'])} features, {len(doc_versions)} docs)"
     )
+    if state_map:
+        print(f"  Engine: {len(state_map)} features with computed state (shadow mode)")
+    elif engine_warning:
+        print(f"  Engine: {engine_warning}")
     if mvp:
         print(
             f"  MVP: {mvp['percent']}% ({mvp['merged']}/{mvp['total']})  ·  In flight: {len(in_flight)}  ·  Active: {len(active)}"
