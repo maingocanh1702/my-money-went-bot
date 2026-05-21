@@ -92,3 +92,5 @@ class Event:
     artifact: str | None = None
     pr_number: int | None = None
     overlay: str | None = None
+    # Phase B / MYM-8 APPEND-ONLY — doc-change events carry artifact content hash for hash-aware dedup
+    content_hash: str | None = None

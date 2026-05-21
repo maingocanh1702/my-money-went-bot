@@ -137,6 +137,144 @@ class TestEventDedup:
         assert is_duplicate(event, events_file)
 
 
+class TestDocChangeHashDedup:
+    """MYM-8: doc-change events (spec/tech/tracker_row_modified) dedup by content_hash."""
+
+    def _make_event(
+        self,
+        event_type: str,
+        artifact: str,
+        content_hash: str | None,
+        ts: str = "2026-05-21T09:00:00Z",
+        item: str = "MYM-108",
+    ) -> Event:
+        return Event(
+            ts=ts,
+            item=item,
+            event=event_type,
+            from_status=None,
+            to_status=None,
+            source=f"filesystem.{event_type.split('_')[0]}",
+            artifact=artifact,
+            content_hash=content_hash,
+        )
+
+    def test_spec_modified_same_hash_dedupes(self, tmp_path: Path) -> None:
+        from scripts.work_state.event_engine import append_event, is_duplicate
+
+        events_file = tmp_path / "events.jsonl"
+        event_a = self._make_event(
+            "spec_modified", "docs/features/feature-funding-sources.md", "hash_X"
+        )
+        append_event(event_a, events_file)
+
+        event_b = self._make_event(
+            "spec_modified",
+            "docs/features/feature-funding-sources.md",
+            "hash_X",
+            ts="2026-05-21T10:00:00Z",
+        )
+        assert is_duplicate(event_b, events_file)
+
+    def test_spec_modified_different_hash_reemits(self, tmp_path: Path) -> None:
+        from scripts.work_state.event_engine import append_event, is_duplicate
+
+        events_file = tmp_path / "events.jsonl"
+        event_a = self._make_event(
+            "spec_modified", "docs/features/feature-funding-sources.md", "hash_X"
+        )
+        append_event(event_a, events_file)
+
+        event_b = self._make_event(
+            "spec_modified",
+            "docs/features/feature-funding-sources.md",
+            "hash_Y",
+            ts="2026-05-21T10:00:00Z",
+        )
+        assert not is_duplicate(event_b, events_file)
+
+    def test_tech_modified_hash_aware_dedup(self, tmp_path: Path) -> None:
+        from scripts.work_state.event_engine import append_event, is_duplicate
+
+        events_file = tmp_path / "events.jsonl"
+        event_a = self._make_event(
+            "tech_modified", "docs/features/BE/feature-funding-sources-tech.md", "tech_hash_1"
+        )
+        append_event(event_a, events_file)
+
+        same_hash = self._make_event(
+            "tech_modified",
+            "docs/features/BE/feature-funding-sources-tech.md",
+            "tech_hash_1",
+            ts="2026-05-21T11:00:00Z",
+        )
+        diff_hash = self._make_event(
+            "tech_modified",
+            "docs/features/BE/feature-funding-sources-tech.md",
+            "tech_hash_2",
+            ts="2026-05-21T11:00:00Z",
+        )
+        assert is_duplicate(same_hash, events_file)
+        assert not is_duplicate(diff_hash, events_file)
+
+    def test_tracker_row_modified_hash_aware_dedup(self, tmp_path: Path) -> None:
+        from scripts.work_state.event_engine import append_event, is_duplicate
+
+        events_file = tmp_path / "events.jsonl"
+        event_a = self._make_event(
+            "tracker_row_modified", "docs/implementation-tracker.md", "tracker_hash_1"
+        )
+        append_event(event_a, events_file)
+
+        same_hash = self._make_event(
+            "tracker_row_modified",
+            "docs/implementation-tracker.md",
+            "tracker_hash_1",
+        )
+        diff_hash = self._make_event(
+            "tracker_row_modified",
+            "docs/implementation-tracker.md",
+            "tracker_hash_2",
+        )
+        assert is_duplicate(same_hash, events_file)
+        assert not is_duplicate(diff_hash, events_file)
+
+    def test_doc_change_dedup_key_includes_content_hash(self) -> None:
+        from scripts.work_state.event_engine import _dedup_key
+
+        event = self._make_event("spec_modified", "docs/x.md", "hash_X")
+        key = _dedup_key(event)
+        assert key == ("MYM-108", "spec_modified", "docs/x.md", "hash_X")
+
+    def test_doc_change_event_missing_content_hash_treated_as_empty_string(
+        self, tmp_path: Path
+    ) -> None:
+        """Legacy tail entries lacking content_hash field compared as empty string."""
+        from scripts.work_state.event_engine import is_duplicate
+
+        events_file = tmp_path / "events.jsonl"
+        # Simulate legacy v1.3.0 entry — no content_hash field
+        legacy = {
+            "ts": "2026-05-20T08:00:00Z",
+            "item": "MYM-108",
+            "event": "spec_modified",
+            "from_status": None,
+            "to_status": None,
+            "source": "filesystem.spec",
+            "artifact": "docs/x.md",
+        }
+        with events_file.open("a") as f:
+            f.write(json.dumps(legacy) + "\n")
+
+        # New emission with explicit hash → different from "" → NOT dup
+        new_event = self._make_event("spec_modified", "docs/x.md", "hash_X")
+        assert not is_duplicate(new_event, events_file)
+
+        # New emission with content_hash=None → maps to "" → matches legacy entry
+        null_event = self._make_event("spec_modified", "docs/x.md", None)
+        assert is_duplicate(null_event, events_file)
+
+
 class TestTailBoundedRead:
     def test_reads_last_100_entries(self, tmp_path: Path) -> None:
         from scripts.work_state.event_engine import read_tail_events

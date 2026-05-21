@@ -34,7 +34,8 @@ def _dedup_key(event: Event) -> tuple[str, ...]:
     if event.event in _ONE_SHOT_EVENTS:
         return (event.item, event.event, event.artifact or "")
     if event.event in _DOC_CHANGE_EVENTS:
-        return (event.item, event.event, event.artifact or "")
+        # MYM-8: hash-aware — same artifact + same content_hash = duplicate; new hash = legitimate re-emit
+        return (event.item, event.event, event.artifact or "", event.content_hash or "")
     if event.event in _CI_EVENTS:
         return (event.item, event.event, event.artifact or "", str(event.pr_number))
     if event.event in _DEPLOY_EVENTS:
@@ -85,7 +86,14 @@ def is_duplicate(
         if event.event in _ONE_SHOT_EVENTS:
             existing_key = (existing_item, existing_event_type, existing_artifact)
         elif event.event in _DOC_CHANGE_EVENTS:
-            existing_key = (existing_item, existing_event_type, existing_artifact)
+            # MYM-8: read content_hash from tail entry; legacy entries lacking field → ""
+            existing_content_hash = str(entry.get("content_hash") or "")
+            existing_key = (
+                existing_item,
+                existing_event_type,
+                existing_artifact,
+                existing_content_hash,
+            )
         elif event.event in _CI_EVENTS:
             existing_key = (
                 existing_item,

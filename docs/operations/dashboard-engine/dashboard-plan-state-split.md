@@ -1,7 +1,7 @@
 ---
 title: Dashboard Plan/State Split — Auto-Progress Work Engine Design
 status: Accepted (Founder sign-off 2026-05-20)
-version: v1.3.0
+version: v1.4.0
 date: 2026-05-19
 updated: 2026-05-21
 author: Founder + Claude
@@ -15,7 +15,7 @@ related:
 # Dashboard Plan/State Split — Auto-Progress Work Engine Design
 
 > **Status:** **Accepted** (Founder sign-off 2026-05-20) · Codex-approved (3 rounds, 23 findings)
-> **Version:** v1.3.0
+> **Version:** v1.4.0
 > **Ngày tạo:** 2026-05-19
 > **Cập nhật:** 2026-05-21
 > **Mục đích:** Tách plan/state để xây foundation cho một **Linear/Jira-like work tracker có progress tự update từ trigger/artifact**, không chỉ sửa dashboard. Dashboard là projection đầu tiên; core asset là work-item schema + signal collectors + event engine + progress model — tạo ra **artifact-derived authoritative state**.
@@ -597,6 +597,7 @@ Generic de-dup tuple `(item, event, artifact, source_sha)` không đủ vì nhi�
 | Event type | De-dup identity | Re-emit allowed? |
 |---|---|---|
 | `spec_created` / `tech_created` | `(item, event, artifact_path)` | Không — file existence là one-shot transition |
+| `spec_modified` / `tech_modified` / `tracker_row_modified` | `(item, event, artifact, content_hash)` | Re-emit khi content_hash khác — same hash treated duplicate (idempotent re-runs). Tail entries lacking `content_hash` field (legacy) treated as `""`. |
 | `branch_created` | `(item, branch_name)` | Không |
 | `commit_added` | `(item, commit_sha)` | Không (per-commit unique SHA) |
 | `pr_opened` / `pr_draft` / `merged` / `closed` | `(item, pr_number, event)` | Không trừ khi PR reopened (separate event `pr_reopened`) |
@@ -607,6 +608,8 @@ Generic de-dup tuple `(item, event, artifact, source_sha)` không đủ vì nhi�
 | `cache_warmup` / `stale_cache` | `(item, build_id, cache_event)` | Re-emit per build (build_id unique) |
 
 Engine reads tail of `events.jsonl` (last 100 entries) trước khi append. Match dedup tuple per event type → skip append. Tail-bounded read giữ de-dup O(1) bất kể log size. Append-only — never modify or delete past events.
+
+**Doc-change emission guard (Phase B/MYM-8):** Engine emits `spec_modified` / `tech_modified` / `tracker_row_modified` only when `prev_content_hash is not None` AND `current_hash != prev_content_hash`. First engine run (bootstrap) skips emission — no prior hash to diff against — preventing false-positive flood from cold-start. Emitted event carries the new `content_hash`; dedup tail match keys off `(item, event, artifact, content_hash)` — different hash = legitimate drift, re-emit; same hash = duplicate, skip. Tail entries without `content_hash` (pre-v1.4.0 legacy logs) compare as empty string and don't collide with new hashed emissions.
 
 Fallback: nếu event type không có entry trong table → use generic `(item, event, artifact, source_sha)` tuple + 24h window. Engine warn `unknown_event_dedup_strategy` để founder catch missing definition.
 
@@ -1204,6 +1207,19 @@ class CurrentState:
     overlays: list[str]
     signals: Signals
     last_event_ts: str | None
+
+@dataclass(frozen=True)
+class Event:
+    ts: str
+    item: str
+    event: str
+    from_status: str | None
+    to_status: str | None
+    source: str
+    artifact: str | None = None
+    pr_number: int | None = None
+    overlay: str | None = None
+    content_hash: str | None = None  # v1.4.0 APPEND-ONLY — doc-change events carry artifact hash for hash-aware dedup
 ```
 
 ### 11.3 GitHub/CI implementation rule
@@ -1499,6 +1515,7 @@ Spec status transition: **Proposed → Accepted (2026-05-20)**.
 
 | Version | Date | Author | Notes |
 |---|---|---|---|
+| v1.4.0 | 2026-05-21 | Founder + Claude | MYM-8 Scope B — Hash-aware doc-change dedup + emission wire. §7.2.1 de-dup table gains row for `spec_modified` / `tech_modified` / `tracker_row_modified` with identity `(item, event, artifact, content_hash)`. §11.2 Event dataclass sketch added (was missing) with APPEND-ONLY `+content_hash: str | None`. Engine emits doc-change events when `prev_content_hash is not None AND current != prev` (first-run bootstrap noise prevention). Backward-compat: legacy tail entries without `content_hash` compare as `""`. Additive — backwards compatible. `last_event_ts` deliberately preserved as `None` (shadow window safety; out-of-scope this PR). |
 | v1.3.0 | 2026-05-21 | Founder + Claude | Phase B doc-change awareness: §8.2 overlay enum extended 14 → 18 (added `spec-modified`, `tech-modified`, `tracker-modified`, `post-ship-doc-change`). §6.1 filesystem signals extended with spec/tech hash tracking + tracker row semantic hash. §7.1 event log extended with 3 new event types (`spec_modified`, `tech_modified`, `tracker_row_modified`). Signals dataclass APPEND-ONLY +5 fields. Additive changes only — backwards compatible. |
 | v1.2.1 | 2026-05-20 | Founder + Claude | Codex cross-model review consolidated (3 rounds, 23 findings total addressed). Round 1: 15 findings (10 MAJOR + 5 MINOR) — linear_id field, deploy-failed overlay, canonical overlay enum, multi-branch lattice, runtime urgency deterministic algorithm, per-event-type dedup, CI cache key strategy, force-pr-resolve as CLI, foundation_change milestone signals, critical misclassification defined, spec move detection, phase rollup counts, exempt branch behavior, Phase 1 estimate revised 5-7 days, rollback runbook completeness. Round 2: 7 findings (4 MAJOR + 3 MINOR) — AC10 "mirror exactly" softened, P2 blocked → warning fallback, §8.0 explicit mappings for changes-requested/merged/abandoned (new ABANDONED bucket), §8.2.1 naming convention (kebab overlays vs snake warnings), partial-progress wording tightened, AC9a typo, rollback hard-rule #2 guard. Round 3: 1 finding (1 MAJOR) — convention_drift info-only consistency. 30 ACs (added AC11c-AC11e, AC19-AC25). 1076 → 1426 lines (+32%). Verdict: APPROVE WITH CHANGES → all resolved → Founder sign-off 2026-05-20 → Status: **Accepted**. |
 | v1.2.0 | 2026-05-19 | Founder + Claude | Integrated artifact-driven workflow feedback: added Intent vs Reality framing, artifact-derived authoritative state wording, human status projection, runtime urgency model, and clarified progress changes come from artifact/workflow events. |

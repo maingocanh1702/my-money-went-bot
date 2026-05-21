@@ -9,9 +9,11 @@ import argparse
 import logging
 import os
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
-from scripts.work_state.models import CurrentState, Signals, WorkItem
+from scripts.work_state.event_engine import append_event, is_duplicate
+from scripts.work_state.models import CurrentState, Event, Signals, WorkItem
 from scripts.work_state.plan_reader import read_tracker
 from scripts.work_state.progress import compute_progress
 from scripts.work_state.signal_collectors.ci import collect_ci_signals
@@ -155,6 +157,66 @@ def _load_prev_hashes(
     return result
 
 
+def _emit_doc_change_events(
+    item: WorkItem,
+    signals: Signals,
+    prev_spec_h: str | None,
+    prev_tech_h: str | None,
+    prev_tracker_h: str | None,
+    tracker_path: str,
+    events_file: Path,
+) -> None:
+    """MYM-8: emit spec/tech/tracker_row_modified events when content hash drifts vs prev.
+
+    Skip first run (prev_*_h is None) — bootstrap noise prevention per spec §7.2.1.
+    Dedup via is_duplicate keyed on (item, event, artifact, content_hash).
+    """
+    now = datetime.now(tz=UTC).isoformat()
+
+    drift_specs: list[tuple[str | None, str | None, str | None, str, str, str]] = [
+        (
+            prev_spec_h,
+            signals.spec_hash,
+            item.specs.get("product"),
+            "spec_modified",
+            "filesystem.spec",
+            "product",
+        ),
+        (
+            prev_tech_h,
+            signals.tech_hash,
+            item.specs.get("tech"),
+            "tech_modified",
+            "filesystem.tech",
+            "tech",
+        ),
+        (
+            prev_tracker_h,
+            signals.tracker_row_hash,
+            tracker_path,
+            "tracker_row_modified",
+            "filesystem.tracker",
+            "tracker",
+        ),
+    ]
+
+    for prev_h, curr_h, artifact, event_type, source, _kind in drift_specs:
+        if prev_h is None or curr_h is None or curr_h == prev_h:
+            continue
+        event = Event(
+            ts=now,
+            item=item.id,
+            event=event_type,
+            from_status=None,
+            to_status=None,
+            source=source,
+            artifact=artifact,
+            content_hash=curr_h,
+        )
+        if not is_duplicate(event, events_file):
+            append_event(event, events_file)
+
+
 def run_engine(
     tracker_path: str,
     dashboard_dir: Path,
@@ -168,6 +230,7 @@ def run_engine(
 
     _validate_cache_schema(dashboard_dir)
     prev_hashes = _load_prev_hashes(dashboard_dir)
+    events_file = dashboard_dir / "events.jsonl"
 
     parsed_items = read_tracker(tracker_path)
     repo_root = Path.cwd()
@@ -203,6 +266,15 @@ def run_engine(
                 progress = compute_progress(signals, item.progress_profile)
             except NotImplementedError:
                 progress = 0
+            _emit_doc_change_events(
+                item,
+                signals,
+                prev_spec_h,
+                prev_tech_h,
+                prev_tracker_h,
+                tracker_path,
+                events_file,
+            )
         else:
             branch_data: list[tuple[str, list[str]]] = []
             branch_signals_list: list[Signals] = []
@@ -237,6 +309,15 @@ def run_engine(
                 progress = compute_progress(signals, item.progress_profile)
             except NotImplementedError:
                 progress = 0
+            _emit_doc_change_events(
+                item,
+                signals,
+                prev_spec_h,
+                prev_tech_h,
+                prev_tracker_h,
+                tracker_path,
+                events_file,
+            )
 
         state = CurrentState(
             item_id=item.id,
