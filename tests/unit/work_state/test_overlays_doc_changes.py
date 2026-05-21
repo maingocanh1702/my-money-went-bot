@@ -114,7 +114,7 @@ class TestPostShipDocChange:
 
 
 class TestCanonicalOverlayEnum:
-    """B4: 4 new overlays exist in canonical enum (18 total)."""
+    """B4: doc-change overlays exist in canonical enum (21 total)."""
 
     def test_4_new_overlays_recognized(self) -> None:
         from scripts.work_state.status_machine import CANONICAL_OVERLAYS
@@ -127,7 +127,7 @@ class TestCanonicalOverlayEnum:
         }
         assert new_overlays.issubset(CANONICAL_OVERLAYS)
 
-    def test_canonical_enum_has_18_entries(self) -> None:
+    def test_canonical_enum_has_21_entries(self) -> None:
         from scripts.work_state.status_machine import CANONICAL_OVERLAYS
 
-        assert len(CANONICAL_OVERLAYS) == 18
+        assert len(CANONICAL_OVERLAYS) == 21

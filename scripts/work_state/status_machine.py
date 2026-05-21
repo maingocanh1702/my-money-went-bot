@@ -1,8 +1,15 @@
-"""Status state machine per spec §8.1, §8.0, §4.1."""
+"""Status state machine per spec §8.1, §8.0, §4.1, §9.4."""
 
 from __future__ import annotations
 
 from scripts.work_state.models import Signals
+
+URGENCY_ORDER: dict[str, int] = {
+    "normal": 0,
+    "warning": 1,
+    "elevated": 2,
+    "critical": 3,
+}
 
 STATUS_RANK: dict[str, int] = {
     "not-started": 0,
@@ -40,6 +47,9 @@ CANONICAL_OVERLAYS: frozenset[str] = frozenset(
         "tech-modified",
         "tracker-modified",
         "post-ship-doc-change",
+        "stale-cache",
+        "cache-warmup",
+        "risk-tier-inferred",
     }
 )
 
@@ -202,3 +212,50 @@ def aggregate_multi_branch_overlays(
         all_overlays.add("partial-progress")
 
     return sorted(all_overlays)
+
+
+def derive_urgency(
+    base: str,
+    overlays: list[str] | frozenset[str],
+    priority: str,
+    risk_tier: str,
+) -> str:
+    """Derive runtime_urgency per spec §9.4.1 — first-match-wins."""
+    overlay_set = frozenset(overlays) if not isinstance(overlays, frozenset) else overlays
+
+    if "deploy-failed" in overlay_set:
+        return "critical"
+    if base == "deployed" and "unknown" in overlay_set:
+        if risk_tier in {"P0", "P1"}:
+            return "critical"
+    if "ci-failing" in overlay_set and base == "merged":
+        return "critical"
+
+    if "blocked" in overlay_set and priority in {"P0", "P1"}:
+        return "elevated"
+    if "ci-failing" in overlay_set:
+        return "elevated"
+    if base == "approved-pending-merge" and "stale" in overlay_set:
+        return "elevated"
+    if "ambiguous-pr-mapping" in overlay_set:
+        return "elevated"
+
+    if "blocked" in overlay_set:
+        return "warning"
+    if "stale" in overlay_set:
+        return "warning"
+    if "unknown" in overlay_set:
+        return "warning"
+    if "artifact-drift" in overlay_set:
+        return "warning"
+    if "cache-warmup" in overlay_set:
+        return "warning"
+
+    return "normal"
+
+
+def aggregate_multi_branch_urgency(urgencies: list[str]) -> str:
+    """MAX urgency per spec §9.4.2 — critical > elevated > warning > normal."""
+    if not urgencies:
+        return "normal"
+    return max(urgencies, key=lambda u: URGENCY_ORDER.get(u, 0))

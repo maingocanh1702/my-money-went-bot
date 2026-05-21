@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
 import time
 from pathlib import Path
 from typing import TypedDict
 
 from scripts.work_state.models import WorkItem
+
+FOUNDER_LOGIN = os.environ.get("GITHUB_FOUNDER_LOGIN", "maingocanh")
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +36,8 @@ class GithubSignals(TypedDict):
     review_state: str
     last_review_at: str | None
     warnings: list[str]
+    foundation_codex_approved: bool | None
+    foundation_founder_signoff: bool | None
 
 
 def _run_gh(args: list[str], timeout: int = 15) -> str:
@@ -274,6 +279,92 @@ def _build_identity(pr: dict[str, object], warnings: list[str]) -> PrIdentityRes
     }
 
 
+def _gh_get_pr_detail(
+    repo: str, pr_number: int, *, no_network: bool = False
+) -> dict[str, object] | None:
+    """Fetch single PR detail (includes labels). Cached."""
+    cache_key = f"pr_detail_{pr_number}"
+    cached = _read_cache(cache_key, PR_DETAIL_TTL_SECONDS)
+    if cached is not None:
+        return cached[0] if cached else None
+    if no_network:
+        return None
+    try:
+        raw = _run_gh(["api", f"repos/{repo}/pulls/{pr_number}", "--method", "GET"])
+        result: dict[str, object] = json.loads(raw)
+        _write_cache(cache_key, [result])
+        return result
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError) as exc:
+        logger.warning("Failed to fetch PR #%d detail: %s", pr_number, exc)
+        return None
+
+
+def _gh_get_comments(
+    repo: str, pr_number: int, *, no_network: bool = False
+) -> list[dict[str, object]]:
+    """Fetch PR issue comments. Cached."""
+    cache_key = f"comments_{pr_number}"
+    cached = _read_cache(cache_key, PR_DETAIL_TTL_SECONDS)
+    if cached is not None:
+        return cached
+    if no_network:
+        return []
+    try:
+        raw = _run_gh(["api", f"repos/{repo}/issues/{pr_number}/comments", "--method", "GET"])
+        result: list[dict[str, object]] = json.loads(raw)
+        _write_cache(cache_key, result)
+        return result
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError) as exc:
+        logger.warning("Failed to fetch comments for PR #%d: %s", pr_number, exc)
+        return []
+
+
+def _detect_foundation_change_signals(
+    pr_detail: dict[str, object] | None,
+    comments: list[dict[str, object]],
+    founder_login: str,
+) -> tuple[bool | None, bool | None]:
+    """Detect codex-approved label + founder sign-off comment marker."""
+    if pr_detail is None:
+        return None, None
+    pr_state = _derive_pr_state(pr_detail)
+    if pr_state == "unknown":
+        return None, None
+
+    labels_raw = pr_detail.get("labels", [])
+    labels: list[str] = []
+    if isinstance(labels_raw, list):
+        for lbl in labels_raw:
+            if isinstance(lbl, dict):
+                name = lbl.get("name", "")
+                if isinstance(name, str):
+                    labels.append(name)
+            elif isinstance(lbl, str):
+                labels.append(lbl)
+    codex_approved = any(label.lower() == "codex-approved" for label in labels)
+
+    founder_signoff = False
+    for comment in comments:
+        if not isinstance(comment, dict):
+            continue
+        user_obj = comment.get("user")
+        author = ""
+        if isinstance(user_obj, dict):
+            login = user_obj.get("login", "")
+            author = str(login) if login else ""
+        if author.lower() != founder_login.lower():
+            continue
+        body = comment.get("body", "")
+        if not isinstance(body, str):
+            continue
+        body_lower = body.lower()
+        if "founder sign-off" in body_lower or "✅ ship" in body_lower:
+            founder_signoff = True
+            break
+
+    return codex_approved, founder_signoff
+
+
 def collect_github_signals(
     item: WorkItem,
     repo: str,
@@ -292,6 +383,8 @@ def collect_github_signals(
             "review_state": "none",
             "last_review_at": None,
             "warnings": ["github_unknown"],
+            "foundation_codex_approved": None,
+            "foundation_founder_signoff": None,
         }
 
     pr_number = identity["pr_number"]
@@ -299,6 +392,14 @@ def collect_github_signals(
     warnings = list(identity["warnings"])
 
     if pr_number is None or pr_state in ("none", "unknown", "merged", "closed"):
+        codex_ok: bool | None = None
+        signoff: bool | None = None
+        if pr_number is not None and pr_state in ("merged", "closed"):
+            pr_detail = _gh_get_pr_detail(repo, pr_number, no_network=no_network)
+            comments = _gh_get_comments(repo, pr_number, no_network=no_network)
+            codex_ok, signoff = _detect_foundation_change_signals(
+                pr_detail, comments, FOUNDER_LOGIN
+            )
         return {
             "pr_state": pr_state,
             "pr_number": pr_number,
@@ -306,6 +407,8 @@ def collect_github_signals(
             "review_state": "none",
             "last_review_at": None,
             "warnings": warnings,
+            "foundation_codex_approved": codex_ok,
+            "foundation_founder_signoff": signoff,
         }
 
     try:
@@ -316,6 +419,10 @@ def collect_github_signals(
 
     review_state, last_review_at = _derive_review_state(reviews)
 
+    pr_detail = _gh_get_pr_detail(repo, pr_number, no_network=no_network)
+    comments = _gh_get_comments(repo, pr_number, no_network=no_network)
+    f_codex, f_signoff = _detect_foundation_change_signals(pr_detail, comments, FOUNDER_LOGIN)
+
     return {
         "pr_state": pr_state,
         "pr_number": pr_number,
@@ -323,4 +430,6 @@ def collect_github_signals(
         "review_state": review_state,
         "last_review_at": last_review_at,
         "warnings": warnings,
+        "foundation_codex_approved": f_codex,
+        "foundation_founder_signoff": f_signoff,
     }

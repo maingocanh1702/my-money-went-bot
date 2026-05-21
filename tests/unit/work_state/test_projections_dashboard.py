@@ -123,6 +123,8 @@ class TestBuildStateBlock:
             "deploy_state",
             "overlays",
             "last_event_ts",
+            "urgency",
+            "urgency_emoji",
         }
         assert set(block.keys()) == expected_keys
 

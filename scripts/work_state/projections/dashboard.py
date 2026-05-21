@@ -19,6 +19,13 @@ from scripts.work_state.state_store import read_current_state
 
 logger = logging.getLogger(__name__)
 
+URGENCY_EMOJI: dict[str, str] = {
+    "critical": "🔥",
+    "elevated": "⚠️",
+    "warning": "👁",
+    "normal": "✓",
+}
+
 
 def load_state(dashboard_dir: Path) -> dict[str, object] | None:
     """Load cached current_state.json. Returns None if missing/malformed."""
@@ -40,6 +47,8 @@ def build_state_block(state_item: dict[str, object]) -> dict[str, object]:
     if not isinstance(overlays, list):
         overlays = []
 
+    urgency = _str_field(state_item, "runtime_urgency", "normal")
+
     return {
         "computed_status": _str_field(state_item, "status", "unknown"),
         "human_status": _str_field(state_item, "human_status", "UNKNOWN"),
@@ -49,6 +58,8 @@ def build_state_block(state_item: dict[str, object]) -> dict[str, object]:
         "deploy_state": _str_field(signals, "deploy_state", "unknown"),
         "overlays": overlays,
         "last_event_ts": state_item.get("last_event_ts"),
+        "urgency": urgency,
+        "urgency_emoji": URGENCY_EMOJI.get(urgency, "✓"),
     }
 
 
