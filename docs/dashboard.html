@@ -126,6 +126,9 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
 .sync-badge { font-size: 10px; font-family: var(--font-mono); padding: 1px 5px; border-radius: 999px; flex-shrink: 0; line-height: 1.3; }
 .sync-badge.unpushed { background: var(--bg-warning); color: var(--text-warning); }
 .sync-badge.unpulled { background: var(--bg-info); color: var(--text-info); }
+.state-badge { font-size: 9px; font-family: var(--font-mono); padding: 1px 5px; border-radius: 999px; flex-shrink: 0; line-height: 1.3; background: #e8eaf6; color: #3949ab; margin-left: 4px; }
+.state-overlay { font-size: 8px; margin-left: 2px; opacity: 0.8; }
+.engine-warning { font-size: 11px; color: var(--text-warning); padding: 6px 10px; background: var(--bg-warning); border-radius: 6px; margin: 8px 0; }
 
 /* Risk callout */
 .callout { padding: 10px 14px; border-radius: var(--radius-md); display: flex; gap: 10px; align-items: flex-start; font-size: 12px; margin-top: 14px; }
@@ -326,19 +329,21 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <h1>MyMoneyWent — progress dashboard</h1>
   <div class="head-meta">
     <span id="live-indicator" class="live-indicator init">⚪ initializing…</span>
-    <p class="meta">Updated 2026-05-21 08:02 · <code>main</code> · auto-refresh 60s</p>
+    <p class="meta">Updated 2026-05-21 14:52 · <code>feat/MYM-6-dashboard-live-view-A</code> · auto-refresh 60s</p>
   </div>
 </div>
+
+
 
 <nav class="tab-bar" role="tablist"><button type="button" class="tab-btn" data-tab="overview">Overview</button><button type="button" class="tab-btn" data-tab="features">Features</button><button type="button" class="tab-btn" data-tab="prs">PRs</button><button type="button" class="tab-btn" data-tab="risks">Risks</button><button type="button" class="tab-btn" data-tab="docs">Docs</button></nav>
 
 <section id="tab-overview" class="tab-panel" role="tabpanel"><div class="overview-summary"><div class="kpi"><div class="kpi-label">Overall</div><div class="kpi-value">30%</div></div><div class="kpi"><div class="kpi-label">MVP</div><div class="kpi-value">17%</div></div></div><div class="phase-bars"><div class="phase-row" data-status="done"><div class="phase-label">Phase 0: Docs &amp; Specs</div><div class="phase-track"><div class="phase-fill phase-done" style="width:100%"></div></div><div class="phase-pct">100%</div></div><div class="phase-row" data-status="partial"><div class="phase-label">Phase 1: Foundation</div><div class="phase-track"><div class="phase-fill phase-partial" style="width:75%"></div></div><div class="phase-pct">75%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 2: Handlers Refactor</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 3: Pricing Logic</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 4: SePay Onboarding</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 5: Email Parsing</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 6: Polish + Deploy</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 7: Closed Beta</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 8: Public Soft Launch</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 9-10: Growth + Business Tier</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div><div class="phase-row" data-status="not_started"><div class="phase-label">Phase 11: Family Plan</div><div class="phase-track"><div class="phase-fill phase-not_started" style="width:0%"></div></div><div class="phase-pct">0%</div></div></div><div class="hero">
 <div class="hero-current">
-  <span class="dot in-review"></span>
+  <span class="dot in-progress"></span>
   <div class="hero-text">
     <p class="hero-label">Đang làm</p>
     <p class="hero-title">dashboard-live-view-A · Dashboard Live View — Phase A (engine→build wire)</p>
-    <p class="hero-sub">In review · feat/MYM-6-dashboard-live-view-A</p>
+    <p class="hero-sub">In progress · feat/MYM-6-dashboard-live-view-A</p>
   </div>
 </div>
 <div class="hero-kpis">
@@ -346,8 +351,8 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <div class="kpi"><p class="kpi-val">57%</p><p class="kpi-lbl">Phase 1</p><p class="kpi-sub">4/7</p></div>
   <div class="kpi"><p class="kpi-val">1</p><p class="kpi-lbl">In flight</p></div>
   <div class="kpi"><p class="kpi-val">0</p><p class="kpi-lbl">Blocked</p></div>
-  <div class="kpi"><p class="kpi-val">↑0</p><p class="kpi-lbl">Unpushed</p><p class="kpi-sub">0 PR</p></div>
-  <div class="kpi"><p class="kpi-val">↓30</p><p class="kpi-lbl">Unpulled</p><p class="kpi-sub">2 PR</p></div>
+  <div class="kpi alert"><p class="kpi-val">↑6</p><p class="kpi-lbl">Unpushed</p><p class="kpi-sub">1 PR</p></div>
+  <div class="kpi"><p class="kpi-val">↓37</p><p class="kpi-lbl">Unpulled</p><p class="kpi-sub">3 PR</p></div>
 </div>
 </div>
 <div class="chart-section">
@@ -411,54 +416,54 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
     <span class="phase-card-meta">4/7 · 57%</span>
   </div>
   <div class="phase-card-bar"><div class="" style="width:57%;"></div></div>
-  <div class="phase-prs"><div class="pr-row in-review" title="In review · feat/MYM-6-dashboard-live-view-A · remote: in-review">
-  <span class="dot in-review"></span>
+  <div class="phase-prs"><div class="pr-row in-progress current" title="In progress · feat/MYM-6-dashboard-live-view-A · local: in-progress">
+  <span class="dot in-progress"></span>
   <span class="pr-id">dashboard-live-view-A</span>
-  <span class="pr-name"><span class="pr-name-text">Dashboard Live View — Phase A (engine→build wire)</span><span class="sync-badge unpulled" title="7 commits trên origin chưa pull về local">↓7</span></span>
+  <span class="pr-name"><span class="pr-name-text">Dashboard Live View — Phase A (engine→build wire)</span><span class="sync-badge unpushed" title="6 commits chưa push lên origin">↑6</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row not-started" title="Not started · infra/W1.1-docker-compose">
   <span class="dot not-started"></span>
   <span class="pr-id">W1.1</span>
-  <span class="pr-name"><span class="pr-name-text">Docker Compose dev + prod</span></span>
+  <span class="pr-name"><span class="pr-name-text">Docker Compose dev + prod</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row not-started" title="Not started · feat/W1.2-discord-adapter">
   <span class="dot not-started"></span>
   <span class="pr-id">W1.2</span>
-  <span class="pr-name"><span class="pr-name-text">Discord adapter (`core/messenger/discord.py`)</span></span>
+  <span class="pr-name"><span class="pr-name-text">Discord adapter (`core/messenger/discord.py`)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row not-started" title="Not started · chore/W1.3-phase1-smoke">
   <span class="dot not-started"></span>
   <span class="pr-id">W1.3</span>
-  <span class="pr-name"><span class="pr-name-text">Phase 1 integration smoke</span></span>
+  <span class="pr-name"><span class="pr-name-text">Phase 1 integration smoke</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row merged" title="Merged · feat/dashboard-v3-rich-v2">
   <span class="dot merged"></span>
   <span class="pr-id">W0.10</span>
-  <span class="pr-name"><span class="pr-name-text">Dashboard v3 rich UI + click-through + Chart.js</span></span>
+  <span class="pr-name"><span class="pr-name-text">Dashboard v3 rich UI + click-through + Chart.js</span><span class="state-badge" title="Engine: WAITING">WAITING</span></span>
 </div><div class="pr-row merged" title="Merged · chore/W0.7-tenant-context-public-api">
   <span class="dot merged"></span>
   <span class="pr-id">W0.7</span>
-  <span class="pr-name"><span class="pr-name-text">Public `request_id` helpers + F02 xfail contract pin</span></span>
+  <span class="pr-name"><span class="pr-name-text">Public `request_id` helpers + F02 xfail contract pin</span><span class="state-badge" title="Engine: WAITING">WAITING</span></span>
 </div><div class="pr-row merged" title="Merged · feat/webhook-display-suffix-migration">
   <span class="dot merged"></span>
   <span class="pr-id">W0.8</span>
-  <span class="pr-name"><span class="pr-name-text">Webhook `display_suffix VARCHAR(8)` migration (G3 option b)</span></span>
+  <span class="pr-name"><span class="pr-name-text">Webhook `display_suffix VARCHAR(8)` migration (G3 option b)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row merged" title="Merged · feat/dashboard-realtime">
   <span class="dot merged"></span>
   <span class="pr-id">W0.9</span>
-  <span class="pr-name"><span class="pr-name-text">Dashboard realtime — auto-rebuild + git-state detect + reconcile</span></span>
+  <span class="pr-name"><span class="pr-name-text">Dashboard realtime — auto-rebuild + git-state detect + reconcile</span><span class="state-badge" title="Engine: WAITING">WAITING</span></span>
 </div><div class="pr-row merged" title="Merged · feat/MYM-1-work-state-engine-1a">
   <span class="dot merged"></span>
   <span class="pr-id">work-state-engine-1a</span>
-  <span class="pr-name"><span class="pr-name-text">Work-State Engine — Phase 1a (skeleton + filesystem + git)</span></span>
+  <span class="pr-name"><span class="pr-name-text">Work-State Engine — Phase 1a (skeleton + filesystem + git)</span><span class="state-badge" title="Engine: WAITING">WAITING</span></span>
 </div><div class="pr-row merged" title="Merged · feat/MYM-3-work-state-engine-1b">
   <span class="dot merged"></span>
   <span class="pr-id">work-state-engine-1b</span>
-  <span class="pr-name"><span class="pr-name-text">Work-State Engine — Phase 1b (github + ci + railway collectors)</span></span>
-</div><div class="pr-row merged" title="Merged · feat/MYM-4-work-state-engine-1b-projection">
+  <span class="pr-name"><span class="pr-name-text">Work-State Engine — Phase 1b (github + ci + railway collectors)</span><span class="state-badge" title="Engine: WAITING">WAITING</span></span>
+</div><div class="pr-row merged" title="Merged · feat/MYM-4-work-state-engine-1b-projection · remote: in-review">
   <span class="dot merged"></span>
   <span class="pr-id">work-state-engine-1b&#x27;</span>
-  <span class="pr-name"><span class="pr-name-text">Work-State Engine — Phase 1b&#x27; (dashboard projection follow-up)</span></span>
-</div><div class="pr-row merged" title="Merged · feat/MYM-5-work-state-engine-1c">
+  <span class="pr-name"><span class="pr-name-text">Work-State Engine — Phase 1b&#x27; (dashboard projection follow-up)</span><span class="sync-badge unpulled" title="5 commits trên origin chưa pull về local">↓5</span><span class="state-badge" title="Engine: WAITING">WAITING</span></span>
+</div><div class="pr-row merged" title="Merged · feat/MYM-5-work-state-engine-1c · remote: in-review">
   <span class="dot merged"></span>
   <span class="pr-id">work-state-engine-1c</span>
-  <span class="pr-name"><span class="pr-name-text">Work-State Engine — Phase 1c (driver + aggregation + persistence + workflow)</span></span>
+  <span class="pr-name"><span class="pr-name-text">Work-State Engine — Phase 1c (driver + aggregation + persistence + workflow)</span><span class="sync-badge unpulled" title="9 commits trên origin chưa pull về local">↓9</span><span class="state-badge" title="Engine: WAITING">WAITING</span></span>
 </div></div>
 </div><div class="phase-card">
   <div class="phase-card-head">
@@ -469,43 +474,43 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <div class="phase-prs"><div class="pr-row not-started" title="Not started · feat/admin-auth">
   <span class="dot not-started"></span>
   <span class="pr-id">admin-auth</span>
-  <span class="pr-name"><span class="pr-name-text">Admin auth framework only (commands defer Phase 6)</span></span>
+  <span class="pr-name"><span class="pr-name-text">Admin auth framework only (commands defer Phase 6)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row not-started" title="Not started · feat/categorization">
   <span class="dot not-started"></span>
   <span class="pr-id">categorization</span>
-  <span class="pr-name"><span class="pr-name-text">Categorization auto-rules + manual</span></span>
+  <span class="pr-name"><span class="pr-name-text">Categorization auto-rules + manual</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row not-started" title="Not started · feat/category-management">
   <span class="dot not-started"></span>
   <span class="pr-id">category-management</span>
-  <span class="pr-name"><span class="pr-name-text">Category management (`/manage`)</span></span>
+  <span class="pr-name"><span class="pr-name-text">Category management (`/manage`)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row not-started" title="Not started · feat/funding-sources">
   <span class="dot not-started"></span>
   <span class="pr-id">funding-sources</span>
-  <span class="pr-name"><span class="pr-name-text">Funding sources resolver + handlers</span></span>
+  <span class="pr-name"><span class="pr-name-text">Funding sources resolver + handlers</span><span class="state-badge" title="Engine: WAITING">WAITING</span></span>
 </div><div class="pr-row not-started" title="Not started · feat/i18n-locale-switcher">
   <span class="dot not-started"></span>
   <span class="pr-id">i18n-locale-switcher</span>
-  <span class="pr-name"><span class="pr-name-text">VI/EN locale switcher</span></span>
+  <span class="pr-name"><span class="pr-name-text">VI/EN locale switcher</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row not-started" title="Not started · feat/manual-transaction-entry">
   <span class="dot not-started"></span>
   <span class="pr-id">manual-transaction-entry</span>
-  <span class="pr-name"><span class="pr-name-text">Manual transaction entry — Channel 3 of transaction-capture</span></span>
+  <span class="pr-name"><span class="pr-name-text">Manual transaction entry — Channel 3 of transaction-capture</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row not-started" title="Not started · feat/reports">
   <span class="dot not-started"></span>
   <span class="pr-id">reports</span>
-  <span class="pr-name"><span class="pr-name-text">Reports `/status`, `/today`, `/weekly`</span></span>
+  <span class="pr-name"><span class="pr-name-text">Reports `/status`, `/today`, `/weekly`</span><span class="state-badge" title="Engine: WAITING">WAITING</span></span>
 </div><div class="pr-row not-started" title="Not started · feat/transaction-capture">
   <span class="dot not-started"></span>
   <span class="pr-id">transaction-capture</span>
-  <span class="pr-name"><span class="pr-name-text">Transaction capture EXPANDED (inherit W0.6 legacy cutover)</span></span>
+  <span class="pr-name"><span class="pr-name-text">Transaction capture EXPANDED (inherit W0.6 legacy cutover)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row merged" title="Merged · feat/F01-onboarding-start">
   <span class="dot merged"></span>
   <span class="pr-id">onboarding-start</span>
-  <span class="pr-name"><span class="pr-name-text">`/start` + user create + trial assign</span></span>
+  <span class="pr-name"><span class="pr-name-text">`/start` + user create + trial assign</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row merged" title="Merged · feat/F07-settings · remote: in-review">
   <span class="dot merged"></span>
   <span class="pr-id">settings</span>
-  <span class="pr-name"><span class="pr-name-text">Settings `/settings`</span><span class="sync-badge unpulled" title="23 commits trên origin chưa pull về local">↓23</span></span>
+  <span class="pr-name"><span class="pr-name-text">Settings `/settings`</span><span class="sync-badge unpulled" title="23 commits trên origin chưa pull về local">↓23</span><span class="state-badge" title="Engine: IN_PROGRESS">IN_PROGRESS</span></span>
 </div></div>
 </div><div class="phase-card">
   <div class="phase-card-head">
@@ -516,7 +521,7 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <div class="phase-prs"><div class="pr-row not-started" title="Not started · feat/pricing-tiers">
   <span class="dot not-started"></span>
   <span class="pr-id">pricing-tiers</span>
-  <span class="pr-name"><span class="pr-name-text">Tier limits + 14d trial + gating middleware</span></span>
+  <span class="pr-name"><span class="pr-name-text">Tier limits + 14d trial + gating middleware</span><span class="state-badge" title="Engine: WAITING">WAITING</span></span>
 </div></div>
 </div><div class="phase-card">
   <div class="phase-card-head">
@@ -527,11 +532,11 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <div class="phase-prs"><div class="pr-row not-started" title="Not started · feat/first-tx-celebration">
   <span class="dot not-started"></span>
   <span class="pr-id">first-tx-celebration</span>
-  <span class="pr-name"><span class="pr-name-text">First-tx celebration flow</span></span>
+  <span class="pr-name"><span class="pr-name-text">First-tx celebration flow</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row not-started" title="Not started · feat/sepay-onboarding-paths">
   <span class="dot not-started"></span>
   <span class="pr-id">sepay-onboarding-paths</span>
-  <span class="pr-name"><span class="pr-name-text">Path A (Quick connect) + Path B (Wizard)</span></span>
+  <span class="pr-name"><span class="pr-name-text">Path A (Quick connect) + Path B (Wizard)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div></div>
 </div><div class="phase-card">
   <div class="phase-card-head">
@@ -542,39 +547,39 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <div class="phase-prs"><div class="pr-row not-started" title="Not started · infra/W5.1-postmark-inbound">
   <span class="dot not-started"></span>
   <span class="pr-id">W5.1</span>
-  <span class="pr-name"><span class="pr-name-text">Postmark inbound + `/inbound/{token}` route</span></span>
+  <span class="pr-name"><span class="pr-name-text">Postmark inbound + `/inbound/{token}` route</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row not-started" title="Not started · feat/cross-source-dedup">
   <span class="dot not-started"></span>
   <span class="pr-id">cross-source-dedup</span>
-  <span class="pr-name"><span class="pr-name-text">Cross-source dedup (SePay + Email)</span></span>
+  <span class="pr-name"><span class="pr-name-text">Cross-source dedup (SePay + Email)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row not-started" title="Not started · feat/email-forwarding-onboarding">
   <span class="dot not-started"></span>
   <span class="pr-id">email-forwarding-onboarding</span>
-  <span class="pr-name"><span class="pr-name-text">Path C onboarding (email forwarding guides)</span></span>
+  <span class="pr-name"><span class="pr-name-text">Path C onboarding (email forwarding guides)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row not-started" title="Not started · feat/parser-cake-vpbank">
   <span class="dot not-started"></span>
   <span class="pr-id">parser-cake-vpbank</span>
-  <span class="pr-name"><span class="pr-name-text">Parser: Cake (VPBank)</span></span>
+  <span class="pr-name"><span class="pr-name-text">Parser: Cake (VPBank)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row not-started" title="Not started · feat/parser-mbbank">
   <span class="dot not-started"></span>
   <span class="pr-id">parser-mbbank</span>
-  <span class="pr-name"><span class="pr-name-text">Parser: MB Bank</span></span>
+  <span class="pr-name"><span class="pr-name-text">Parser: MB Bank</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row not-started" title="Not started · feat/parser-techcombank">
   <span class="dot not-started"></span>
   <span class="pr-id">parser-techcombank</span>
-  <span class="pr-name"><span class="pr-name-text">Parser: Techcombank full extraction</span></span>
+  <span class="pr-name"><span class="pr-name-text">Parser: Techcombank full extraction</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row deferred" title="Deferred · feat/parser-acb">
   <span class="dot deferred"></span>
   <span class="pr-id">parser-acb</span>
-  <span class="pr-name"><span class="pr-name-text">Parser: ACB (deferred to Phase 5b)</span></span>
+  <span class="pr-name"><span class="pr-name-text">Parser: ACB (deferred to Phase 5b)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row deferred" title="Deferred · feat/parser-bidv">
   <span class="dot deferred"></span>
   <span class="pr-id">parser-bidv</span>
-  <span class="pr-name"><span class="pr-name-text">Parser: BIDV (deferred to Phase 5b)</span></span>
+  <span class="pr-name"><span class="pr-name-text">Parser: BIDV (deferred to Phase 5b)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row deferred" title="Deferred · feat/parser-sacombank">
   <span class="dot deferred"></span>
   <span class="pr-id">parser-sacombank</span>
-  <span class="pr-name"><span class="pr-name-text">Parser: Sacombank (deferred to Phase 5b)</span></span>
+  <span class="pr-name"><span class="pr-name-text">Parser: Sacombank (deferred to Phase 5b)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div></div>
 </div><div class="phase-card">
   <div class="phase-card-head">
@@ -585,43 +590,43 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
   <div class="phase-prs"><div class="pr-row not-started" title="Not started · infra/W6.1-sentry-alerts">
   <span class="dot not-started"></span>
   <span class="pr-id">W6.1</span>
-  <span class="pr-name"><span class="pr-name-text">Sentry alerts — 7 critical (per observability-plan.md)</span></span>
+  <span class="pr-name"><span class="pr-name-text">Sentry alerts — 7 critical (per observability-plan.md)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row not-started" title="Not started · infra/W6.2-railway-deploy">
   <span class="dot not-started"></span>
   <span class="pr-id">W6.2</span>
-  <span class="pr-name"><span class="pr-name-text">Railway deploy + custom domain (tienvenoidau.com)</span></span>
+  <span class="pr-name"><span class="pr-name-text">Railway deploy + custom domain (tienvenoidau.com)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row not-started" title="Not started · infra/W6.3-backup-b2">
   <span class="dot not-started"></span>
   <span class="pr-id">W6.3</span>
-  <span class="pr-name"><span class="pr-name-text">Backup automation (B2 + pg_dump daily, SSE-B2)</span></span>
+  <span class="pr-name"><span class="pr-name-text">Backup automation (B2 + pg_dump daily, SSE-B2)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row not-started" title="Not started · chore/W6.4-dr-restore-test">
   <span class="dot not-started"></span>
   <span class="pr-id">W6.4</span>
-  <span class="pr-name"><span class="pr-name-text">DR runbook full validation (test restore)</span></span>
+  <span class="pr-name"><span class="pr-name-text">DR runbook full validation (test restore)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row not-started" title="Not started · feat/admin-commands">
   <span class="dot not-started"></span>
   <span class="pr-id">admin-commands</span>
-  <span class="pr-name"><span class="pr-name-text">Admin commands (`/admin_stats`, `/admin_cost`, `/admin_user`, `/admin_resolve`)</span></span>
+  <span class="pr-name"><span class="pr-name-text">Admin commands (`/admin_stats`, `/admin_cost`, `/admin_user`, `/admin_resolve`)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row not-started" title="Not started · feat/messenger-channel">
   <span class="dot not-started"></span>
   <span class="pr-id">messenger-channel</span>
-  <span class="pr-name"><span class="pr-name-text">Messenger adapter (feature-flagged `ENABLE_MESSENGER_CHANNEL=false`)</span></span>
+  <span class="pr-name"><span class="pr-name-text">Messenger adapter (feature-flagged `ENABLE_MESSENGER_CHANNEL=false`)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row not-started" title="Not started · feat/payment-email-backup">
   <span class="dot not-started"></span>
   <span class="pr-id">payment-email-backup</span>
-  <span class="pr-name"><span class="pr-name-text">Email backup detect (Techcombank email path)</span></span>
+  <span class="pr-name"><span class="pr-name-text">Email backup detect (Techcombank email path)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row not-started" title="Not started · feat/payment-recurring">
   <span class="dot not-started"></span>
   <span class="pr-id">payment-recurring</span>
-  <span class="pr-name"><span class="pr-name-text">Manual review fallback + recurring billing</span></span>
+  <span class="pr-name"><span class="pr-name-text">Manual review fallback + recurring billing</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row not-started" title="Not started · feat/payment-vietqr">
   <span class="dot not-started"></span>
   <span class="pr-id">payment-vietqr</span>
-  <span class="pr-name"><span class="pr-name-text">Payment VietQR + SePay auto-detect (4-layer fuzzy)</span></span>
+  <span class="pr-name"><span class="pr-name-text">Payment VietQR + SePay auto-detect (4-layer fuzzy)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row not-started" title="Not started · feat/scheduled-jobs">
   <span class="dot not-started"></span>
   <span class="pr-id">scheduled-jobs</span>
-  <span class="pr-name"><span class="pr-name-text">Scheduled jobs (APScheduler, TZ jitter ±5min)</span></span>
+  <span class="pr-name"><span class="pr-name-text">Scheduled jobs (APScheduler, TZ jitter ±5min)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div><div class="pr-row deferred" title="Deferred · —">
   <span class="dot deferred"></span>
   <span class="pr-id">(to be created when Phase W enters implementation planning)</span>
@@ -629,7 +634,7 @@ h1 { font-size: 18px; font-weight: 500; margin: 0; }
 </div><div class="pr-row deferred" title="Deferred · feat/MYM-XXX-parser-evolver-poc">
   <span class="dot deferred"></span>
   <span class="pr-id">parser-evolver</span>
-  <span class="pr-name"><span class="pr-name-text">GEPA-style auto-tune cho email parsers (POC: ACB)</span></span>
+  <span class="pr-name"><span class="pr-name-text">GEPA-style auto-tune cho email parsers (POC: ACB)</span><span class="state-badge" title="Engine: BACKLOG">BACKLOG</span></span>
 </div></div>
 </div>
 </div></div></section>
