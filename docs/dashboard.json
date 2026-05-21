@@ -86,9 +86,7 @@
         "last_event_ts": null,
         "overlays": [],
         "pr_state": "none",
-        "review_state": "none",
-        "urgency": "normal",
-        "urgency_emoji": "\u2713"
+        "review_state": "none"
       }
     },
     {
@@ -107,9 +105,7 @@
         "last_event_ts": null,
         "overlays": [],
         "pr_state": "none",
-        "review_state": "none",
-        "urgency": "normal",
-        "urgency_emoji": "\u2713"
+        "review_state": "none"
       }
     },
     {
@@ -128,9 +124,7 @@
         "last_event_ts": null,
         "overlays": [],
         "pr_state": "none",
-        "review_state": "none",
-        "urgency": "normal",
-        "urgency_emoji": "\u2713"
+        "review_state": "none"
       }
     },
     {
@@ -149,9 +143,7 @@
         "last_event_ts": null,
         "overlays": [],
         "pr_state": "none",
-        "review_state": "none",
-        "urgency": "normal",
-        "urgency_emoji": "\u2713"
+        "review_state": "none"
       }
     },
     {
@@ -170,9 +162,7 @@
         "last_event_ts": null,
         "overlays": [],
         "pr_state": "merged",
-        "review_state": "none",
-        "urgency": "normal",
-        "urgency_emoji": "\u2713"
+        "review_state": "none"
       }
     },
     {
@@ -191,9 +181,7 @@
         "last_event_ts": null,
         "overlays": [],
         "pr_state": "merged",
-        "review_state": "none",
-        "urgency": "normal",
-        "urgency_emoji": "\u2713"
+        "review_state": "none"
       }
     },
     {
@@ -212,9 +200,7 @@
         "last_event_ts": null,
         "overlays": [],
         "pr_state": "none",
-        "review_state": "none",
-        "urgency": "normal",
-        "urgency_emoji": "\u2713"
+        "review_state": "none"
       }
     },
     {
@@ -233,9 +219,7 @@
         "last_event_ts": null,
         "overlays": [],
         "pr_state": "merged",
-        "review_state": "none",
-        "urgency": "normal",
-        "urgency_emoji": "\u2713"
+        "review_state": "none"
       }
     },
     {
@@ -254,9 +238,7 @@
         "last_event_ts": null,
         "overlays": [],
         "pr_state": "none",
-        "review_state": "none",
-        "urgency": "normal",
-        "urgency_emoji": "\u2713"
+        "review_state": "none"
       }
     },
     {
@@ -302,9 +284,7 @@
         "last_event_ts": null,
         "overlays": [],
         "pr_state": "none",
-        "review_state": "none",
-        "urgency": "normal",
-        "urgency_emoji": "\u2713"
+        "review_state": "none"
       }
     },
     {
@@ -359,9 +339,7 @@
         "last_event_ts": null,
         "overlays": [],
         "pr_state": "none",
-        "review_state": "none",
-        "urgency": "normal",
-        "urgency_emoji": "\u2713"
+        "review_state": "none"
       }
     },
     {
@@ -383,7 +361,7 @@
       "spec": "done"
     }
   ],
-  "generated_at": "2026-05-21T13:08:48+00:00",
+  "generated_at": "2026-05-21T13:24:49+00:00",
   "overall": {
     "mvp_merged": 6,
     "mvp_percent": 17,
