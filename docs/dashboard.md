@@ -2,7 +2,7 @@
 
 > **Auto-generated** từ [`implementation-tracker.md`](implementation-tracker.md) bằng `scripts/build-dashboard.py`.
 > KHÔNG edit trực tiếp — sửa tracker rồi rebuild.
-> **Cập nhật:** 2026-05-21 20:08 · **Branch hiện tại:** `feat/MYM-10-work-state-1d-urgency-bundle`
+> **Cập nhật:** 2026-05-21 13:18 · **Branch hiện tại:** `main`
 
 Để xem dashboard HTML đẹp hơn: mở [`dashboard.html`](dashboard.html) bằng browser.
 
@@ -11,7 +11,7 @@
 ## Tổng quan
 
 - **MVP progress:** **17%** (6/36 PR merged)
-- **In flight:** 1 PR · **Blocked:** 0 · **Deferred:** 0
+- **In flight:** 0 PR · **Blocked:** 0 · **Deferred:** 0
 - **Target launch:** Tháng 9/2026 (~16 weeks runway)
 
 ## Phase progress
@@ -31,17 +31,17 @@
 
 | PR | Feature | Status | Computed | Branch |
 |----|---------|:------:|:--------:|--------|
-| `W0.7` | Public `request_id` helpers + F02 xfail contract pin | ✅ Merged | WAITING ✓ normal | `chore/W0.7-tenant-context-public-api` |
+| `W0.7` | Public `request_id` helpers + F02 xfail contract pin | ✅ Merged | BACKLOG ✓ normal | `chore/W0.7-tenant-context-public-api` |
 | `W0.8` | Webhook `display_suffix VARCHAR(8)` migration (G3 option b) | ✅ Merged | BACKLOG ✓ normal | `feat/webhook-display-suffix-migration` |
-| `W0.9` | Dashboard realtime — auto-rebuild + git-state detect + reconcile | ✅ Merged | WAITING ✓ normal | `feat/dashboard-realtime` |
-| `W0.10` | Dashboard v3 rich UI + click-through + Chart.js | ✅ Merged | WAITING ✓ normal | `feat/dashboard-v3-rich-v2` |
-| `work-state-engine-1a` | Work-State Engine — Phase 1a (skeleton + filesystem + git) | ✅ Merged | WAITING ✓ normal | `feat/MYM-1-work-state-engine-1a` |
-| `work-state-engine-1b` | Work-State Engine — Phase 1b (github + ci + railway collectors) | ✅ Merged | WAITING ✓ normal | `feat/MYM-3-work-state-engine-1b` |
-| `work-state-engine-1b'` | Work-State Engine — Phase 1b' (dashboard projection follow-up) | ✅ Merged | WAITING ✓ normal | `feat/MYM-4-work-state-engine-1b-projection` |
-| `work-state-engine-1c` | Work-State Engine — Phase 1c (driver + aggregation + persistence + workflow) | ✅ Merged | WAITING ✓ normal | `feat/MYM-5-work-state-engine-1c` |
-| `dashboard-live-view-A` | Dashboard Live View — Phase A (engine→build wire) | ✅ Merged | WAITING ✓ normal | `feat/MYM-6-dashboard-live-view-A` |
-| `dashboard-live-view-B` | Dashboard Live View — Phase B (doc-change awareness) | ✅ Merged | WAITING ✓ normal | `feat/MYM-7-dashboard-live-view-B` |
-| `work-state-engine-1d` | Work-State Engine — Phase 1d (urgency + MAX agg + foundation_change + projection) | ⬜ In review | WAITING ✓ normal | `feat/MYM-10-work-state-1d-urgency-bundle` |
+| `W0.9` | Dashboard realtime — auto-rebuild + git-state detect + reconcile | ✅ Merged | BACKLOG ✓ normal | `feat/dashboard-realtime` |
+| `W0.10` | Dashboard v3 rich UI + click-through + Chart.js | ✅ Merged | BACKLOG ✓ normal | `feat/dashboard-v3-rich-v2` |
+| `work-state-engine-1a` | Work-State Engine — Phase 1a (skeleton + filesystem + git) | ✅ Merged | BACKLOG ✓ normal | `feat/MYM-1-work-state-engine-1a` |
+| `work-state-engine-1b` | Work-State Engine — Phase 1b (github + ci + railway collectors) | ✅ Merged | BACKLOG ✓ normal | `feat/MYM-3-work-state-engine-1b` |
+| `work-state-engine-1b'` | Work-State Engine — Phase 1b' (dashboard projection follow-up) | ✅ Merged | BACKLOG ✓ normal | `feat/MYM-4-work-state-engine-1b-projection` |
+| `work-state-engine-1c` | Work-State Engine — Phase 1c (driver + aggregation + persistence + workflow) | ✅ Merged | BACKLOG ✓ normal | `feat/MYM-5-work-state-engine-1c` |
+| `dashboard-live-view-A` | Dashboard Live View — Phase A (engine→build wire) | ✅ Merged | BACKLOG ✓ normal | `feat/MYM-6-dashboard-live-view-A` |
+| `dashboard-live-view-B` | Dashboard Live View — Phase B (doc-change awareness) | ✅ Merged | BACKLOG ✓ normal | `feat/MYM-7-dashboard-live-view-B` |
+| `work-state-engine-1d` | Work-State Engine — Phase 1d (urgency + MAX agg + foundation_change + projection) | ✅ Merged | BACKLOG ✓ normal | `feat/MYM-10-work-state-1d-urgency-bundle` |
 | `W1.1` | Docker Compose dev + prod | ⬜ Not started | BACKLOG ✓ normal | `infra/W1.1-docker-compose` |
 | `W1.2` | Discord adapter (`core/messenger/discord.py`) | ⬜ Not started | BACKLOG ✓ normal | `feat/W1.2-discord-adapter` |
 | `W1.3` | Phase 1 integration smoke | ⬜ Not started | BACKLOG ✓ normal | `chore/W1.3-phase1-smoke` |
@@ -51,12 +51,12 @@
 | PR | Feature | Status | Computed | Branch |
 |----|---------|:------:|:--------:|--------|
 | `onboarding-start` | `/start` + user create + trial assign | ✅ Merged | BACKLOG ✓ normal | `feat/F01-onboarding-start` |
-| `funding-sources` | Funding sources resolver + handlers | ⬜ Not started | WAITING ✓ normal | `feat/funding-sources` |
+| `funding-sources` | Funding sources resolver + handlers | ⬜ Not started | BACKLOG ✓ normal | `feat/funding-sources` |
 | `transaction-capture` | Transaction capture EXPANDED (inherit W0.6 legacy cutover) | ⬜ Not started | BACKLOG ✓ normal | `feat/transaction-capture` |
 | `manual-transaction-entry` | Manual transaction entry — Channel 3 of transaction-capture | ⬜ Not started | BACKLOG ✓ normal | `feat/manual-transaction-entry` |
 | `category-management` | Category management (`/manage`) | ⬜ Not started | BACKLOG ✓ normal | `feat/category-management` |
 | `categorization` | Categorization auto-rules + manual | ⬜ Not started | BACKLOG ✓ normal | `feat/categorization` |
-| `reports` | Reports `/status`, `/today`, `/weekly` | ⬜ Not started | WAITING ✓ normal | `feat/reports` |
+| `reports` | Reports `/status`, `/today`, `/weekly` | ⬜ Not started | BACKLOG ✓ normal | `feat/reports` |
 | `settings` | Settings `/settings` | ✅ Merged | IN_PROGRESS ✓ normal | `feat/F07-settings` |
 | `admin-auth` | Admin auth framework only (commands defer Phase 6) | ⬜ Not started | BACKLOG ✓ normal | `feat/admin-auth` |
 | `i18n-locale-switcher` | VI/EN locale switcher | ⬜ Not started | BACKLOG ✓ normal | `feat/i18n-locale-switcher` |
@@ -65,7 +65,7 @@
 
 | PR | Feature | Status | Computed | Branch |
 |----|---------|:------:|:--------:|--------|
-| `pricing-tiers` | Tier limits + 14d trial + gating middleware | ⬜ Not started | WAITING ✓ normal | `feat/pricing-tiers` |
+| `pricing-tiers` | Tier limits + 14d trial + gating middleware | ⬜ Not started | BACKLOG ✓ normal | `feat/pricing-tiers` |
 
 ### Phase 4 — 0/2 · 0% `░░░░░░░░░░`
 
@@ -128,14 +128,7 @@ gantt
 
 ## Đang làm
 
-### work-state-engine-1d — Work-State Engine — Phase 1d (urgency + MAX agg + foundation_change + projection)
-
-- **Status:** ⬜ In review · 🌿 đang trên branch này
-- **Branch:** `feat/MYM-10-work-state-1d-urgency-bundle`
-- **Wave:** Wave 0 follow-up
-- **Gates:** 🔒I 🔒X
-- **Phase:** Phase 1
-- **Notes:** **Ready to kickoff post MYM-7 merge.** **Linear:** [MYM-10](https://linear.app/maingocanh/issue/MYM-10) — project `Work-State Engine`, milestone `Phase 1d — Runtime urgency model`, P1 Foundation Lane manual_only. **Spec:** `docs/operations/dashboard-engine/dashboard-plan-state-split.md` v1.3.0 §9.4 + §4.1.3 + §9.1 (AC11b + AC11c + AC11d + AC10 verify). **Prereq:** MYM-1+3+4+5+6+7 all merged ✓. **Prompt:** `docs/autopilot/prompts/work-state-1d-autopilot.md` (~10 Steps + 4 Checkpoints A-D + 15 circuit breakers; mega-bundle 4 sub-phases per memory `feedback_megaprompt_with_checkpoints_works`). **Scope:** Phase A `derive_urgency` per §9.4.1 (4-tier first-match-wins) trong `status_machine.py`. Phase B MAX urgency aggregation per §9.4.2 (critical>elevated>warning>normal) trong multi-branch wire. Phase C `foundation_change` milestone signal detection trong `signal_collectors/github.py` (codex-approved label + founder sign-off comment marker), Signals APPEND-ONLY +2 fields. Phase D HTML/MD/JSON urgency badge rendering trong `projections/dashboard.py` + `build-dashboard.py`. **Quality gates:** Codex 2× consecutive clean, pre-flight FULL mypy scope (MYM-4 lesson), branch lowercase (avoid MYM-9 regex), dogfood ≥1 urgency badge per state row. ACs D1-D12 (3 per sub-phase). ~8-12h autopilot. **Out of scope:** docs_only/dashboard_engine profile refinement (separate ticket), 7-day shadow validation (parallel), Phase 2 promotion (post-shadow).
+_Không có PR active._
 
 ## Up next
 
