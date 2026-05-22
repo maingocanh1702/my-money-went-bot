@@ -2,7 +2,7 @@
 
 > **Auto-generated** từ [`implementation-tracker.md`](implementation-tracker.md) bằng `scripts/build-dashboard.py`.
 > KHÔNG edit trực tiếp — sửa tracker rồi rebuild.
-> **Cập nhật:** 2026-05-21 14:57 · **Branch hiện tại:** `main`
+> **Cập nhật:** 2026-05-21 21:28 · **Branch hiện tại:** `main`
 
 Để xem dashboard HTML đẹp hơn: mở [`dashboard.html`](dashboard.html) bằng browser.
 
@@ -31,18 +31,18 @@
 
 | PR | Feature | Status | Computed | Branch |
 |----|---------|:------:|:--------:|--------|
-| `W0.7` | Public `request_id` helpers + F02 xfail contract pin | ✅ Merged | BACKLOG ✓ normal | `chore/W0.7-tenant-context-public-api` |
+| `W0.7` | Public `request_id` helpers + F02 xfail contract pin | ✅ Merged | WAITING ✓ normal | `chore/W0.7-tenant-context-public-api` |
 | `W0.8` | Webhook `display_suffix VARCHAR(8)` migration (G3 option b) | ✅ Merged | BACKLOG ✓ normal | `feat/webhook-display-suffix-migration` |
-| `W0.9` | Dashboard realtime — auto-rebuild + git-state detect + reconcile | ✅ Merged | BACKLOG ✓ normal | `feat/dashboard-realtime` |
-| `W0.10` | Dashboard v3 rich UI + click-through + Chart.js | ✅ Merged | BACKLOG ✓ normal | `feat/dashboard-v3-rich-v2` |
-| `work-state-engine-1a` | Work-State Engine — Phase 1a (skeleton + filesystem + git) | ✅ Merged | BACKLOG ✓ normal | `feat/MYM-1-work-state-engine-1a` |
-| `work-state-engine-1b` | Work-State Engine — Phase 1b (github + ci + railway collectors) | ✅ Merged | BACKLOG ✓ normal | `feat/MYM-3-work-state-engine-1b` |
-| `work-state-engine-1b'` | Work-State Engine — Phase 1b' (dashboard projection follow-up) | ✅ Merged | BACKLOG ✓ normal | `feat/MYM-4-work-state-engine-1b-projection` |
-| `work-state-engine-1c` | Work-State Engine — Phase 1c (driver + aggregation + persistence + workflow) | ✅ Merged | BACKLOG ✓ normal | `feat/MYM-5-work-state-engine-1c` |
-| `dashboard-live-view-A` | Dashboard Live View — Phase A (engine→build wire) | ✅ Merged | BACKLOG ✓ normal | `feat/MYM-6-dashboard-live-view-A` |
-| `dashboard-live-view-B` | Dashboard Live View — Phase B (doc-change awareness) | ✅ Merged | BACKLOG ✓ normal | `feat/MYM-7-dashboard-live-view-B` |
-| `doc-change-hash-dedup` | Doc-change hash-aware dedup + engine emission wire | ✅ Merged | BACKLOG ✓ normal | `feat/MYM-8-doc-change-hash-dedup` |
-| `work-state-engine-1d` | Work-State Engine — Phase 1d (urgency + MAX agg + foundation_change + projection) | ✅ Merged | BACKLOG ✓ normal | `feat/MYM-10-work-state-1d-urgency-bundle` |
+| `W0.9` | Dashboard realtime — auto-rebuild + git-state detect + reconcile | ✅ Merged | WAITING ✓ normal | `feat/dashboard-realtime` |
+| `W0.10` | Dashboard v3 rich UI + click-through + Chart.js | ✅ Merged | WAITING ✓ normal | `feat/dashboard-v3-rich-v2` |
+| `work-state-engine-1a` | Work-State Engine — Phase 1a (skeleton + filesystem + git) | ✅ Merged | WAITING ✓ normal | `feat/MYM-1-work-state-engine-1a` |
+| `work-state-engine-1b` | Work-State Engine — Phase 1b (github + ci + railway collectors) | ✅ Merged | WAITING ✓ normal | `feat/MYM-3-work-state-engine-1b` |
+| `work-state-engine-1b'` | Work-State Engine — Phase 1b' (dashboard projection follow-up) | ✅ Merged | WAITING ✓ normal | `feat/MYM-4-work-state-engine-1b-projection` |
+| `work-state-engine-1c` | Work-State Engine — Phase 1c (driver + aggregation + persistence + workflow) | ✅ Merged | WAITING ✓ normal | `feat/MYM-5-work-state-engine-1c` |
+| `dashboard-live-view-A` | Dashboard Live View — Phase A (engine→build wire) | ✅ Merged | WAITING ✓ normal | `feat/MYM-6-dashboard-live-view-A` |
+| `dashboard-live-view-B` | Dashboard Live View — Phase B (doc-change awareness) | ✅ Merged | WAITING ✓ normal | `feat/MYM-7-dashboard-live-view-B` |
+| `doc-change-hash-dedup` | Doc-change hash-aware dedup + engine emission wire | ✅ Merged | WAITING ✓ normal | `feat/MYM-8-doc-change-hash-dedup` |
+| `work-state-engine-1d` | Work-State Engine — Phase 1d (urgency + MAX agg + foundation_change + projection) | ✅ Merged | WAITING ✓ normal | `feat/MYM-10-work-state-1d-urgency-bundle` |
 | `W1.1` | Docker Compose dev + prod | ⬜ Not started | BACKLOG ✓ normal | `infra/W1.1-docker-compose` |
 | `W1.2` | Discord adapter (`core/messenger/discord.py`) | ⬜ Not started | BACKLOG ✓ normal | `feat/W1.2-discord-adapter` |
 | `W1.3` | Phase 1 integration smoke | ⬜ Not started | BACKLOG ✓ normal | `chore/W1.3-phase1-smoke` |
@@ -52,12 +52,12 @@
 | PR | Feature | Status | Computed | Branch |
 |----|---------|:------:|:--------:|--------|
 | `onboarding-start` | `/start` + user create + trial assign | ✅ Merged | BACKLOG ✓ normal | `feat/F01-onboarding-start` |
-| `funding-sources` | Funding sources resolver + handlers | ⬜ Not started | BACKLOG ✓ normal | `feat/funding-sources` |
+| `funding-sources` | Funding sources resolver + handlers | ⬜ Not started | WAITING ✓ normal | `feat/funding-sources` |
 | `transaction-capture` | Transaction capture EXPANDED (inherit W0.6 legacy cutover) | ⬜ Not started | BACKLOG ✓ normal | `feat/transaction-capture` |
 | `manual-transaction-entry` | Manual transaction entry — Channel 3 of transaction-capture | ⬜ Not started | BACKLOG ✓ normal | `feat/manual-transaction-entry` |
 | `category-management` | Category management (`/manage`) | ⬜ Not started | BACKLOG ✓ normal | `feat/category-management` |
 | `categorization` | Categorization auto-rules + manual | ⬜ Not started | BACKLOG ✓ normal | `feat/categorization` |
-| `reports` | Reports `/status`, `/today`, `/weekly` | ⬜ Not started | BACKLOG ✓ normal | `feat/reports` |
+| `reports` | Reports `/status`, `/today`, `/weekly` | ⬜ Not started | WAITING ✓ normal | `feat/reports` |
 | `settings` | Settings `/settings` | ✅ Merged | IN_PROGRESS ✓ normal | `feat/F07-settings` |
 | `admin-auth` | Admin auth framework only (commands defer Phase 6) | ⬜ Not started | BACKLOG ✓ normal | `feat/admin-auth` |
 | `i18n-locale-switcher` | VI/EN locale switcher | ⬜ Not started | BACKLOG ✓ normal | `feat/i18n-locale-switcher` |
@@ -66,7 +66,7 @@
 
 | PR | Feature | Status | Computed | Branch |
 |----|---------|:------:|:--------:|--------|
-| `pricing-tiers` | Tier limits + 14d trial + gating middleware | ⬜ Not started | BACKLOG ✓ normal | `feat/pricing-tiers` |
+| `pricing-tiers` | Tier limits + 14d trial + gating middleware | ⬜ Not started | WAITING ✓ normal | `feat/pricing-tiers` |
 
 ### Phase 4 — 0/2 · 0% `░░░░░░░░░░`
 
