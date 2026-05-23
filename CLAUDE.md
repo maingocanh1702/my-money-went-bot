@@ -145,7 +145,8 @@ If you need to bridge `core ↔ markets`, the only legal place is `core/handlers
 
 ## External system pointers
 
-- **Linear:** project key `MYM` (workspace `maingocanh`). Tickets `MYM-NNN`. Branch + PR must reference. URL: https://linear.app/maingocanh/team/MYM/all
+- **Linear:** project key `MYM` (workspace **`maingocanh1`** as of 2026-05-23). Tickets `MYM-NNN`. Branch + PR must reference. URL: https://linear.app/maingocanh1/team/MYM/all
+  - Archive workspace `maingocanh` is read-only; historical `MYM-1..MYM-11` tickets remain there. Tracker entries referencing `linear.app/maingocanh/...` are correct (archive). All NEW issues live in `maingocanh1`. See memory `project_linear_workspace_switch_2026_05_23.md`.
 - **Railway:** prod deploy via `railway.toml` + nixpacks (so runtime deps live in `requirements.txt`, NOT `pyproject.toml`).
 - **Sentry, GitHub Actions:** wired via `.github/workflows/*.yml`.
 

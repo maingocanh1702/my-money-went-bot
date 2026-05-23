@@ -1,0 +1,79 @@
+{
+  "dumped_at": "2026-05-23",
+  "source_workspace": "maingocanh",
+  "target_workspace": "maingocanh1",
+  "summary": {
+    "teams": 2,
+    "labels": 7,
+    "projects": 2,
+    "milestones": 5,
+    "open_issues": 0,
+    "done_issues": 11,
+    "users": 1
+  },
+  "teams": [
+    {
+      "id": "039dc03d-590a-4c17-af1d-b848782814c8",
+      "name": "MyMoneyWent",
+      "key": "MYM",
+      "createdAt": "2026-05-19T18:09:50.446Z"
+    },
+    {
+      "id": "3c61dcee-a166-4e38-b4e2-715fbf2e514e",
+      "name": "WorkState",
+      "key": null,
+      "createdAt": "2026-05-21T15:23:17.333Z",
+      "note": "Empty team, no issues"
+    }
+  ],
+  "labels": [
+    {"id": "d153d65f-2ace-46bb-86d1-2a40126be325", "name": "CI", "color": "#f2994a"},
+    {"id": "f9733a80-18a7-4828-a1a0-eee3a677ddab", "name": "dashboard", "color": "#f2994a"},
+    {"id": "5d98dfb1-b6bb-40cf-902b-b1eb14727777", "name": "infrastructure", "color": "#f2c94c"},
+    {"id": "db3afbe5-992b-4fd1-be2a-eae10a00ca72", "name": "foundation", "color": "#26b5ce"},
+    {"id": "6fd64d37-5e5a-4e08-9add-f66e402fa3a9", "name": "Feature", "color": "#BB87FC"},
+    {"id": "4cf8cf1b-eb49-4811-8008-5257f5c9fc6d", "name": "Improvement", "color": "#4EA7FC"},
+    {"id": "201a189c-9112-4279-90ed-8bcadb85c026", "name": "Bug", "color": "#EB5757"}
+  ],
+  "projects": [
+    {
+      "id": "7bdb9b26-c3cf-4c2e-96a7-0ab5f09b619b",
+      "name": "WorkState V1 — Dashboard Live Tracker",
+      "icon": ":radar:",
+      "team": "MyMoneyWent",
+      "status": "In Progress",
+      "priority": 2,
+      "startDate": "2026-05-21",
+      "summary": "Standalone product spin-out from MyMoneyWent. Realtime project dashboard that derives status from GitHub triggers + 2-way Linear sync. OSS core + Cloud SaaS option. V1 ready for 3-5 external repos within 8-12 weeks.",
+      "milestones": []
+    },
+    {
+      "id": "03af7476-b374-4e99-a4df-62eb486a7a39",
+      "name": "Work-State Engine",
+      "icon": null,
+      "team": "MyMoneyWent",
+      "status": "In Progress",
+      "priority": 0,
+      "startDate": "2026-05-19",
+      "summary": "Multi-phase implementation of dashboard work-state engine per docs/operations/dashboard-plan-state-split.md v1.2.1.",
+      "milestones": [
+        {"id": "55f38663-9d32-4111-b47a-22b3073750d8", "name": "Phase 1a — Skeleton + filesystem + git", "progress": 0},
+        {"id": "d6555b26-8c1f-4931-af7a-68f5130c61cf", "name": "Phase 1b — GitHub + CI + Railway collectors", "progress": 100},
+        {"id": "d71938be-fd8b-4b1c-8076-ab2f6736672d", "name": "Phase 1c — Multi-branch aggregation", "progress": 100},
+        {"id": "8c25cfb4-fe96-4576-97c7-9ffc202b44be", "name": "Phase 1d — Runtime urgency model", "progress": 100},
+        {"id": "7c0f4d9b-665a-4c4f-9537-1a29d7321498", "name": "Phase 2 — CI enforcement (Plan/State boundary)", "progress": 0}
+      ]
+    }
+  ],
+  "users": [
+    {
+      "id": "435db212-1654-483a-8a95-516004e78e7a",
+      "name": "Ngoc-Anh Mai",
+      "email": "maingocanh1702@gmail.com",
+      "displayName": "maingocanh",
+      "isAdmin": true
+    }
+  ],
+  "open_issues": [],
+  "done_issues_summary": "11 issues MYM-1 through MYM-11, all Done. Not migrated per user choice (open-only scope)."
+}
