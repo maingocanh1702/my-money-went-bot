@@ -23,9 +23,10 @@
 
 ---
 
-## 2. Per-feature workflow (10 steps)
+## 2. Per-feature workflow (11 steps, 0-10)
 
 ```
+0. Brainstorm (CHỈ cho features chưa có spec — skip nếu spec đã tồn tại)
 1. Đọc spec (FE + BE tech doc)
 2. Skill: engineering:testing-strategy → draft test plan
 3. Plan ngắn 10 dòng (files, tests, contracts, migration risk)
@@ -41,6 +42,28 @@
    └─ Reminder: in-session iteration KHÔNG bump version
 10. PR → squash-merge vào main → tag v0.X.0-F##
 ```
+
+### 2.0. Step 0 — Brainstorm (chỉ khi chưa có spec)
+
+> **Skip điều kiện:** Nếu `docs/features/feature-<name>.md` đã tồn tại → nhảy thẳng Step 1.
+
+Dành cho features mới chưa có spec — giai đoạn ideation trước khi formalize.
+
+**Quy trình:**
+1. Mô tả ý tưởng thô (problem + desired outcome)
+2. AI đóng vai **CTO skeptic**: pushback, hỏi clarifying questions, challenge assumptions
+3. AI hỏi cho đến khi hết ambiguity — founder trả lời hoặc defer
+4. Output: **draft spec outline** (sections cần viết, key decisions, open questions)
+5. Founder viết spec FE + BE tech doc dựa trên outline
+
+**Rules:**
+- KHÔNG code, KHÔNG tạo branch, KHÔNG file mới ngoài spec draft
+- KHÔNG assume requirements — hỏi nếu không rõ
+- Kết thúc khi: đủ rõ để viết spec → chuyển sang Step 1
+- CTO role = pushback + challenge, KHÔNG phải yes-man
+- Max 5 round hỏi-đáp. Nếu vẫn ambiguous → ghi vào "Open Questions" section của spec
+
+**Anti-pattern:** Brainstorm xong → nhảy thẳng code (skip spec writing). Step 0 output PHẢI là spec, không phải code.
 
 ### 2.1. Step 1 — Đọc spec
 
@@ -366,6 +389,10 @@ Có thể code parallel với bất kỳ feature Wave 3+ nào vì adapter đã s
 ---
 
 ## Changelog
+
+### v1.1.0 — 2026-05-21
+- Added Step 0: Brainstorm — explicit ideation phase for features without existing specs. AI acts as CTO skeptic, pushback + clarify before spec writing. Inspired by Zevi's CTO Project pattern.
+- Workflow expanded from 10 steps to 11 steps (0-10). Step 0 is conditional — skip when spec already exists.
 
 ### v1.0.0 — 2026-05-11
 - Initial draft. Workflow 10-step, 7 Wave dependency graph, anti-patterns list, skill mapping.
