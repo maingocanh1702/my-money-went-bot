@@ -60,15 +60,22 @@ Các app tài chính cá nhân (Money Lover, Misa, MoneyKeeper, ...) thường �
 
 ## Ngân hàng được hỗ trợ
 
-Bất cứ bank nào [SePay support](https://sepay.vn/ngan-hang.html) là bot này track được. Tính đến 2026:
+Bất cứ bank nào [SePay support](https://sepay.vn/ngan-hang.html) là bot này track được. SePay kết nối trực tiếp với **10 ngân hàng VN** (tính đến 2026):
 
-**⚡ API real-time (webhook tức thì khi có tx):**
-BIDV · MB · VietinBank · ACB · OCB · KienLongBank · MSB
+| Ngân hàng | Code |
+|---|---|
+| VPBank | VPB |
+| ACB | ACB |
+| Sacombank | STB |
+| VietinBank | ICB |
+| MBBank | MBB |
+| BIDV | BIDV |
+| MSB | MSB |
+| TPBank | TPB |
+| KienLongBank | KLB |
+| OCB | OCB |
 
-**📩 SMS Banking (có độ trễ nhỏ, phụ thuộc SMS từ bank):**
-VPBank · Sacombank · TPBank · ABBank · Techcombank · Vietcombank · và các bank khác
-
-Nếu 1 bank xuất hiện trên [bảng giá SePay](https://sepay.vn/bang-gia.html), bot xử lý được luôn. Bank mới SePay tích hợp = bot chạy ngay, không cần chỉnh code.
+Một số bank (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) dùng **API trực tiếp** — webhook tức thì khi có tx. Số còn lại đi qua **SMS Banking** nên có chút độ trễ. Dù sao bot cũng xử lý payload giống hệt nhau — xem [bảng giá SePay](https://sepay.vn/bang-gia.html) để biết list mới nhất.
 
 ---
 

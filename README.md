@@ -60,15 +60,22 @@ Most personal finance apps (Money Lover, Misa, MoneyKeeper, ...) want your bank 
 
 ## Supported banks
 
-Whatever [SePay supports](https://sepay.vn/ngan-hang.html), this bot tracks. As of 2026, that's:
+Whatever [SePay supports](https://sepay.vn/ngan-hang.html), this bot tracks. SePay directly connects to **10 Vietnamese banks** (as of 2026):
 
-**⚡ Real-time API (instant webhook on every tx):**
-BIDV · MB · VietinBank · ACB · OCB · KienLongBank · MSB
+| Bank | Code |
+|---|---|
+| VPBank | VPB |
+| ACB | ACB |
+| Sacombank | STB |
+| VietinBank | ICB |
+| MBBank | MBB |
+| BIDV | BIDV |
+| MSB | MSB |
+| TPBank | TPB |
+| KienLongBank | KLB |
+| OCB | OCB |
 
-**📩 SMS Banking (slight delay, depends on bank SMS):**
-VPBank · Sacombank · TPBank · ABBank · Techcombank · Vietcombank · and others
-
-If a bank is on SePay's [pricing page](https://sepay.vn/bang-gia.html), this bot handles it. New SePay integrations work out-of-the-box — no bot changes needed.
+A subset (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) use **direct API integration** for instant webhooks; the rest go through **SMS Banking** which has a slight delay. Either way the bot handles the payload identically — see [SePay pricing](https://sepay.vn/bang-gia.html) for the latest.
 
 ---
 
