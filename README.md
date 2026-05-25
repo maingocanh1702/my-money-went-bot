@@ -14,16 +14,33 @@
 
 ## What it does
 
+```mermaid
+flowchart TD
+    A[🏦 Vietnamese bank<br/>transaction happens] -->|SePay webhook| B[🤖 Bot receives payload]
+    B --> C[📊 Append row to<br/>your Google Sheet]
+    C --> D{Matches a<br/>keyword rule?}
+    D -->|✅ Yes| E[🎯 Auto-categorize<br/>no prompt]
+    D -->|❌ No| F[💬 Telegram:<br/>'What category?']
+    F --> G[👆 You tap a bucket]
+    E --> H[📈 Visible in /report<br/>account × category × period]
+    G --> H
+
+    B -. unknown source? .-> I[📝 Onboarding wizard<br/>name → type → done]
+    I -. future tx auto-route .-> B
+
+    classDef bank fill:#fef3c7,stroke:#d97706,color:#92400e
+    classDef bot fill:#dbeafe,stroke:#2563eb,color:#1e40af
+    classDef store fill:#dcfce7,stroke:#16a34a,color:#15803d
+    classDef user fill:#fce7f3,stroke:#db2777,color:#9d174d
+    classDef out fill:#f3e8ff,stroke:#9333ea,color:#6b21a8
+    class A bank
+    class B,E,I bot
+    class C store
+    class F,G user
+    class H out
 ```
-Bank transaction happens
-  ↓ SePay webhook
-Bot writes a Transactions row to your Google Sheet
-  ↓ Auto-categorize if a /keywords rule matches (no prompt)
-  ↓ Else bot asks "what category?" (skipped for income)
-You tap a category
-  ↓
-/report shows it grouped by account × category × period
-```
+
+In one sentence: every Vietnamese bank tx → SePay → your bot → your Google Sheet, with a 1-tap (or zero-tap) category step in between.
 
 **No database. No third-party data store. Single-tenant — one bot per person.** Your Google Sheet IS the entire backend. Your data, your sheet, your rules.
 

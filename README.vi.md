@@ -14,16 +14,33 @@
 
 ## Bot làm gì
 
+```mermaid
+flowchart TD
+    A[🏦 Giao dịch ngân hàng VN<br/>xảy ra] -->|SePay webhook| B[🤖 Bot nhận payload]
+    B --> C[📊 Ghi row vào<br/>Google Sheet của bạn]
+    C --> D{Match<br/>keyword rule?}
+    D -->|✅ Có| E[🎯 Auto-categorize<br/>không hỏi]
+    D -->|❌ Không| F[💬 Telegram hỏi:<br/>'Khoản này thuộc mục nào?']
+    F --> G[👆 Bạn tap 1 bucket]
+    E --> H[📈 Hiện trong /report<br/>account × category × period]
+    G --> H
+
+    B -. nguồn chưa biết? .-> I[📝 Wizard onboarding<br/>tên → loại → xong]
+    I -. tx sau auto-route .-> B
+
+    classDef bank fill:#fef3c7,stroke:#d97706,color:#92400e
+    classDef bot fill:#dbeafe,stroke:#2563eb,color:#1e40af
+    classDef store fill:#dcfce7,stroke:#16a34a,color:#15803d
+    classDef user fill:#fce7f3,stroke:#db2777,color:#9d174d
+    classDef out fill:#f3e8ff,stroke:#9333ea,color:#6b21a8
+    class A bank
+    class B,E,I bot
+    class C store
+    class F,G user
+    class H out
 ```
-Giao dịch ngân hàng xảy ra
-  ↓ SePay webhook
-Bot ghi 1 row Transactions vào Google Sheet của bạn
-  ↓ Auto-categorize nếu rule /keywords match (không hỏi)
-  ↓ Nếu không: bot hỏi "Khoản này thuộc mục nào?" (skip nếu là tiền vào)
-Bạn tap category
-  ↓
-/report hiển thị tx group theo account × category × period
-```
+
+Tóm 1 câu: mỗi tx ngân hàng VN → SePay → bot của bạn → Google Sheet của bạn, với 1-tap (hoặc zero-tap) phân loại ở giữa.
 
 **Không database. Không lưu data ở bên thứ 3. Single-tenant — 1 bot / 1 người.** Google Sheet của bạn LÀ backend. Data của bạn, sheet của bạn, luật của bạn.
 
