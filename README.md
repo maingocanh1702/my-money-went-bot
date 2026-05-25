@@ -58,6 +58,25 @@ Most personal finance apps (Money Lover, Misa, MoneyKeeper, ...) want your bank 
 
 ---
 
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%" align="center"><b>🤖 Auto-categorize + log</b></td>
+    <td width="50%" align="center"><b>📊 <code>/report</code> — monthly category lens</b></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/auto-categorize.png" alt="Auto-categorize a Bach Hoa Xanh transaction" /></td>
+    <td><img src="docs/screenshots/report-monthly.png" alt="Monthly report with budget bars and tracking buckets" /></td>
+  </tr>
+  <tr>
+    <td>Tx from Bach Hoa Xanh hits a <code>/keywords</code> rule → auto-tagged Food, no prompt. Bot replies with logged amount + bucket progress.</td>
+    <td>Tổng spending vs budget, per-bucket budget bars with status emoji, plus a Tracking section for buckets you watch without capping.</td>
+  </tr>
+</table>
+
+---
+
 ## Supported banks
 
 Whatever [SePay supports](https://sepay.vn/ngan-hang.html), this bot tracks. SePay directly connects to **10 Vietnamese banks** (as of 2026):

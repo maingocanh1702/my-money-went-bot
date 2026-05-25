@@ -58,6 +58,25 @@ Các app tài chính cá nhân (Money Lover, Misa, MoneyKeeper, ...) thường �
 
 ---
 
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%" align="center"><b>🤖 Auto-categorize + log</b></td>
+    <td width="50%" align="center"><b>📊 <code>/report</code> — lens category theo tháng</b></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/auto-categorize.png" alt="Auto-categorize tx Bách Hóa Xanh" /></td>
+    <td><img src="docs/screenshots/report-monthly.png" alt="Báo cáo tháng với budget bar và bucket tracking" /></td>
+  </tr>
+  <tr>
+    <td>Tx từ Bách Hóa Xanh match rule <code>/keywords</code> → auto-tag Food, không hỏi. Bot reply lại số tiền đã log + progress của bucket.</td>
+    <td>Tổng spending vs budget, budget bar từng bucket với emoji trạng thái, có thêm section Tracking cho bucket bạn theo dõi mà không đặt cap.</td>
+  </tr>
+</table>
+
+---
+
 ## Ngân hàng được hỗ trợ
 
 Bất cứ bank nào [SePay support](https://sepay.vn/ngan-hang.html) là bot này track được. SePay kết nối trực tiếp với **10 ngân hàng VN** (tính đến 2026):

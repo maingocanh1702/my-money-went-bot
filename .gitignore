@@ -45,3 +45,9 @@ Thumbs.db
 # Logs
 *.log
 .pytest_cache/
+
+# Allow screenshots for README
+!docs/
+docs/*
+!docs/screenshots/
+!docs/screenshots/**
