@@ -1,6 +1,6 @@
 # 💰 My Money Went Bot
 
-> Bot Telegram bắt mọi giao dịch ngân hàng VN qua [SePay](https://sepay.vn), hỏi bạn khoản đó dùng cho việc gì, rồi ghi tất cả vào Google Sheet của riêng bạn.
+![My Money Went Bot — Bot Telegram tự động theo dõi chi tiêu từ ngân hàng Việt Nam và ghi vào Google Sheet của bạn](docs/screenshots/banner.png)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
@@ -14,7 +14,12 @@
 
 ## Bot làm gì
 
+![Cách hoạt động — 5 bước: giao dịch ngân hàng, SePay webhook, bot xử lý, ghi Google Sheet, báo cáo Telegram](docs/screenshots/how-it-works.png)
+
 **My Money Went Bot là 1 bot Telegram theo dõi chi tiêu cá nhân.** Mỗi lần ngân hàng VN gửi thông báo giao dịch (qua [SePay](https://sepay.vn)), bot ghi vào Google Sheet *của bạn* và hỏi bạn tap phân loại — hoặc skip luôn nếu bạn đã dạy nó 1 keyword rule. Gõ `/report` bất cứ lúc nào để xem tiền đã đi đâu, slice theo account, category, và khoảng thời gian.
+
+<details>
+<summary>📐 Flow chi tiết (có nhánh auto-categorize + onboarding)</summary>
 
 ```mermaid
 flowchart LR
@@ -42,6 +47,8 @@ flowchart LR
     class H out
 ```
 
+</details>
+
 **Không database. Không lưu data ở bên thứ 3. Single-tenant — 1 bot / 1 người.** Google Sheet của bạn LÀ backend. Data của bạn, sheet của bạn, luật của bạn.
 
 ---
@@ -58,6 +65,10 @@ Các app tài chính cá nhân (Money Lover, Misa, MoneyKeeper, ...) thường �
 ---
 
 ## Tính năng
+
+![Tính năng nổi bật — 6 feature, kiến trúc hệ thống, ngân hàng hỗ trợ, và list command](docs/screenshots/features-architecture.png)
+
+Chi tiết từng tính năng:
 
 🏦 **Tracking per-account** — mỗi tx được tag theo bank account gốc. `/report` slice theo account (TPB / Vietcombank / cash) và theo category.
 

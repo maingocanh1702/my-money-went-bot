@@ -1,6 +1,6 @@
 # 💰 My Money Went Bot
 
-> Telegram bot catches every Vietnamese bank transaction via [SePay](https://sepay.vn), asks you what it was for, and quietly logs everything to a Google Sheet you own.
+![My Money Went Bot — Telegram bot catches every Vietnamese bank transaction and writes it to your Google Sheet](docs/screenshots/banner.png)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
@@ -14,7 +14,12 @@
 
 ## What it does
 
+![How it works — 5-step flow: bank transaction, SePay webhook, bot processes, write to Google Sheet, Telegram report](docs/screenshots/how-it-works.png)
+
 **My Money Went Bot is a personal expense tracker that lives in your Telegram chat.** Every time a Vietnamese bank sends a transaction notification (via [SePay](https://sepay.vn)), the bot logs it to a Google Sheet *you own* and asks you to tap a category — or skips that step entirely if you've taught it a keyword rule. Type `/report` anytime to see where your money went, sliced by account, category, and time period.
+
+<details>
+<summary>📐 Detailed flow (with auto-categorize + onboarding branches)</summary>
 
 ```mermaid
 flowchart LR
@@ -42,6 +47,8 @@ flowchart LR
     class H out
 ```
 
+</details>
+
 **No database. No third-party data store. Single-tenant — one bot per person.** Your Google Sheet IS the entire backend. Your data, your sheet, your rules.
 
 ---
@@ -58,6 +65,10 @@ Most personal finance apps (Money Lover, Misa, MoneyKeeper, ...) want your bank 
 ---
 
 ## Features
+
+![Feature overview — 6 features, system architecture, supported banks, and command list](docs/screenshots/features-architecture.png)
+
+The full feature breakdown:
 
 🏦 **Per-account tracking** — every tx tagged with which bank account it came from. `/report` slices by account (TPB / Vietcombank / cash) and by category.
 
