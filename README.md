@@ -14,19 +14,21 @@
 
 ## What it does
 
+**My Money Went Bot is a personal expense tracker that lives in your Telegram chat.** Every time a Vietnamese bank sends a transaction notification (via [SePay](https://sepay.vn)), the bot logs it to a Google Sheet *you own* and asks you to tap a category — or skips that step entirely if you've taught it a keyword rule. Type `/report` anytime to see where your money went, sliced by account, category, and time period.
+
 ```mermaid
-flowchart TD
-    A[🏦 Vietnamese bank<br/>transaction happens] -->|SePay webhook| B[🤖 Bot receives payload]
-    B --> C[📊 Append row to<br/>your Google Sheet]
-    C --> D{Matches a<br/>keyword rule?}
-    D -->|✅ Yes| E[🎯 Auto-categorize<br/>no prompt]
-    D -->|❌ No| F[💬 Telegram:<br/>'What category?']
-    F --> G[👆 You tap a bucket]
-    E --> H[📈 Visible in /report<br/>account × category × period]
+flowchart LR
+    A[🏦 Vietnamese<br/>bank tx] -->|SePay<br/>webhook| B[🤖 Bot]
+    B --> C[📊 Row in<br/>Google Sheet]
+    C --> D{Match<br/>keyword<br/>rule?}
+    D -->|✅ Yes| E[🎯 Auto-<br/>categorize]
+    D -->|❌ No| F[💬 'What<br/>category?']
+    F --> G[👆 You tap]
+    E --> H[📈 /report<br/>account ×<br/>category ×<br/>period]
     G --> H
 
-    B -. unknown source? .-> I[📝 Onboarding wizard<br/>name → type → done]
-    I -. future tx auto-route .-> B
+    B -. unknown<br/>source? .-> I[📝 Onboard<br/>wizard]
+    I -. future tx<br/>auto-route .-> B
 
     classDef bank fill:#fef3c7,stroke:#d97706,color:#92400e
     classDef bot fill:#dbeafe,stroke:#2563eb,color:#1e40af
@@ -39,8 +41,6 @@ flowchart TD
     class F,G user
     class H out
 ```
-
-In one sentence: every Vietnamese bank tx → SePay → your bot → your Google Sheet, with a 1-tap (or zero-tap) category step in between.
 
 **No database. No third-party data store. Single-tenant — one bot per person.** Your Google Sheet IS the entire backend. Your data, your sheet, your rules.
 

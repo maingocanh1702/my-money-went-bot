@@ -14,19 +14,21 @@
 
 ## Bot làm gì
 
+**My Money Went Bot là 1 bot Telegram theo dõi chi tiêu cá nhân.** Mỗi lần ngân hàng VN gửi thông báo giao dịch (qua [SePay](https://sepay.vn)), bot ghi vào Google Sheet *của bạn* và hỏi bạn tap phân loại — hoặc skip luôn nếu bạn đã dạy nó 1 keyword rule. Gõ `/report` bất cứ lúc nào để xem tiền đã đi đâu, slice theo account, category, và khoảng thời gian.
+
 ```mermaid
-flowchart TD
-    A[🏦 Giao dịch ngân hàng VN<br/>xảy ra] -->|SePay webhook| B[🤖 Bot nhận payload]
-    B --> C[📊 Ghi row vào<br/>Google Sheet của bạn]
-    C --> D{Match<br/>keyword rule?}
-    D -->|✅ Có| E[🎯 Auto-categorize<br/>không hỏi]
-    D -->|❌ Không| F[💬 Telegram hỏi:<br/>'Khoản này thuộc mục nào?']
-    F --> G[👆 Bạn tap 1 bucket]
-    E --> H[📈 Hiện trong /report<br/>account × category × period]
+flowchart LR
+    A[🏦 Tx ngân<br/>hàng VN] -->|SePay<br/>webhook| B[🤖 Bot]
+    B --> C[📊 Ghi row<br/>Google Sheet]
+    C --> D{Match<br/>keyword<br/>rule?}
+    D -->|✅ Có| E[🎯 Auto-<br/>categorize]
+    D -->|❌ Không| F[💬 'Thuộc mục<br/>nào?']
+    F --> G[👆 Bạn tap]
+    E --> H[📈 /report<br/>account ×<br/>category ×<br/>period]
     G --> H
 
-    B -. nguồn chưa biết? .-> I[📝 Wizard onboarding<br/>tên → loại → xong]
-    I -. tx sau auto-route .-> B
+    B -. nguồn<br/>chưa biết? .-> I[📝 Wizard<br/>onboard]
+    I -. tx sau<br/>auto-route .-> B
 
     classDef bank fill:#fef3c7,stroke:#d97706,color:#92400e
     classDef bot fill:#dbeafe,stroke:#2563eb,color:#1e40af
@@ -39,8 +41,6 @@ flowchart TD
     class F,G user
     class H out
 ```
-
-Tóm 1 câu: mỗi tx ngân hàng VN → SePay → bot của bạn → Google Sheet của bạn, với 1-tap (hoặc zero-tap) phân loại ở giữa.
 
 **Không database. Không lưu data ở bên thứ 3. Single-tenant — 1 bot / 1 người.** Google Sheet của bạn LÀ backend. Data của bạn, sheet của bạn, luật của bạn.
 
