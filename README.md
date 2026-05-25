@@ -54,7 +54,21 @@ Most personal finance apps (Money Lover, Misa, MoneyKeeper, ...) want your bank 
 
 🔁 **Historical backfill** — `/accounts assign <slug>` retroactively links unmapped past txs to a newly-onboarded account. No tx lost between "first webhook" and "wizard complete".
 
-🇻🇳 **Vietnamese banks** — works with anything SePay supports (Vietcombank, TPBank, Techcombank, MB, ...). VND-only in v1.
+🇻🇳 **Vietnamese banks** — works with anything SePay supports. VND-only in v1.
+
+---
+
+## Supported banks
+
+Whatever [SePay supports](https://sepay.vn/ngan-hang.html), this bot tracks. As of 2026, that's:
+
+**⚡ Real-time API (instant webhook on every tx):**
+BIDV · MB · VietinBank · ACB · OCB · KienLongBank · MSB
+
+**📩 SMS Banking (slight delay, depends on bank SMS):**
+VPBank · Sacombank · TPBank · ABBank · Techcombank · Vietcombank · and others
+
+If a bank is on SePay's [pricing page](https://sepay.vn/bang-gia.html), this bot handles it. New SePay integrations work out-of-the-box — no bot changes needed.
 
 ---
 
@@ -102,7 +116,11 @@ Most personal finance apps (Money Lover, Misa, MoneyKeeper, ...) want your bank 
 ### Step 3 — Set up SePay
 
 1. Sign up at [sepay.vn](https://sepay.vn), connect your bank.
-2. **Webhook settings** → URL = `https://<your-domain>/webhook`. Enable both "Tiền vào" + "Tiền ra".
+2. **Webhook settings** → URL = `https://<your-domain>/webhook`. Pick which directions to track:
+   - **Only spending** → enable **Tiền ra** only.
+   - **Spending + income** → enable both **Tiền ra** and **Tiền vào**.
+
+   (Income tx are logged but skip the category picker — see [Why this exists](#why-this-exists).)
 3. ⚠️ **Disable SePay's native Google Sheets integration** — this bot writes its own rows; doubling = duplicate transactions.
 
 ### Step 4 — Deploy
@@ -284,10 +302,11 @@ On Railway: just push to your fork, Railway auto-deploys.
 
 Intentionally out of v1 scope:
 
+- 💬 **Facebook Messenger bot** — same UX as Telegram, second front-end.
+- 🎮 **Discord bot** — for users who live in Discord, not Telegram.
 - 🧾 **Credit card support** — outstanding balance, utilization %, `/cc pay`, statement-cycle tracking.
 - 🔄 **Manual `/transfer`** between tracked accounts.
 - 📧 **Email ingestion** for banks not on SePay (TCB, Cake, HSBC notification emails).
-- 🌐 **Multi-tenant SaaS** — separate codebase, would need user DB, per-user Sheets, webhook scoping.
 - 💱 **Multi-currency** accounts (HKD, USD, ...).
 
 ---

@@ -54,7 +54,21 @@ Các app tài chính cá nhân (Money Lover, Misa, MoneyKeeper, ...) thường �
 
 🔁 **Backfill tx lịch sử** — `/accounts assign <slug>` gán retroactive tx cũ chưa map vào account vừa onboard. Không mất tx nào giữa "first webhook" và "wizard complete".
 
-🇻🇳 **Ngân hàng VN** — hoạt động với bất kỳ bank nào SePay support (Vietcombank, TPBank, Techcombank, MB, ...). VND-only ở v1.
+🇻🇳 **Ngân hàng VN** — hoạt động với bất kỳ bank nào SePay support. VND-only ở v1.
+
+---
+
+## Ngân hàng được hỗ trợ
+
+Bất cứ bank nào [SePay support](https://sepay.vn/ngan-hang.html) là bot này track được. Tính đến 2026:
+
+**⚡ API real-time (webhook tức thì khi có tx):**
+BIDV · MB · VietinBank · ACB · OCB · KienLongBank · MSB
+
+**📩 SMS Banking (có độ trễ nhỏ, phụ thuộc SMS từ bank):**
+VPBank · Sacombank · TPBank · ABBank · Techcombank · Vietcombank · và các bank khác
+
+Nếu 1 bank xuất hiện trên [bảng giá SePay](https://sepay.vn/bang-gia.html), bot xử lý được luôn. Bank mới SePay tích hợp = bot chạy ngay, không cần chỉnh code.
 
 ---
 
@@ -102,7 +116,11 @@ Các app tài chính cá nhân (Money Lover, Misa, MoneyKeeper, ...) thường �
 ### Bước 3 — Setup SePay
 
 1. Đăng ký tại [sepay.vn](https://sepay.vn), kết nối bank.
-2. **Webhook settings** → URL = `https://<your-domain>/webhook`. Bật cả "Tiền vào" + "Tiền ra".
+2. **Webhook settings** → URL = `https://<your-domain>/webhook`. Chọn hướng tx muốn track:
+   - **Chỉ track chi tiêu** → chỉ bật **Tiền ra**.
+   - **Track cả thu nhập + chi tiêu** → bật cả **Tiền ra** và **Tiền vào**.
+
+   (Tx Tiền vào được ghi log nhưng skip category picker — xem [Tại sao có project này](#tại-sao-có-project-này).)
 3. ⚠️ **Tắt SePay native Google Sheets integration** — bot này tự ghi rows; bật cả 2 = tx duplicate.
 
 ### Bước 4 — Deploy
@@ -284,10 +302,11 @@ Trên Railway: chỉ cần push lên fork của bạn, Railway tự deploy.
 
 Cố tình để ngoài scope v1:
 
+- 💬 **Bot Facebook Messenger** — cùng UX với Telegram, front-end thứ 2.
+- 🎮 **Bot Discord** — cho user dùng Discord thay vì Telegram.
 - 🧾 **Credit card support** — outstanding balance, % utilization, `/cc pay`, statement-cycle tracking.
 - 🔄 **`/transfer` manual** giữa các account đã track.
 - 📧 **Email ingestion** cho bank không support SePay (TCB, Cake, HSBC email).
-- 🌐 **Multi-tenant SaaS** — codebase riêng, cần user DB, Sheet per user, webhook scoping.
 - 💱 **Multi-currency** accounts (HKD, USD, ...).
 
 ---
