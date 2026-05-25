@@ -1,0 +1,47 @@
+# Secrets — NEVER commit these
+.env
+credentials.json
+
+# Personal notes — only for private repo
+PRIVATE_SETUP.md
+HOW_IT_WORKS.md
+
+# Internal planning docs (drop if you re-scrape them locally)
+PLAN_*.md
+SAAS_*.md
+REFACTOR_*.md
+UNIFIED_*.md
+ROADMAP.md
+fintrack-*.md
+ACCOUNT_TRACKING_*.md
+BANK_PARSER_*.md
+FEATURE_DEVELOPMENT_PROCESS.md
+docs/
+updates/
+
+# IDE / agent state
+.claude/
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Test scratch
+test_sh.py
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+.pytest_cache/
