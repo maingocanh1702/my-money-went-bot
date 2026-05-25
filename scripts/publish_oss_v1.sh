@@ -20,9 +20,9 @@ set -euo pipefail
 
 # ─── Config ─────────────────────────────────────────────────────
 PERSONAL_DIR="${PERSONAL_DIR:-$HOME/Projects/Bot Finance}"
-OSS_DIR="${OSS_DIR:-$HOME/Projects/spend-less-bot}"
+OSS_DIR="${OSS_DIR:-$HOME/Projects/My Money Went Bot}"
 PERSONAL_REPO="${PERSONAL_REPO:-maingocanh1702/financial-tracking}"
-OSS_REPO_NAME="${OSS_REPO_NAME:-spend-less-bot}"
+OSS_REPO_NAME="${OSS_REPO_NAME:-my-money-went-bot}"
 OSS_REPO_FULL="${OSS_REPO_FULL:-maingocanh1702/$OSS_REPO_NAME}"
 OSS_DESCRIPTION="Vietnamese personal finance Telegram bot — Phase 1 OSS"
 
@@ -124,9 +124,9 @@ fi
 
 # Set remote (idempotent)
 if git remote | grep -q '^origin$'; then
-  git remote set-url origin "git@github.com:$OSS_REPO_FULL.git"
+  git remote set-url origin "https://github.com/$OSS_REPO_FULL.git"
 else
-  git remote add     origin "git@github.com:$OSS_REPO_FULL.git"
+  git remote add     origin "https://github.com/$OSS_REPO_FULL.git"
 fi
 
 # Commit + push (skip if already committed identically)
