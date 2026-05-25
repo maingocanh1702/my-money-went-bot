@@ -1,124 +1,125 @@
-# 📊 Financial Tracking Bot
+# 💰 My Money Went Bot
 
-A Telegram bot that ingests Vietnamese bank notifications via [SePay](https://sepay.vn) and turns them into a per-account, per-category spending report — backed entirely by a Google Sheet you own.
+> Telegram bot catches every Vietnamese bank transaction via [SePay](https://sepay.vn), asks you what it was for, and quietly logs everything to a Google Sheet you own.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
+[![Tests: 98 passing](https://img.shields.io/badge/tests-98%20passing-brightgreen.svg)](tests/)
 
 [🇻🇳 Tiếng Việt](README.vi.md)
 
+> 🙏 **Credits:** built on top of patterns from [`maddyle8124/spend-less-bot`](https://github.com/maddyle8124/spend-less-bot). Big thanks to Maddy — without that seed this wouldn't exist.
+
+---
+
+## What it does
+
 ```
-Bank tx happens
-  → SePay webhook → bot writes Transactions row
-    → Auto-categorize if a /keywords rule matches the description (no prompt)
-    → Otherwise: bot asks "what category?" (skipped entirely for income)
-      → You tap a category
-        → Tx appears in /report grouped by account + category
+Bank transaction happens
+  ↓ SePay webhook
+Bot writes a Transactions row to your Google Sheet
+  ↓ Auto-categorize if a /keywords rule matches (no prompt)
+  ↓ Else bot asks "what category?" (skipped for income)
+You tap a category
+  ↓
+/report shows it grouped by account × category × period
 ```
 
-No backend database. No third-party data store. Single-tenant by design — one bot instance per user.
+**No database. No third-party data store. Single-tenant — one bot per person.** Your Google Sheet IS the entire backend. Your data, your sheet, your rules.
+
+---
+
+## Why this exists
+
+Most personal finance apps (Money Lover, Misa, MoneyKeeper, ...) want your bank credentials, run on their cloud, and gatekeep your data behind a freemium wall. This bot does the opposite:
+
+- **You own the data.** It lives in your Google Sheet. Export, fork, archive, pivot — your call.
+- **You see every line of code.** ~3,000 LOC of Python. Audit, customize, ship.
+- **You categorize once.** Auto-categorization via `/keywords` means recurring tx (Spotify, Grab, ...) skip the picker.
+- **Reports match your real model** — per-account *and* per-category, across week/month/quarter/year. Not just "monthly category bar chart".
 
 ---
 
 ## Features
 
-- **Per-account tracking** — every tx tagged with which bank account it came from. `/report` slices by account (TPB / Vietcombank / cash) and by category.
-- **Multi-period reports** — `/report` switches between week / month / quarter / year via inline buttons.
-- **Two report lenses** — category (default: budget bars + warnings) and account (flow per card). Toggle in-place.
-- **Account onboarding** — auto-prompts when a tx arrives from an unmapped source. Short 3-step wizard: name → type → done.
-- **Budget allocation** — `/allocate` sets monthly caps per category. Edit-mode shows existing buckets with per-bucket tap-to-edit (no re-walking the full wizard every time).
-- **Auto-categorize** — `/keywords` defines patterns that auto-tag matching descriptions, skipping the picker entirely.
-- **Backfill historical tx** — `/accounts assign <slug>` plus the col-U `account_source_key` mechanism auto-attribute legacy txs to a newly-onboarded account.
+🏦 **Per-account tracking** — every tx tagged with which bank account it came from. `/report` slices by account (TPB / Vietcombank / cash) and by category.
+
+📊 **Unified `/report` with 2 lenses × 4 periods** — week/month/quarter/year via inline buttons. Toggle account ↔ category lens in-place. No re-typing the command.
+
+🤖 **Smart account onboarding** — first time a tx arrives from an unmapped source, bot asks. 3-step wizard: name → type → done. Future tx auto-route.
+
+⚡ **Auto-categorize** — `/keywords` lets you define patterns ("GRAB" → Daily Spending, "Spotify" → Subscription). Matching tx skip the prompt entirely.
+
+🎯 **Smart budget allocation** — `/allocate` sets monthly caps per category. After setup, returns in *edit mode* — tap one bucket to change its limit, no re-walking the full wizard.
+
+🔁 **Historical backfill** — `/accounts assign <slug>` retroactively links unmapped past txs to a newly-onboarded account. No tx lost between "first webhook" and "wizard complete".
+
+🇻🇳 **Vietnamese banks** — works with anything SePay supports (Vietcombank, TPBank, Techcombank, MB, ...). VND-only in v1.
 
 ---
 
-## Commands
+## What you'll need
 
-| Command | What it does |
-|---------|--------------|
-| `/today` | Today's spending vs daily cap (Daily Spending bucket). |
-| `/report [period]` | Unified spending report. Default = month + category lens. Inline buttons switch period (tuần/tháng/quý/năm) + lens (account/category). |
-| `/accounts` | List configured accounts. `/accounts add` opens the wizard. `/accounts assign <slug>` bulk-attributes unmapped historical txs. |
-| `/manage` | Add / rename / delete categories. Per-bucket edit-amount. |
-| `/keywords` | Manage auto-categorize rules. |
-| `/allocate` | Edit budget. First run = wizard. Subsequent runs = edit-mode (per-bucket buttons). |
-
----
-
-## Architecture
-
-```
-┌──────────┐   webhook    ┌────────────────┐    write     ┌──────────────┐
-│  SePay   │ ───────────► │  FastAPI bot   │ ───────────► │ Google Sheet │
-└──────────┘              │  (Railway/VPS) │              │   (yours)    │
-                          └──────┬─────────┘              └──────────────┘
-                                 │ Telegram Bot API
-                                 ▼
-                          ┌────────────────┐
-                          │   You (chat)   │
-                          └────────────────┘
-```
-
-**Source of truth = ledger table**. `running_balance` / `outstanding_balance` are caches recomputed from the ledger on every write. See `handlers/account_resolver.py` and `sheets.py` for details.
-
-Sheet tabs (auto-created on first run):
-
-| Tab | Purpose |
-|-----|---------|
-| `Đầu ra` | All transactions (one row per tx, cols A–U). |
-| `Accounts` | Onboarded accounts (name, type, currency, source_keys mapped). |
-| `Account Ledger` | Append-only ledger entries — source of truth for balances. |
-| `Pending Accounts` | Onboarding queue for tx whose source isn't mapped yet (24h TTL). |
-| `Budget Config` | Per-month bucket allocations. |
-| `Sub-category Config` | Sub-labels per bucket (optional). |
-| `Keyword Rules` | Auto-categorize patterns. |
-| `Bot State` | Wizard / picker state per chat (ephemeral). |
-| `Monthly Reports` | Archived monthly summaries. |
+| Requirement | Where to get it |
+|---|---|
+| Telegram account | You probably have one |
+| [SePay](https://sepay.vn) account | Connects to your Vietnamese bank |
+| Google account | For Google Sheets + Google Cloud |
+| Server with public HTTPS | [Railway](https://railway.app) is simplest (free tier OK). Or Ubuntu VPS + [ngrok](https://ngrok.com) for testing. |
+| Python 3.11+ | On your server / Railway |
 
 ---
 
 ## Quick start
 
-You'll need:
+### Step 1 — Create your Telegram bot
 
-- Telegram account
-- [SePay](https://sepay.vn) account connected to your VN bank
-- Google account (Sheets + Cloud Console)
-- A server with public HTTPS endpoint — [Railway](https://railway.app) is the simplest. Or any Ubuntu VPS + ngrok for testing.
-- Python 3.11+
+1. Message [@BotFather](https://t.me/BotFather) → `/newbot` → save the token.
+2. Message [@userinfobot](https://t.me/userinfobot) → save your chat ID.
 
-### 1 — Telegram bot
+### Step 2 — Set up Google Sheets
 
-1. Message [@BotFather](https://t.me/BotFather) → `/newbot` → copy the token.
-2. Message [@userinfobot](https://t.me/userinfobot) → copy your chat ID.
-
-### 2 — Google service account
-
-1. [console.cloud.google.com](https://console.cloud.google.com) → new project.
+1. Go to [console.cloud.google.com](https://console.cloud.google.com) → new project.
 2. Enable **Google Sheets API** + **Google Drive API**.
-3. **IAM & Admin → Service Accounts → Create Service Account** → **Keys → Add Key → JSON** → download as `credentials.json`.
-4. Create a new Google Sheet. Note the SHEET_ID from the URL.
+3. **IAM & Admin → Service Accounts → Create** → **Keys → Add Key → JSON** → download as `credentials.json`.
+4. Create a new Google Sheet. Copy the **SHEET_ID** from the URL.
 5. Share the sheet with the service account email (Editor access).
-6. Tabs auto-create on first webhook — no manual schema setup needed.
 
-### 3 — SePay webhook
+**Sheet tabs auto-create on first webhook** — no manual schema setup. Tabs:
 
-1. Create [sepay.vn](https://sepay.vn) account, connect your bank.
-2. **Webhook settings** → URL = `https://<your-domain>/webhook`. Enable both "Tiền vào" and "Tiền ra".
-3. **Disable SePay's native Google Sheets integration** if enabled — this bot writes its own rows; doubling = duplicates.
+| Tab | Purpose |
+|---|---|
+| `Đầu ra` | All transactions (one row per tx) |
+| `Accounts` | Onboarded accounts (name, type, source_keys) |
+| `Account Ledger` | Append-only ledger — source of truth for balances |
+| `Pending Accounts` | Onboarding queue (24h TTL) |
+| `Budget Config` | Per-month bucket allocations |
+| `Sub-category Config` | Optional sub-labels per bucket |
+| `Keyword Rules` | Auto-categorize patterns |
+| `Bot State` | Wizard / picker state per chat |
+| `Monthly Reports` | Archived monthly summaries |
 
-### 4 — Deploy
+### Step 3 — Set up SePay
+
+1. Sign up at [sepay.vn](https://sepay.vn), connect your bank.
+2. **Webhook settings** → URL = `https://<your-domain>/webhook`. Enable both "Tiền vào" + "Tiền ra".
+3. ⚠️ **Disable SePay's native Google Sheets integration** — this bot writes its own rows; doubling = duplicate transactions.
+
+### Step 4 — Deploy
 
 ```bash
-git clone https://github.com/<your-user>/financial-tracking-bot.git
-cd financial-tracking-bot
+git clone https://github.com/maingocanh1702/my-money-went-bot.git
+cd my-money-went-bot
 cp .env.example .env
-# Edit .env with BOT_TOKEN, CHAT_ID, SHEET_ID, GOOGLE_CREDS (or GOOGLE_CREDS_JSON)
+# Edit .env: BOT_TOKEN, CHAT_ID, SHEET_ID, GOOGLE_CREDS_JSON (or GOOGLE_CREDS)
 ```
 
 **Railway** (recommended):
 
-1. Push to GitHub.
-2. New Railway project → connect repo.
-3. Add env vars from `.env`. For `GOOGLE_CREDS_JSON`, paste the full credentials JSON as a single line.
-4. Railway gives you a `*.up.railway.app` URL — use that as your SePay webhook.
+1. Push your fork to GitHub.
+2. [railway.app](https://railway.app) → New Project → Deploy from GitHub repo.
+3. Add env vars in Railway dashboard. For `GOOGLE_CREDS_JSON`, paste the full JSON as one line.
+4. Railway gives you a `*.up.railway.app` URL — use that as your SePay webhook URL.
 5. Register the Telegram webhook:
    ```bash
    curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
@@ -128,15 +129,15 @@ cp .env.example .env
 **VPS** (Ubuntu 22.04):
 
 ```bash
-apt install -y python3.11 python3-pip python3-venv
+sudo apt install -y python3.11 python3-pip python3-venv
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 chmod 600 .env credentials.json
 
 # systemd service
-sudo tee /etc/systemd/system/finbot.service <<EOF
+sudo tee /etc/systemd/system/mmwbot.service <<EOF
 [Unit]
-Description=Financial Tracking Bot
+Description=My Money Went Bot
 After=network.target
 [Service]
 WorkingDirectory=$(pwd)
@@ -147,39 +148,147 @@ Restart=always
 WantedBy=multi-user.target
 EOF
 
-sudo systemctl enable --now finbot
+sudo systemctl enable --now mmwbot
+journalctl -u mmwbot -f   # watch logs
 ```
 
-### 5 — First run
+### Step 5 — First run
 
-1. Trigger any small bank tx.
-2. Bot pings: "Account chưa map" + "Khoản này thuộc mục nào?". Tap Setup → wizard. Tap a category.
-3. Future txs from the same account auto-route.
-4. Type `/report` to see the breakdown.
+1. Open a chat with your bot on Telegram, send `/today` — bot should reply.
+2. Make a small test transaction through your bank — within a few seconds the bot pings: *"Account chưa map"* + *"Khoản này thuộc mục nào?"*.
+3. Tap **✅ Setup** → onboard the account (name → type).
+4. Tap a category for the transaction.
+5. Type `/report` → see your spending breakdown.
+
+Future tx from the same account auto-route. Set up `/keywords` rules to auto-categorize recurring tx.
 
 ---
 
-## Known limitations & security considerations
+## Bot commands
 
-**Single-tenant.** One bot instance per user. To serve multiple users, you'd need a multi-tenant refactor (database per user, user-scoped webhooks, etc.) — out of scope for this codebase.
+| Command | What it does |
+|---|---|
+| `/today` | Today's spending vs daily cap (Daily Spending bucket). |
+| `/report [period]` | Full spending report. Inline buttons for week/month/quarter/year × account/category lens. |
+| `/accounts` | List configured accounts. `/accounts add` opens the wizard. `/accounts assign <slug>` bulk-tags historical txs. |
+| `/manage` | Add / rename / delete categories. Per-bucket edit-amount. |
+| `/keywords` | Manage auto-categorize rules. |
+| `/allocate` | Edit budget. Wizard on first run, per-bucket edit-mode after. |
 
-**No PII redaction.** The `Description` column stores raw SePay payload text, which can contain partner names, account numbers, and other PII. Anyone with read access to your Sheet sees this. Self-hosted only.
+---
 
-**Webhook auth is opt-in.** SePay's API key check is supported via the `SEPAY_SECRET` env var. If unset, the webhook accepts any caller who knows the URL. **Recommended:** set the secret and put Cloudflare or another WAF in front.
+## Architecture
 
-**No automatic credit-card-statement parsing.** Credit-card payments must be logged manually via `/cc pay`. Auto-detection from SePay bank-side ("transfer to credit card") is deferred to a later phase.
+```
+┌──────────┐   webhook    ┌────────────────┐    rows      ┌──────────────┐
+│  SePay   │ ───────────► │  FastAPI bot   │ ───────────► │ Google Sheet │
+└──────────┘              │  (Railway/VPS) │              │   (yours)    │
+                          └──────┬─────────┘              └──────────────┘
+                                 │ Telegram Bot API
+                                 ▼
+                          ┌────────────────┐
+                          │   You (chat)   │
+                          └────────────────┘
+```
 
-**Income (Tiền vào) is not categorized.** Project goal is tracking *spending*. Incoming tx just land in Transactions and surface in `/report` per-account flow.
+**Source of truth = ledger table.** `running_balance` is a cache recomputed from the ledger on every write. See [`handlers/account_resolver.py`](handlers/account_resolver.py) and [`sheets.py`](sheets.py).
+
+### Project layout
+
+```
+.
+├── main.py                       # FastAPI entry — routes all webhooks
+├── config.py                     # Reads env vars, sheet tab names
+├── sheets.py                     # All Google Sheets read/write logic
+├── telegram_api.py               # Telegram Bot API wrapper
+├── handlers/
+│   ├── sepay.py                  # Incoming SePay webhook handler
+│   ├── account_resolver.py       # Maps payload → account_id
+│   ├── accounts.py               # /accounts wizard + onboarding + backfill
+│   ├── transaction.py            # Category picker + confirmation flow
+│   ├── allocation.py             # /allocate budget wizard + edit mode
+│   ├── manage.py                 # /manage categories
+│   ├── keywords.py               # /keywords auto-categorize rules
+│   ├── report.py                 # Unified /report (account + category lenses)
+│   └── reports.py                # /today snapshot + daily recap
+├── tests/unit/                   # 98 unit tests, in-memory FakeSpreadsheet
+├── .env.example                  # Template — copy to .env and fill in
+├── crontab.txt                   # Example cron jobs (daily recap, monthly)
+├── setup.sh                      # VPS bootstrap script
+├── railway.toml                  # Railway deploy config
+└── requirements.txt
+```
+
+---
+
+## Security ⚠️
+
+A few things to be careful about — this handles bank notification data:
+
+**1. Protect your `.env` and `credentials.json`.** These are the keys to your bot. Anyone with them reads your spending data.
+
+```bash
+chmod 600 .env credentials.json
+```
+
+Never commit either to GitHub — `.gitignore` already blocks them.
+
+**2. Webhook auth is opt-in.** SePay's API key check is supported via the `SEPAY_SECRET` env var. If unset, anyone who knows your webhook URL can spam fake transactions. **Recommended:** set the secret and put Cloudflare (or another WAF) in front of your Railway app.
+
+**3. Use SSH keys, not passwords.** If you VPS-deploy, password SSH is brute-forceable:
+
+```bash
+ssh-keygen -t ed25519
+ssh-copy-id root@your-server
+# Then in /etc/ssh/sshd_config:
+#   PasswordAuthentication no
+```
+
+**4. Bot only talks to your `CHAT_ID`.** Hardcoded check — no one else can interact even if they find the bot name.
+
+**5. No banking credentials touch this code.** The bot receives transaction *notifications* (amount + description) from SePay. Your bank login, card numbers, etc. never pass through.
+
+**6. PII in descriptions.** SePay's payload includes raw transfer descriptions which may contain partner names, account numbers, references. These get written to the `Description` column. Anyone with read access to your Sheet sees this — keep the Sheet private.
+
+---
+
+## Troubleshooting
+
+| Problem | Check |
+|---|---|
+| No message when transaction happens | Service running? `systemctl status mmwbot` or Railway logs |
+| Bot crashed | `journalctl -u mmwbot -n 50` |
+| Wrong amounts in sheet | Check logs for `DEBUG append_transaction:` |
+| Duplicate rows in sheet | Make sure SePay's native Sheets integration is disabled |
+| Daily recap at wrong time | Server in UTC? Shift cron hours by -7 from ICT |
+| `/allocate` not saving | Check logs for `[allocate]` messages |
+| Bot doesn't auto-route tx from known account | Check that `source_keys` cell in `Accounts` tab has the right SePay account number |
+
+---
+
+## Updating the bot
+
+```bash
+# On your server
+cd /path/to/my-money-went-bot
+git pull
+systemctl restart mmwbot
+journalctl -u mmwbot -f   # watch logs
+```
+
+On Railway: just push to your fork, Railway auto-deploys.
 
 ---
 
 ## Roadmap (deferred)
 
-- **Credit card support** — outstanding balance, utilization %, `/cc pay`, statement-cycle reset. Out of Phase 1 OSS scope; the underlying ledger model already supports it but the wizard / command surface ships with bank/debit/cash only.
-- **Manual `/transfer` between tracked accounts** — bank → bank internal moves. Out of Phase 1 scope.
-- **Email ingestion** for bank notification emails (TCB, Cake, HSBC, ...) — Phase 1 ships SePay only.
-- **TRANSFERS section in /report** to separate transfer-like buckets (Saving, etc.) from spending totals.
-- **Multi-tenant SaaS** — would require a separate codebase (user database, per-user Sheet, webhook scoping). Out of scope for this repo.
+Intentionally out of v1 scope:
+
+- 🧾 **Credit card support** — outstanding balance, utilization %, `/cc pay`, statement-cycle tracking.
+- 🔄 **Manual `/transfer`** between tracked accounts.
+- 📧 **Email ingestion** for banks not on SePay (TCB, Cake, HSBC notification emails).
+- 🌐 **Multi-tenant SaaS** — separate codebase, would need user DB, per-user Sheets, webhook scoping.
+- 💱 **Multi-currency** accounts (HKD, USD, ...).
 
 ---
 
@@ -190,7 +299,24 @@ pip install -r requirements.txt
 pytest tests/unit/ -v
 ```
 
-121 unit tests use an in-memory FakeSpreadsheet (no Google API calls). Tests with `@freeze_time` need `freezegun` for deterministic period assertions.
+98 unit tests use an in-memory `FakeSpreadsheet` — zero Google API calls during tests. Tests with `@freeze_time` need `freezegun` for deterministic period assertions.
+
+---
+
+## Contributing
+
+Contributions welcome — issue / PR / fork. Be opinionated about scope: this bot is intentionally minimal. Features outside the [Roadmap](#roadmap-deferred) are unlikely to be merged but happy to discuss.
+
+When opening a PR:
+- Include tests for new behavior.
+- Match existing code style (functional helpers, docstrings, no over-engineering).
+- For UX changes, attach a Telegram screenshot.
+
+---
+
+## Acknowledgments
+
+This project started as a fork-and-rewrite of [`maddyle8124/spend-less-bot`](https://github.com/maddyle8124/spend-less-bot). The core idea — Telegram bot + SePay webhook + Google Sheet — comes from there. My Money Went Bot adds per-account tracking, unified multi-period reports, account onboarding wizard, and a number of UX refinements.
 
 ---
 
