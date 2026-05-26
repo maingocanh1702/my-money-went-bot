@@ -5,7 +5,7 @@
 
 set -e
 DOMAIN=${1:-"your-domain.com"}
-BOT_DIR="/home/ubuntu/financial-tracking-bot"
+BOT_DIR="/home/ubuntu/my-money-went-bot"
 
 echo "=== [1/6] Installing system dependencies ==="
 apt update && apt install -y python3.11 python3-pip python3.11-venv nginx certbot python3-certbot-nginx
@@ -13,7 +13,7 @@ apt update && apt install -y python3.11 python3-pip python3.11-venv nginx certbo
 echo "=== [2/6] Creating project directory ==="
 mkdir -p $BOT_DIR
 # Copy your project files here first, then run this script
-# scp -r ./financial-tracking-bot ubuntu@your-vps-ip:~/
+# scp -r ./my-money-went-bot ubuntu@your-vps-ip:~/
 
 echo "=== [3/6] Python virtualenv + deps ==="
 cd $BOT_DIR
@@ -31,6 +31,7 @@ After=network.target
 User=ubuntu
 WorkingDirectory=$BOT_DIR
 ExecStart=$BOT_DIR/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000
+EnvironmentFile=$BOT_DIR/.env
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -67,4 +68,7 @@ certbot --nginx -d $DOMAIN --non-interactive --agree-tos -m admin@$DOMAIN
 
 echo ""
 echo "✅ Done! Now set your Telegram webhook:"
-echo "curl \"https://api.telegram.org/bot\$BOT_TOKEN/setWebhook?url=https://$DOMAIN/webhook&drop_pending_updates=true\""
+echo "curl -X POST \"https://api.telegram.org/bot<BOT_TOKEN>/setWebhook\" \\"
+echo "  -d \"url=https://$DOMAIN/webhook\" \\"
+echo "  -d \"secret_token=<TELEGRAM_WEBHOOK_SECRET>\" \\"
+echo "  -d \"drop_pending_updates=true\""
