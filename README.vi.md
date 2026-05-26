@@ -144,7 +144,7 @@ Một số bank (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) dùng **API 
 
 ---
 
-## Setup cho người không rành kỹ thuật
+## Khuyến nghị: Setup bằng Railway
 
 Nếu bạn không quen server Linux, hãy đi theo flow này: **Telegram → Google Sheet → Railway → SePay → test giao dịch đầu tiên**. Bỏ qua phần VPS; phần đó chỉ dành cho người đã quen deploy server.
 
@@ -251,7 +251,7 @@ Sau khi deploy xong trên Railway, app sẽ có domain dạng `https://<your-app
 
 ---
 
-## Quick start
+## Hướng dẫn setup chi tiết
 
 ### Bước 1 — Tạo Telegram bot
 

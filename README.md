@@ -144,7 +144,7 @@ A subset (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) use **direct API in
 
 ---
 
-## Non-technical setup path
+## Recommended setup: Railway
 
 If you are not comfortable with Linux servers, use this path: **Telegram → Google Sheet → Railway → SePay → first test transaction**. Skip the VPS section; it is for people who already know how to deploy a server.
 
@@ -251,7 +251,7 @@ After Railway deploys, your app has a domain like `https://<your-app>.up.railway
 
 ---
 
-## Quick start
+## Detailed setup reference
 
 ### Step 1 — Create your Telegram bot
 
