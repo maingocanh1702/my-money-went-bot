@@ -65,6 +65,7 @@ Need step-by-step help beyond the README?
 
 - [Wiki home](https://github.com/maingocanh1702/my-money-went-bot/wiki)
 - [Setup for non-technical users](https://github.com/maingocanh1702/my-money-went-bot/wiki/Setup-for-Non-Technical-Users)
+- [Vietnamese setup guide](https://github.com/maingocanh1702/my-money-went-bot/wiki/Setup-cho-nguoi-khong-ranh-ky-thuat)
 - [Railway deployment](https://github.com/maingocanh1702/my-money-went-bot/wiki/Railway-Deployment)
 - [Troubleshooting](https://github.com/maingocanh1702/my-money-went-bot/wiki/Troubleshooting)
 - [Security and privacy](https://github.com/maingocanh1702/my-money-went-bot/wiki/Security-and-Privacy)
@@ -246,6 +247,12 @@ After Railway deploys, your app has a domain like `https://<your-app>.up.railway
      -d "url=https://<your-app>.up.railway.app/webhook" \
      -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>" \
      -d "drop_pending_updates=true"
+   ```
+
+   No terminal? Open this URL in your browser after replacing the placeholders:
+
+   ```text
+   https://api.telegram.org/bot<BOT_TOKEN>/setWebhook?url=https://<your-app>.up.railway.app/webhook&secret_token=<TELEGRAM_WEBHOOK_SECRET>&drop_pending_updates=true
    ```
 
 3. Open Telegram and send `/today` to your bot. The bot should reply.
@@ -472,7 +479,7 @@ Future tx from the same account auto-route. Set up `/keywords` rules to auto-cat
 │   ├── keywords.py               # /keywords auto-categorize rules
 │   ├── report.py                 # Unified /report (account + category lenses)
 │   └── reports.py                # /today snapshot + daily recap
-├── tests/unit/                   # 98 unit tests, in-memory FakeSpreadsheet
+├── tests/unit/                   # 120 unit tests, in-memory FakeSpreadsheet
 ├── .env.example                  # Template — copy to .env and fill in
 ├── crontab.txt                   # Example cron jobs (daily recap, monthly)
 ├── setup.sh                      # VPS bootstrap script
@@ -566,12 +573,16 @@ Intentionally out of v1 scope:
 
 ## Development
 
+TL;DR for developers:
+
 ```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 pytest tests/unit/ -v
 ```
 
-98 unit tests use an in-memory `FakeSpreadsheet` — zero Google API calls during tests. Tests with `@freeze_time` need `freezegun` for deterministic period assertions.
+120 unit tests use an in-memory `FakeSpreadsheet` — zero Google API calls during tests. Tests with `@freeze_time` need `freezegun` for deterministic period assertions.
 
 ---
 

@@ -2,6 +2,7 @@
 
 - [Home](Home)
 - [Setup for Non-Technical Users](Setup-for-Non-Technical-Users)
+- [Setup cho nguoi khong ranh ky thuat](Setup-cho-nguoi-khong-ranh-ky-thuat)
 - [Railway Deployment](Railway-Deployment)
 - [Google Sheets Setup](Google-Sheets-Setup)
 - [SePay Setup](SePay-Setup)
@@ -11,4 +12,3 @@
 - [Command Reference](Command-Reference)
 - [Developer Guide](Developer-Guide)
 - [FAQ](FAQ)
-

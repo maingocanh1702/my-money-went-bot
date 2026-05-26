@@ -5,6 +5,7 @@ This wiki is the longer, task-based manual for My Money Went Bot. The README is 
 ## Start here
 
 - New user: [Setup for Non-Technical Users](Setup-for-Non-Technical-Users)
+- Vietnamese user: [Setup cho nguoi khong ranh ky thuat](Setup-cho-nguoi-khong-ranh-ky-thuat)
 - Deploying on Railway: [Railway Deployment](Railway-Deployment)
 - Stuck during setup: [Troubleshooting](Troubleshooting)
 - Want to understand privacy/security: [Security and Privacy](Security-and-Privacy)
@@ -32,6 +33,7 @@ Detailed guide: [Setup for Non-Technical Users](Setup-for-Non-Technical-Users)
 ## Wiki pages
 
 - [Setup for Non-Technical Users](Setup-for-Non-Technical-Users)
+- [Setup cho nguoi khong ranh ky thuat](Setup-cho-nguoi-khong-ranh-ky-thuat)
 - [Railway Deployment](Railway-Deployment)
 - [Google Sheets Setup](Google-Sheets-Setup)
 - [SePay Setup](SePay-Setup)
@@ -41,4 +43,3 @@ Detailed guide: [Setup for Non-Technical Users](Setup-for-Non-Technical-Users)
 - [Command Reference](Command-Reference)
 - [Developer Guide](Developer-Guide)
 - [FAQ](FAQ)
-

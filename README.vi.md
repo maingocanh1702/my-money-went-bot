@@ -64,7 +64,7 @@ flowchart LR
 Cần hướng dẫn từng bước ngoài README?
 
 - [Wiki home](https://github.com/maingocanh1702/my-money-went-bot/wiki)
-- [Setup cho người không rành kỹ thuật](https://github.com/maingocanh1702/my-money-went-bot/wiki/Setup-for-Non-Technical-Users)
+- [Setup cho người không rành kỹ thuật](https://github.com/maingocanh1702/my-money-went-bot/wiki/Setup-cho-nguoi-khong-ranh-ky-thuat)
 - [Deploy bằng Railway](https://github.com/maingocanh1702/my-money-went-bot/wiki/Railway-Deployment)
 - [Troubleshooting](https://github.com/maingocanh1702/my-money-went-bot/wiki/Troubleshooting)
 - [Bảo mật và riêng tư](https://github.com/maingocanh1702/my-money-went-bot/wiki/Security-and-Privacy)
@@ -246,6 +246,12 @@ Sau khi deploy xong trên Railway, app sẽ có domain dạng `https://<your-app
      -d "url=https://<your-app>.up.railway.app/webhook" \
      -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>" \
      -d "drop_pending_updates=true"
+   ```
+
+   Không dùng terminal? Mở URL này trong browser sau khi thay các placeholder:
+
+   ```text
+   https://api.telegram.org/bot<BOT_TOKEN>/setWebhook?url=https://<your-app>.up.railway.app/webhook&secret_token=<TELEGRAM_WEBHOOK_SECRET>&drop_pending_updates=true
    ```
 
 3. Mở Telegram, chat với bot, gửi `/today`. Bot phải trả lời.
@@ -472,7 +478,7 @@ Tx sau từ cùng account auto-route. Setup `/keywords` rules để auto-categor
 │   ├── keywords.py               # /keywords auto-categorize rules
 │   ├── report.py                 # /report thống nhất (account + category lenses)
 │   └── reports.py                # /today snapshot + daily recap
-├── tests/unit/                   # 98 unit tests, in-memory FakeSpreadsheet
+├── tests/unit/                   # 120 unit tests, in-memory FakeSpreadsheet
 ├── .env.example                  # Template — copy thành .env và điền
 ├── crontab.txt                   # Cron jobs mẫu (daily recap, monthly)
 ├── setup.sh                      # VPS bootstrap script
@@ -566,12 +572,16 @@ Cố tình để ngoài scope v1:
 
 ## Development
 
+TL;DR cho dev:
+
 ```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 pytest tests/unit/ -v
 ```
 
-98 unit tests dùng `FakeSpreadsheet` in-memory — zero gọi Google API trong test. Tests có `@freeze_time` cần `freezegun` để period assertion deterministic.
+120 unit tests dùng `FakeSpreadsheet` in-memory — zero gọi Google API trong test. Tests có `@freeze_time` cần `freezegun` để period assertion deterministic.
 
 ---
 
