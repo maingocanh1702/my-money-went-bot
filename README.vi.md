@@ -148,6 +148,8 @@ Một số bank (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) dùng **API 
 
 Nếu bạn không quen server Linux, hãy đi theo flow này: **Telegram → Google Sheet → Railway → SePay → test giao dịch đầu tiên**. Bỏ qua phần VPS; phần đó chỉ dành cho người đã quen deploy server.
 
+Cần hướng dẫn chi tiết hơn? Source của wiki dạng task-based nằm trong [`docs/wiki`](docs/wiki/Home.md). Sau khi GitHub Wiki được khởi tạo, có thể publish cùng bộ trang này lên wiki của repo.
+
 Một vài từ kỹ thuật trong guide này:
 
 | Từ | Hiểu đơn giản là |

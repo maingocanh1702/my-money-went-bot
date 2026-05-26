@@ -148,6 +148,8 @@ A subset (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) use **direct API in
 
 If you are not comfortable with Linux servers, use this path: **Telegram → Google Sheet → Railway → SePay → first test transaction**. Skip the VPS section; it is for people who already know how to deploy a server.
 
+Need more detail? The task-based wiki source lives in [`docs/wiki`](docs/wiki/Home.md). Once the GitHub Wiki is initialized, the same pages can be published to the repo wiki.
+
 Plain-English terms used below:
 
 | Term | Meaning |
