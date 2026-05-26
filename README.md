@@ -59,6 +59,19 @@ flowchart LR
 
 ---
 
+## Documentation
+
+Need step-by-step help beyond the README?
+
+- [Wiki home](https://github.com/maingocanh1702/my-money-went-bot/wiki)
+- [Setup for non-technical users](https://github.com/maingocanh1702/my-money-went-bot/wiki/Setup-for-Non-Technical-Users)
+- [Railway deployment](https://github.com/maingocanh1702/my-money-went-bot/wiki/Railway-Deployment)
+- [Troubleshooting](https://github.com/maingocanh1702/my-money-went-bot/wiki/Troubleshooting)
+- [Security and privacy](https://github.com/maingocanh1702/my-money-went-bot/wiki/Security-and-Privacy)
+- [Command reference](https://github.com/maingocanh1702/my-money-went-bot/wiki/Command-Reference)
+
+---
+
 ## Why this exists
 
 Most personal finance apps (Money Lover, Misa, MoneyKeeper, ...) want your bank credentials, run on their cloud, and gatekeep your data behind a freemium wall. This bot does the opposite:
@@ -148,7 +161,7 @@ A subset (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) use **direct API in
 
 If you are not comfortable with Linux servers, use this path: **Telegram → Google Sheet → Railway → SePay → first test transaction**. Skip the VPS section; it is for people who already know how to deploy a server.
 
-Need more detail? The task-based wiki source lives in [`docs/wiki`](docs/wiki/Home.md). Once the GitHub Wiki is initialized, the same pages can be published to the repo wiki.
+Need more detail? Use the [project wiki](https://github.com/maingocanh1702/my-money-went-bot/wiki).
 
 Plain-English terms used below:
 
