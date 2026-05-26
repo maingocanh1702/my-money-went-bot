@@ -176,12 +176,15 @@ A subset (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) use **direct API in
 ### Step 3 — Set up SePay
 
 1. Sign up at [sepay.vn](https://sepay.vn), connect your bank.
-2. **Webhook settings** → URL = `https://<your-domain>/webhook`. Pick which directions to track:
+2. **Webhook settings** → URL = `https://<your-domain>/webhook`.
+3. Set the SePay **API Key** to the same random value you will use as `SEPAY_SECRET`.
+   The bot rejects SePay payloads unless this value is present in the webhook payload.
+4. Pick which directions to track:
    - **Only spending** → enable **Tiền ra** only.
    - **Spending + income** → enable both **Tiền ra** and **Tiền vào**.
 
    (Income tx are logged but skip the category picker — see [Why this exists](#why-this-exists).)
-3. ⚠️ **Disable SePay's native Google Sheets integration** — this bot writes its own rows; doubling = duplicate transactions.
+5. ⚠️ **Disable SePay's native Google Sheets integration** — this bot writes its own rows; doubling = duplicate transactions.
 
 ### Step 4 — Deploy
 
@@ -189,21 +192,58 @@ A subset (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) use **direct API in
 git clone https://github.com/maingocanh1702/my-money-went-bot.git
 cd my-money-went-bot
 cp .env.example .env
-# Edit .env: BOT_TOKEN, CHAT_ID, SHEET_ID, GOOGLE_CREDS_JSON (or GOOGLE_CREDS),
-# plus the required SEPAY_SECRET, TELEGRAM_WEBHOOK_SECRET, and CRON_SECRET.
 ```
+
+Required env vars:
+
+| Env var | What to put there |
+|---|---|
+| `BOT_TOKEN` | Token from BotFather |
+| `CHAT_ID` | Your Telegram chat ID from `@userinfobot` |
+| `SHEET_ID` | The long ID in your Google Sheet URL |
+| `GOOGLE_CREDS_JSON` | Railway/cloud: one-line service-account JSON |
+| `GOOGLE_CREDS` | VPS/local alternative: path to `credentials.json` |
+| `SEPAY_SECRET` | Same value as the SePay webhook API Key |
+| `TELEGRAM_WEBHOOK_SECRET` | Random token passed to Telegram `setWebhook` |
+| `CRON_SECRET` | Random token used by `/trigger/*` cron URLs |
+
+Generate secrets:
+
+```bash
+openssl rand -hex 32   # use once for SEPAY_SECRET
+openssl rand -hex 32   # use once for TELEGRAM_WEBHOOK_SECRET
+openssl rand -hex 32   # use once for CRON_SECRET
+```
+
+For Railway, convert Google credentials to one line:
+
+```bash
+cat credentials.json | tr -d '\n'
+```
+
+Paste that output into `GOOGLE_CREDS_JSON`. For VPS/local, keep `credentials.json` on disk and set `GOOGLE_CREDS=credentials.json` instead.
 
 **Railway** (recommended):
 
 1. Push your fork to GitHub.
 2. [railway.app](https://railway.app) → New Project → Deploy from GitHub repo.
 3. Add env vars in Railway dashboard. For `GOOGLE_CREDS_JSON`, paste the full JSON as one line. Production startup fails closed unless `SEPAY_SECRET`, `TELEGRAM_WEBHOOK_SECRET`, and `CRON_SECRET` are all set.
-4. Railway gives you a `*.up.railway.app` URL — use that as your SePay webhook URL.
-5. Register the Telegram webhook with the same secret token as `TELEGRAM_WEBHOOK_SECRET`:
+4. Railway gives you a `*.up.railway.app` URL. Check health first:
+   ```bash
+   curl https://<your-app>.up.railway.app/
+   ```
+   You should see `{"status":"ok","bot":"Financial Tracking Bot"}`.
+5. Use `https://<your-app>.up.railway.app/webhook` as your SePay webhook URL.
+6. Register the Telegram webhook with the same secret token as `TELEGRAM_WEBHOOK_SECRET`:
    ```bash
    curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
      -d "url=https://<your-app>.up.railway.app/webhook" \
-     -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>"
+     -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>" \
+     -d "drop_pending_updates=true"
+   ```
+7. Verify Telegram accepted it:
+   ```bash
+   curl "https://api.telegram.org/bot<BOT_TOKEN>/getWebhookInfo"
    ```
 
 **VPS** (Ubuntu 22.04):
@@ -232,13 +272,23 @@ sudo systemctl enable --now mmwbot
 journalctl -u mmwbot -f   # watch logs
 ```
 
+For VPS, put the app behind HTTPS before registering webhooks. Use nginx + Let's Encrypt, or run `setup.sh your-domain.com` after copying the repo and `.env` to the server. Then register Telegram with:
+
+```bash
+curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
+  -d "url=https://<your-domain>/webhook" \
+  -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>" \
+  -d "drop_pending_updates=true"
+```
+
 ### Step 5 — First run
 
-1. Open a chat with your bot on Telegram, send `/today` — bot should reply.
-2. Make a small test transaction through your bank — within a few seconds the bot pings: *"Account chưa map"* + *"Khoản này thuộc mục nào?"*.
-3. Tap **✅ Setup** → onboard the account (name → type).
-4. Tap a category for the transaction.
-5. Type `/report` → see your spending breakdown.
+1. Open a chat with your bot on Telegram, send `/today` — bot should reply. If not, check Railway/VPS logs and `getWebhookInfo`.
+2. Confirm SePay is using the same API Key as `SEPAY_SECRET`.
+3. Make a small test transaction through your bank — within a few seconds the bot pings: *"Account chưa map"* + *"Khoản này thuộc mục nào?"*.
+4. Tap **✅ Setup** → onboard the account (name → type).
+5. Tap a category for the transaction.
+6. Type `/report` → see your spending breakdown.
 
 Future tx from the same account auto-route. Set up `/keywords` rules to auto-categorize recurring tx.
 

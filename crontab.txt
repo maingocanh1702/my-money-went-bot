@@ -1,12 +1,14 @@
 # Cron jobs for financial-tracking-bot scheduled triggers
 # Add with: crontab -e
 # Times below assume your server is in UTC. Shift by -7 hours from ICT.
+# Cron does not automatically read .env, so paste the same CRON_SECRET here.
+CRON_SECRET=replace_with_your_cron_secret
 
 # Daily recap at 11 PM ICT (16:00 UTC) — bot pings how much you spent today
-0 16 * * * curl -s -X POST http://127.0.0.1:8000/trigger/daily-recap
+0 16 * * * curl -s -X POST "http://127.0.0.1:8000/trigger/daily-recap?secret=${CRON_SECRET}"
 
 # 1st of every month at 9:00 AM ICT (02:00 UTC) — bot opens /allocate for the new month
-0 2 1 * * curl -s -X POST http://127.0.0.1:8000/trigger/monthly-allocation
+0 2 1 * * curl -s -X POST "http://127.0.0.1:8000/trigger/monthly-allocation?secret=${CRON_SECRET}"
 
 # Note: /trigger/weekly and /trigger/monthly-report were removed in Phase 2
 # (legacy /weekly + /report-old replaced by the unified interactive /report

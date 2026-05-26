@@ -176,12 +176,15 @@ Một số bank (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) dùng **API 
 ### Bước 3 — Setup SePay
 
 1. Đăng ký tại [sepay.vn](https://sepay.vn), kết nối bank.
-2. **Webhook settings** → URL = `https://<your-domain>/webhook`. Chọn hướng tx muốn track:
+2. **Webhook settings** → URL = `https://<your-domain>/webhook`.
+3. Set **API Key** của SePay bằng đúng random value bạn sẽ dùng cho `SEPAY_SECRET`.
+   Bot sẽ reject webhook SePay nếu payload không có giá trị này.
+4. Chọn hướng tx muốn track:
    - **Chỉ track chi tiêu** → chỉ bật **Tiền ra**.
    - **Track cả thu nhập + chi tiêu** → bật cả **Tiền ra** và **Tiền vào**.
 
    (Tx Tiền vào được ghi log nhưng skip category picker — xem [Tại sao có project này](#tại-sao-có-project-này).)
-3. ⚠️ **Tắt SePay native Google Sheets integration** — bot này tự ghi rows; bật cả 2 = tx duplicate.
+5. ⚠️ **Tắt SePay native Google Sheets integration** — bot này tự ghi rows; bật cả 2 = tx duplicate.
 
 ### Bước 4 — Deploy
 
@@ -189,21 +192,58 @@ Một số bank (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) dùng **API 
 git clone https://github.com/maingocanh1702/my-money-went-bot.git
 cd my-money-went-bot
 cp .env.example .env
-# Sửa .env: BOT_TOKEN, CHAT_ID, SHEET_ID, GOOGLE_CREDS_JSON (hoặc GOOGLE_CREDS),
-# và 3 secret bắt buộc: SEPAY_SECRET, TELEGRAM_WEBHOOK_SECRET, CRON_SECRET.
 ```
+
+Env vars bắt buộc:
+
+| Env var | Điền gì |
+|---|---|
+| `BOT_TOKEN` | Token từ BotFather |
+| `CHAT_ID` | Telegram chat ID của bạn từ `@userinfobot` |
+| `SHEET_ID` | ID dài trong URL Google Sheet |
+| `GOOGLE_CREDS_JSON` | Railway/cloud: service-account JSON dạng 1 dòng |
+| `GOOGLE_CREDS` | VPS/local alternative: đường dẫn `credentials.json` |
+| `SEPAY_SECRET` | Cùng giá trị với SePay webhook API Key |
+| `TELEGRAM_WEBHOOK_SECRET` | Random token truyền vào Telegram `setWebhook` |
+| `CRON_SECRET` | Random token dùng cho URL `/trigger/*` của cron |
+
+Generate secrets:
+
+```bash
+openssl rand -hex 32   # dùng một lần cho SEPAY_SECRET
+openssl rand -hex 32   # dùng một lần cho TELEGRAM_WEBHOOK_SECRET
+openssl rand -hex 32   # dùng một lần cho CRON_SECRET
+```
+
+Với Railway, convert Google credentials thành 1 dòng:
+
+```bash
+cat credentials.json | tr -d '\n'
+```
+
+Paste output đó vào `GOOGLE_CREDS_JSON`. Với VPS/local, giữ `credentials.json` trên disk và set `GOOGLE_CREDS=credentials.json`.
 
 **Railway** (khuyến nghị):
 
 1. Push fork của bạn lên GitHub.
 2. [railway.app](https://railway.app) → New Project → Deploy from GitHub repo.
 3. Add env vars trong Railway dashboard. Với `GOOGLE_CREDS_JSON`, paste toàn bộ JSON thành 1 dòng. Production sẽ fail closed nếu thiếu `SEPAY_SECRET`, `TELEGRAM_WEBHOOK_SECRET`, hoặc `CRON_SECRET`.
-4. Railway cấp URL `*.up.railway.app` — dùng URL này làm SePay webhook URL.
-5. Đăng ký Telegram webhook với cùng secret token như `TELEGRAM_WEBHOOK_SECRET`:
+4. Railway cấp URL `*.up.railway.app`. Check health trước:
+   ```bash
+   curl https://<your-app>.up.railway.app/
+   ```
+   Kết quả nên là `{"status":"ok","bot":"Financial Tracking Bot"}`.
+5. Dùng `https://<your-app>.up.railway.app/webhook` làm SePay webhook URL.
+6. Đăng ký Telegram webhook với cùng secret token như `TELEGRAM_WEBHOOK_SECRET`:
    ```bash
    curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
      -d "url=https://<your-app>.up.railway.app/webhook" \
-     -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>"
+     -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>" \
+     -d "drop_pending_updates=true"
+   ```
+7. Verify Telegram đã nhận webhook:
+   ```bash
+   curl "https://api.telegram.org/bot<BOT_TOKEN>/getWebhookInfo"
    ```
 
 **VPS** (Ubuntu 22.04):
@@ -232,13 +272,23 @@ sudo systemctl enable --now mmwbot
 journalctl -u mmwbot -f   # xem log
 ```
 
+Với VPS, cần đặt app sau HTTPS trước khi register webhook. Dùng nginx + Let's Encrypt, hoặc chạy `setup.sh your-domain.com` sau khi copy repo và `.env` lên server. Sau đó register Telegram:
+
+```bash
+curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
+  -d "url=https://<your-domain>/webhook" \
+  -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>" \
+  -d "drop_pending_updates=true"
+```
+
 ### Bước 5 — Lần đầu chạy
 
-1. Mở chat với bot trên Telegram, gửi `/today` — bot phải reply.
-2. Trigger 1 tx ngân hàng nhỏ — trong vài giây bot sẽ ping: *"Account chưa map"* + *"Khoản này thuộc mục nào?"*.
-3. Tap **✅ Setup** → onboard account (tên → loại).
-4. Tap category cho tx.
-5. Type `/report` → xem breakdown chi tiêu.
+1. Mở chat với bot trên Telegram, gửi `/today` — bot phải reply. Nếu không, check Railway/VPS logs và `getWebhookInfo`.
+2. Confirm SePay đang dùng đúng API Key giống `SEPAY_SECRET`.
+3. Trigger 1 tx ngân hàng nhỏ — trong vài giây bot sẽ ping: *"Account chưa map"* + *"Khoản này thuộc mục nào?"*.
+4. Tap **✅ Setup** → onboard account (tên → loại).
+5. Tap category cho tx.
+6. Type `/report` → xem breakdown chi tiêu.
 
 Tx sau từ cùng account auto-route. Setup `/keywords` rules để auto-categorize tx định kỳ.
 
