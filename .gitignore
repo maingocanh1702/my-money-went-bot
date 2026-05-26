@@ -51,3 +51,5 @@ Thumbs.db
 docs/*
 !docs/screenshots/
 !docs/screenshots/**
+!docs/media/
+!docs/media/**
