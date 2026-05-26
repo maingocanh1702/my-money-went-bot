@@ -51,7 +51,9 @@ flowchart LR
 
 ## Demo
 
-[Xem video demo 54 giây](docs/media/my-money-went-bot-demo.mp4) để thấy luồng giao dịch đi qua Telegram, phân loại, và báo cáo.
+[![Xem video demo 54 giây của My Money Went Bot](docs/media/my-money-went-bot-demo-thumbnail.jpg)](docs/media/my-money-went-bot-demo.mp4)
+
+Xem luồng giao dịch đi qua Telegram, phân loại, và báo cáo.
 
 **Không database. Không lưu data ở bên thứ 3. Single-tenant — 1 bot / 1 người.** Google Sheet của bạn LÀ backend. Data của bạn, sheet của bạn, luật của bạn.
 
