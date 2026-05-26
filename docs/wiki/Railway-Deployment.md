@@ -74,9 +74,14 @@ curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
   -d "drop_pending_updates=true"
 ```
 
+No terminal? Open this URL in your browser after replacing the placeholders:
+
+```text
+https://api.telegram.org/bot<BOT_TOKEN>/setWebhook?url=https://your-app.up.railway.app/webhook&secret_token=<TELEGRAM_WEBHOOK_SECRET>&drop_pending_updates=true
+```
+
 Verify it:
 
 ```bash
 curl "https://api.telegram.org/bot<BOT_TOKEN>/getWebhookInfo"
 ```
-

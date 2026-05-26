@@ -27,7 +27,7 @@ GOOGLE_CREDS=credentials.json
 pytest tests/unit/ -v
 ```
 
-Unit tests use an in-memory fake spreadsheet and should not call Google APIs.
+There are 120 unit tests. They use an in-memory fake spreadsheet and should not call Google APIs.
 
 ## Main files
 
@@ -61,4 +61,3 @@ For behavior changes:
 - Keep changes scoped.
 - Match existing code style.
 - Include screenshots for Telegram UX changes when useful.
-
