@@ -144,6 +144,113 @@ Một số bank (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) dùng **API 
 
 ---
 
+## Setup cho người không rành kỹ thuật
+
+Nếu bạn không quen server Linux, hãy đi theo flow này: **Telegram → Google Sheet → Railway → SePay → test giao dịch đầu tiên**. Bỏ qua phần VPS; phần đó chỉ dành cho người đã quen deploy server.
+
+Một vài từ kỹ thuật trong guide này:
+
+| Từ | Hiểu đơn giản là |
+|---|---|
+| `env vars` | Các ô cấu hình trong Railway. Bạn copy giá trị vào đó, không cần sửa code. |
+| `webhook` | Một đường link để Telegram hoặc SePay gửi thông báo vào bot. |
+| `service account` | Một email robot của Google để bot ghi dữ liệu vào Sheet của bạn. |
+| `secret` | Chuỗi random giống mật khẩu, dùng để chặn request lạ. |
+
+### 1. Tổng quan các bước
+
+1. Tạo bot Telegram và lấy `BOT_TOKEN`.
+2. Lấy `CHAT_ID` Telegram của bạn.
+3. Tạo Google Sheet và lấy `SHEET_ID`.
+4. Tạo Google service account, tải file `credentials.json`, rồi share Sheet cho email robot đó.
+5. Deploy repo lên Railway và điền các biến cấu hình.
+6. Dán Railway webhook URL vào SePay.
+7. Kết nối Telegram webhook.
+8. Gửi `/today`, thử 1 giao dịch nhỏ, rồi phân loại giao dịch đầu tiên.
+
+### 2. Copy gì, dán vào đâu
+
+Bot cần **7 biến** trong Railway, chia thành 2 nhóm:
+
+**Nhóm Core — bot không chạy được nếu thiếu:**
+
+Đây là 4 biến kết nối bot với Telegram, Google Sheet, và ngân hàng. `spend-less-bot` cũng cần đúng 4 biến này — bất kỳ bot nào dùng Telegram + SePay + Sheets đều cần.
+
+| Giá trị | Lấy ở đâu | Dán vào đâu |
+|---|---|---|
+| `BOT_TOKEN` | Chat với [@BotFather](https://t.me/BotFather), chạy `/newbot` | Railway → Variables → `BOT_TOKEN` |
+| `CHAT_ID` | Chat với [@userinfobot](https://t.me/userinfobot) | Railway → Variables → `CHAT_ID` |
+| `SHEET_ID` | Phần dài trong URL Google Sheet: `/spreadsheets/d/<SHEET_ID>/edit` | Railway → Variables → `SHEET_ID` |
+| `GOOGLE_CREDS_JSON` | Nội dung file `credentials.json` của Google service account | Railway → Variables → `GOOGLE_CREDS_JSON` |
+
+**Nhóm Security — chặn người lạ gửi dữ liệu giả vào bot:**
+
+Đây là 3 "mật khẩu" chứng minh request thật sự đến từ SePay / Telegram / cron job của bạn, không phải ai đó đoán được URL. Nếu thiếu, bất kỳ ai biết URL bot đều có thể ghi giao dịch giả vào Sheet của bạn. `spend-less-bot` không có nhóm này — webhook của nó mở cho ai gọi cũng được.
+
+| Giá trị | Lấy ở đâu | Dán vào đâu | Bảo vệ cái gì |
+|---|---|---|---|
+| `SEPAY_SECRET` | Tự tạo một chuỗi random dài | Railway → Variables → `SEPAY_SECRET` **và** SePay → Webhook API Key | Chặn giao dịch ngân hàng giả |
+| `TELEGRAM_WEBHOOK_SECRET` | Tự tạo một chuỗi random dài khác | Railway → Variables → `TELEGRAM_WEBHOOK_SECRET` **và** lệnh Telegram `setWebhook` | Chặn lệnh Telegram giả |
+| `CRON_SECRET` | Tự tạo một chuỗi random dài khác | Railway → Variables → `CRON_SECRET` | Chặn trigger báo cáo ngày/tháng giả |
+
+Nếu bạn không biết dùng terminal để generate secret, có thể dùng password manager hoặc website password generator bất kỳ (search "random password generator") để tạo 3 chuỗi random dài. Đừng dùng lại password cá nhân.
+
+Với `GOOGLE_CREDS_JSON`, Railway cần toàn bộ JSON nằm trên **một dòng**. Nếu bạn có terminal:
+
+```bash
+cat credentials.json | tr -d '\n'
+```
+
+Copy output đó vào Railway. Nếu không dùng terminal, mở `credentials.json`, copy toàn bộ nội dung, rồi xóa các dòng xuống dòng để thành một dòng trước khi paste.
+
+### 3. Checklist trước khi bấm deploy
+
+- [ ] Đã tạo Telegram bot và lưu `BOT_TOKEN`.
+- [ ] Đã lấy đúng `CHAT_ID` của chính bạn.
+- [ ] Đã tạo Google Sheet mới và copy `SHEET_ID`.
+- [ ] Đã bật Google Sheets API và Google Drive API.
+- [ ] Đã tạo service account, tải `credentials.json`.
+- [ ] Đã share Google Sheet cho email trong `credentials.json` với quyền **Editor**.
+- [ ] Đã thêm đủ 7 biến trong Railway: `BOT_TOKEN`, `CHAT_ID`, `SHEET_ID`, `GOOGLE_CREDS_JSON`, `SEPAY_SECRET`, `TELEGRAM_WEBHOOK_SECRET`, `CRON_SECRET`.
+- [ ] Đã tắt SePay native Google Sheets integration để tránh duplicate giao dịch.
+
+### 4. Làm sao biết setup đã đúng
+
+Sau khi deploy xong trên Railway, app sẽ có domain dạng `https://<your-app>.up.railway.app`.
+
+1. Mở `https://<your-app>.up.railway.app/` trên trình duyệt. Nếu đúng, bạn sẽ thấy:
+
+   ```json
+   {"status":"ok","bot":"Financial Tracking Bot"}
+   ```
+
+2. Dùng domain đó để set Telegram webhook:
+
+   ```bash
+   curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
+     -d "url=https://<your-app>.up.railway.app/webhook" \
+     -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>" \
+     -d "drop_pending_updates=true"
+   ```
+
+3. Mở Telegram, chat với bot, gửi `/today`. Bot phải trả lời.
+4. Trong SePay, set webhook URL là `https://<your-app>.up.railway.app/webhook`.
+5. Thử một giao dịch nhỏ. Nếu đúng, bot sẽ báo giao dịch mới, hỏi setup account, rồi hỏi category.
+6. Mở Google Sheet. Bạn sẽ thấy các tab được tạo tự động và giao dịch được ghi vào Sheet.
+
+### 5. Lỗi thường gặp
+
+| Bạn thấy gì | Thường do đâu | Làm gì |
+|---|---|---|
+| Railway deploy failed | Thiếu env var bắt buộc hoặc JSON sai format | Kiểm tra đủ 7 biến trong Railway, đặc biệt `GOOGLE_CREDS_JSON` phải là JSON một dòng |
+| Mở domain Railway không thấy `status: ok` | App chưa start hoặc crash | Xem Railway logs, kiểm tra biến môi trường |
+| Bot không trả lời `/today` | Telegram webhook chưa set đúng hoặc sai `TELEGRAM_WEBHOOK_SECRET` | Chạy lại lệnh `setWebhook`, dùng đúng Railway domain và đúng secret |
+| Có giao dịch nhưng Sheet trống | Chưa share Sheet cho service account | Mở `credentials.json`, lấy email `client_email`, share Sheet cho email đó quyền Editor |
+| Giao dịch bị ghi 2 lần | SePay native Google Sheets integration vẫn bật | Tắt integration Google Sheets trong SePay |
+| SePay báo đã gửi nhưng bot không nhận | Sai webhook URL hoặc sai API Key | URL phải là `/webhook`; SePay API Key phải giống `SEPAY_SECRET` |
+
+---
+
 ## Quick start
 
 ### Bước 1 — Tạo Telegram bot
@@ -194,7 +301,7 @@ cd my-money-went-bot
 cp .env.example .env
 ```
 
-Env vars bắt buộc:
+Env vars bắt buộc — **Core** (bot không start được nếu thiếu):
 
 | Env var | Điền gì |
 |---|---|
@@ -203,9 +310,18 @@ Env vars bắt buộc:
 | `SHEET_ID` | ID dài trong URL Google Sheet |
 | `GOOGLE_CREDS_JSON` | Railway/cloud: service-account JSON dạng 1 dòng |
 | `GOOGLE_CREDS` | VPS/local alternative: đường dẫn `credentials.json` |
-| `SEPAY_SECRET` | Cùng giá trị với SePay webhook API Key |
-| `TELEGRAM_WEBHOOK_SECRET` | Random token truyền vào Telegram `setWebhook` |
-| `CRON_SECRET` | Random token dùng cho URL `/trigger/*` của cron |
+
+Env vars bắt buộc — **Security** (xác thực mọi request từ bên ngoài — app từ chối start nếu thiếu):
+
+| Env var | Điền gì | Bảo vệ cái gì |
+|---|---|---|
+| `SEPAY_SECRET` | Cùng giá trị với SePay webhook API Key | Chặn webhook giao dịch giả |
+| `TELEGRAM_WEBHOOK_SECRET` | Random token truyền vào Telegram `setWebhook` | Chặn Telegram update giả |
+| `CRON_SECRET` | Random token dùng cho URL `/trigger/*` của cron | Chặn trigger cron giả |
+
+Vì sao nhiều biến hơn `spend-less-bot`? Repo gốc giữ setup tối giản: token Telegram, chat ID, sheet ID, và file Google credentials trên server. `my-money-went-bot` thêm các biến security vì app được thiết kế để deploy public trên Railway/VPS và nhận dữ liệu giao dịch ngân hàng qua webhook. Nếu không có các secret này, người lạ biết URL `/webhook` hoặc `/trigger/*` có thể gửi dữ liệu giả vào bot hoặc kích hoạt job không mong muốn.
+
+Nhìn theo nhóm thì không quá nhiều: **3 biến định danh** (`BOT_TOKEN`, `CHAT_ID`, `SHEET_ID`), **1 cách cấp quyền Google** (`GOOGLE_CREDS_JSON` hoặc `GOOGLE_CREDS`), và **3 chuỗi random để bảo mật production** (`SEPAY_SECRET`, `TELEGRAM_WEBHOOK_SECRET`, `CRON_SECRET`).
 
 Generate secrets:
 
