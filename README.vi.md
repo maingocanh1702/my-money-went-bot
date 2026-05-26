@@ -59,6 +59,19 @@ flowchart LR
 
 ---
 
+## Tài liệu
+
+Cần hướng dẫn từng bước ngoài README?
+
+- [Wiki home](https://github.com/maingocanh1702/my-money-went-bot/wiki)
+- [Setup cho người không rành kỹ thuật](https://github.com/maingocanh1702/my-money-went-bot/wiki/Setup-for-Non-Technical-Users)
+- [Deploy bằng Railway](https://github.com/maingocanh1702/my-money-went-bot/wiki/Railway-Deployment)
+- [Troubleshooting](https://github.com/maingocanh1702/my-money-went-bot/wiki/Troubleshooting)
+- [Bảo mật và riêng tư](https://github.com/maingocanh1702/my-money-went-bot/wiki/Security-and-Privacy)
+- [Command reference](https://github.com/maingocanh1702/my-money-went-bot/wiki/Command-Reference)
+
+---
+
 ## Tại sao có project này
 
 Các app tài chính cá nhân (Money Lover, Misa, MoneyKeeper, ...) thường đòi credentials ngân hàng của bạn, chạy trên cloud của họ, và đẩy data của bạn sau bức tường freemium. Bot này làm ngược lại:
@@ -147,6 +160,8 @@ Một số bank (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) dùng **API 
 ## Khuyến nghị: Setup bằng Railway
 
 Nếu bạn không quen server Linux, hãy đi theo flow này: **Telegram → Google Sheet → Railway → SePay → test giao dịch đầu tiên**. Bỏ qua phần VPS; phần đó chỉ dành cho người đã quen deploy server.
+
+Cần hướng dẫn chi tiết hơn? Xem [wiki của project](https://github.com/maingocanh1702/my-money-went-bot/wiki).
 
 Một vài từ kỹ thuật trong guide này:
 
