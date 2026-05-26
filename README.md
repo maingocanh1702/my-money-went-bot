@@ -144,6 +144,113 @@ A subset (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) use **direct API in
 
 ---
 
+## Non-technical setup path
+
+If you are not comfortable with Linux servers, use this path: **Telegram → Google Sheet → Railway → SePay → first test transaction**. Skip the VPS section; it is for people who already know how to deploy a server.
+
+Plain-English terms used below:
+
+| Term | Meaning |
+|---|---|
+| `env vars` | Settings fields in Railway. You paste values there instead of editing code. |
+| `webhook` | A URL where Telegram or SePay sends events to your bot. |
+| `service account` | A Google robot email that lets the bot write to your Sheet. |
+| `secret` | A random password-like string that blocks unknown requests. |
+
+### 1. Setup overview
+
+1. Create a Telegram bot and save `BOT_TOKEN`.
+2. Get your Telegram `CHAT_ID`.
+3. Create a Google Sheet and copy `SHEET_ID`.
+4. Create a Google service account, download `credentials.json`, and share the Sheet with that robot email.
+5. Deploy this repo on Railway and fill in the settings.
+6. Paste the Railway webhook URL into SePay.
+7. Connect the Telegram webhook.
+8. Send `/today`, trigger one small transaction, then categorize the first transaction.
+
+### 2. What to copy and where to paste it
+
+The bot needs **7 settings** in Railway. They fall into two groups:
+
+**Core — the bot cannot start without these:**
+
+These connect the bot to Telegram, your Google Sheet, and your bank. `spend-less-bot` has the same 4 settings — any Telegram + SePay + Sheets bot needs them.
+
+| Value | Where to get it | Where to paste it |
+|---|---|---|
+| `BOT_TOKEN` | Chat with [@BotFather](https://t.me/BotFather), run `/newbot` | Railway → Variables → `BOT_TOKEN` |
+| `CHAT_ID` | Chat with [@userinfobot](https://t.me/userinfobot) | Railway → Variables → `CHAT_ID` |
+| `SHEET_ID` | The long part of the Google Sheet URL: `/spreadsheets/d/<SHEET_ID>/edit` | Railway → Variables → `SHEET_ID` |
+| `GOOGLE_CREDS_JSON` | Contents of the Google service-account `credentials.json` file | Railway → Variables → `GOOGLE_CREDS_JSON` |
+
+**Security — blocks strangers from sending fake data to your bot:**
+
+These are random passwords that prove a request really comes from SePay / Telegram / your cron job, not a stranger who guessed your URL. Without them, anyone who finds your bot's URL could log fake transactions into your Sheet. `spend-less-bot` does not have these — its webhook is open to anyone.
+
+| Value | Where to get it | Where to paste it | What it protects |
+|---|---|---|---|
+| `SEPAY_SECRET` | A long random string you create | Railway → Variables → `SEPAY_SECRET` **and** SePay → Webhook API Key | Blocks fake bank transactions |
+| `TELEGRAM_WEBHOOK_SECRET` | A different long random string | Railway → Variables → `TELEGRAM_WEBHOOK_SECRET` **and** Telegram `setWebhook` | Blocks fake Telegram commands |
+| `CRON_SECRET` | Another different long random string | Railway → Variables → `CRON_SECRET` | Blocks fake daily/monthly report triggers |
+
+If you do not use a terminal, generate the three secrets with a password manager or any password-generator website (search "random password generator"). Do not reuse a personal password.
+
+Railway needs `GOOGLE_CREDS_JSON` as **one line**. If you have a terminal:
+
+```bash
+cat credentials.json | tr -d '\n'
+```
+
+Paste the output into Railway. Without a terminal, open `credentials.json`, copy the whole file, then remove line breaks before pasting.
+
+### 3. Pre-deploy checklist
+
+- [ ] Created the Telegram bot and saved `BOT_TOKEN`.
+- [ ] Got your own `CHAT_ID`.
+- [ ] Created a new Google Sheet and copied `SHEET_ID`.
+- [ ] Enabled Google Sheets API and Google Drive API.
+- [ ] Created a service account and downloaded `credentials.json`.
+- [ ] Shared the Google Sheet with the `client_email` from `credentials.json` as **Editor**.
+- [ ] Added all 7 Railway variables: `BOT_TOKEN`, `CHAT_ID`, `SHEET_ID`, `GOOGLE_CREDS_JSON`, `SEPAY_SECRET`, `TELEGRAM_WEBHOOK_SECRET`, `CRON_SECRET`.
+- [ ] Disabled SePay's native Google Sheets integration to avoid duplicate transactions.
+
+### 4. How to know it worked
+
+After Railway deploys, your app has a domain like `https://<your-app>.up.railway.app`.
+
+1. Open `https://<your-app>.up.railway.app/` in a browser. You should see:
+
+   ```json
+   {"status":"ok","bot":"Financial Tracking Bot"}
+   ```
+
+2. Use that domain to set the Telegram webhook:
+
+   ```bash
+   curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
+     -d "url=https://<your-app>.up.railway.app/webhook" \
+     -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>" \
+     -d "drop_pending_updates=true"
+   ```
+
+3. Open Telegram and send `/today` to your bot. The bot should reply.
+4. In SePay, set the webhook URL to `https://<your-app>.up.railway.app/webhook`.
+5. Trigger one small transaction. The bot should message you, ask to set up the account, then ask for a category.
+6. Open the Google Sheet. The bot should have created tabs automatically and written the transaction.
+
+### 5. Common setup problems
+
+| What you see | Likely cause | What to do |
+|---|---|---|
+| Railway deploy failed | Missing required env var or invalid JSON | Check all 7 Railway variables, especially `GOOGLE_CREDS_JSON` as one-line JSON |
+| Railway domain does not show `status: ok` | App did not start or crashed | Check Railway logs and env vars |
+| Bot does not answer `/today` | Telegram webhook is not set correctly or `TELEGRAM_WEBHOOK_SECRET` does not match | Run `setWebhook` again with the Railway domain and matching secret |
+| Transaction arrives but Sheet is empty | Sheet was not shared with the service account | Open `credentials.json`, copy `client_email`, share the Sheet with that email as Editor |
+| Transaction appears twice | SePay native Google Sheets integration is still enabled | Disable SePay's Google Sheets integration |
+| SePay says it sent the webhook but the bot gets nothing | Wrong webhook URL or wrong API Key | URL must end in `/webhook`; SePay API Key must match `SEPAY_SECRET` |
+
+---
+
 ## Quick start
 
 ### Step 1 — Create your Telegram bot
@@ -194,7 +301,7 @@ cd my-money-went-bot
 cp .env.example .env
 ```
 
-Required env vars:
+Required env vars — **Core** (the bot cannot start without these):
 
 | Env var | What to put there |
 |---|---|
@@ -203,9 +310,18 @@ Required env vars:
 | `SHEET_ID` | The long ID in your Google Sheet URL |
 | `GOOGLE_CREDS_JSON` | Railway/cloud: one-line service-account JSON |
 | `GOOGLE_CREDS` | VPS/local alternative: path to `credentials.json` |
-| `SEPAY_SECRET` | Same value as the SePay webhook API Key |
-| `TELEGRAM_WEBHOOK_SECRET` | Random token passed to Telegram `setWebhook` |
-| `CRON_SECRET` | Random token used by `/trigger/*` cron URLs |
+
+Required env vars — **Security** (authenticates every inbound request — the app refuses to start without them):
+
+| Env var | What to put there | What it protects |
+|---|---|---|
+| `SEPAY_SECRET` | Same value as the SePay webhook API Key | Rejects fake bank-transaction webhooks |
+| `TELEGRAM_WEBHOOK_SECRET` | Random token passed to Telegram `setWebhook` | Rejects fake Telegram updates |
+| `CRON_SECRET` | Random token used by `/trigger/*` cron URLs | Rejects unauthorized cron triggers |
+
+Why more variables than `spend-less-bot`? The original repo keeps setup minimal: Telegram token, chat ID, sheet ID, and a Google credentials file on the server. `my-money-went-bot` adds security variables because it is designed to run publicly on Railway/VPS and receive bank-transaction data through webhooks. Without these secrets, anyone who knows the `/webhook` or `/trigger/*` URL could send fake data to the bot or trigger jobs unexpectedly.
+
+Grouped mentally, the list is smaller than it looks: **3 identity values** (`BOT_TOKEN`, `CHAT_ID`, `SHEET_ID`), **1 Google access method** (`GOOGLE_CREDS_JSON` or `GOOGLE_CREDS`), and **3 random production security secrets** (`SEPAY_SECRET`, `TELEGRAM_WEBHOOK_SECRET`, `CRON_SECRET`).
 
 Generate secrets:
 
