@@ -51,7 +51,9 @@ flowchart LR
 
 ## Demo
 
-[Watch the 54-second demo video](docs/media/my-money-went-bot-demo.mp4) to see a transaction flow through Telegram, categorization, and reporting.
+![My Money Went Bot demo preview](docs/media/my-money-went-bot-demo-preview.gif)
+
+[Watch the 54-second demo with audio](docs/media/my-money-went-bot-demo.mp4) to see a transaction flow through Telegram, categorization, and reporting.
 
 **No database. No third-party data store. Single-tenant — one bot per person.** Your Google Sheet IS the entire backend. Your data, your sheet, your rules.
 
