@@ -68,6 +68,7 @@ def _basic_payload(amount=50000, ref="REFX", account="1903999888",
     """Use Vietnam-localized 'now' so sepay's stale-tx filter doesn't reject."""
     from datetime import datetime
     import pytz
+    from config import SEPAY_SECRET
     tz = pytz.timezone("Asia/Ho_Chi_Minh")
     return {
         "transferType": tx_type,
@@ -77,6 +78,7 @@ def _basic_payload(amount=50000, ref="REFX", account="1903999888",
         "currency": currency,
         "referenceCode": ref,
         "accountNumber": account,
+        "apikey": SEPAY_SECRET,
     }
 
 
@@ -121,6 +123,59 @@ async def test_sepay_replay_does_not_double_write(fake_world):
     rows = sh._sheet(S.TRANSACTIONS).get_all_values()
     # header + exactly one tx row
     assert len(rows) == 2
+
+
+@pytest.mark.asyncio
+async def test_sepay_retry_after_append_failure_processes_ref(fake_world, monkeypatch):
+    _seed_account()
+    payload = _basic_payload(ref="RETRY_AFTER_APPEND_FAIL")
+
+    original_append = sh.append_transaction
+    calls = {"count": 0}
+
+    def flaky_append(*args, **kwargs):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise RuntimeError("simulated append failure")
+        return original_append(*args, **kwargs)
+
+    monkeypatch.setattr(sh, "append_transaction", flaky_append)
+
+    with pytest.raises(RuntimeError, match="simulated append failure"):
+        await sepay.handle_sepay_webhook(payload)
+
+    rows = sh._sheet(S.TRANSACTIONS).get_all_values()
+    assert len(rows) == 1
+
+    await sepay.handle_sepay_webhook(payload)
+
+    rows = sh._sheet(S.TRANSACTIONS).get_all_values()
+    assert len(rows) == 2
+    assert rows[1][8] == "RETRY_AFTER_APPEND_FAIL"
+
+    ref_rows = sh._sheet(S.PROCESSED_REFS).get_all_values()
+    matching = [r for r in ref_rows[1:] if r[0] == "RETRY_AFTER_APPEND_FAIL"]
+    assert matching[-1][1] == "committed"
+
+
+def test_tx_exists_committed_ref_is_deduped(fake_world):
+    ws_refs = fake_world.add_worksheet(S.PROCESSED_REFS)
+    ws_refs.update("A1:C1", [["ref_code", "status", "created_at"]])
+    ws_refs.update("A2:C2", [["COMMITTED_REF", "committed", "2026-05-26T00:00:00"]])
+
+    assert sh.tx_exists("COMMITTED_REF") is True
+
+
+def test_tx_exists_failed_ref_is_recoverable(fake_world):
+    ws_refs = fake_world.add_worksheet(S.PROCESSED_REFS)
+    ws_refs.update("A1:C1", [["ref_code", "status", "created_at"]])
+    ws_refs.update("A2:C2", [["FAILED_REF", "failed", "2026-05-26T00:00:00"]])
+
+    assert sh.tx_exists("FAILED_REF") is False
+
+    rows = ws_refs.get_all_values()
+    assert len([r for r in rows[1:] if r[0] == "FAILED_REF"]) == 1
+    assert rows[1][1] == "processing"
 
 
 # ── Idempotency: ledger write is itself idempotent (per-row apply) ─
@@ -168,6 +223,21 @@ async def test_currency_mismatch_skips_ledger(fake_world):
     sh.invalidate_accounts_cache()
     acc = sh.find_account_by_id("tcb_main")
     assert acc["running_balance"] == 1_000_000  # unchanged
+
+
+@pytest.mark.asyncio
+async def test_sepay_vnd_amount_preserves_integer_precision(fake_world):
+    _seed_account()
+    payload = _basic_payload(
+        amount="9007199254740993",
+        ref="BIG_VND",
+        desc="large vnd precision check",
+    )
+
+    await sepay.handle_sepay_webhook(payload)
+
+    rows = sh._sheet(S.TRANSACTIONS).get_all_values()
+    assert rows[1][7] == "9007199254740993"
 
 
 # ── Recat: voids old ledger leg, account net unchanged ─────────

@@ -18,6 +18,9 @@ os.environ.setdefault("BOT_TOKEN", "test:dummy")
 os.environ.setdefault("CHAT_ID", "0")
 os.environ.setdefault("SHEET_ID", "test_sheet_id")
 os.environ.setdefault("GOOGLE_CREDS", "credentials.json")  # not actually opened in unit tests
+os.environ.setdefault("TELEGRAM_WEBHOOK_SECRET", "test_tg_secret")
+os.environ.setdefault("SEPAY_SECRET", "test_sepay_secret")
+os.environ.setdefault("CRON_SECRET", "test_cron_secret")
 
 
 def _col_letter_to_idx(letter: str) -> int:

@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
-[![Tests: 98 passing](https://img.shields.io/badge/tests-98%20passing-brightgreen.svg)](tests/)
+[![Tests: 120 passing](https://img.shields.io/badge/tests-120%20passing-brightgreen.svg)](tests/)
 
 [🇬🇧 English](README.md)
 
@@ -183,19 +183,21 @@ Một số bank (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) dùng **API 
 git clone https://github.com/maingocanh1702/my-money-went-bot.git
 cd my-money-went-bot
 cp .env.example .env
-# Sửa .env: BOT_TOKEN, CHAT_ID, SHEET_ID, GOOGLE_CREDS_JSON (hoặc GOOGLE_CREDS)
+# Sửa .env: BOT_TOKEN, CHAT_ID, SHEET_ID, GOOGLE_CREDS_JSON (hoặc GOOGLE_CREDS),
+# và 3 secret bắt buộc: SEPAY_SECRET, TELEGRAM_WEBHOOK_SECRET, CRON_SECRET.
 ```
 
 **Railway** (khuyến nghị):
 
 1. Push fork của bạn lên GitHub.
 2. [railway.app](https://railway.app) → New Project → Deploy from GitHub repo.
-3. Add env vars trong Railway dashboard. Với `GOOGLE_CREDS_JSON`, paste toàn bộ JSON thành 1 dòng.
+3. Add env vars trong Railway dashboard. Với `GOOGLE_CREDS_JSON`, paste toàn bộ JSON thành 1 dòng. Production sẽ fail closed nếu thiếu `SEPAY_SECRET`, `TELEGRAM_WEBHOOK_SECRET`, hoặc `CRON_SECRET`.
 4. Railway cấp URL `*.up.railway.app` — dùng URL này làm SePay webhook URL.
-5. Đăng ký Telegram webhook:
+5. Đăng ký Telegram webhook với cùng secret token như `TELEGRAM_WEBHOOK_SECRET`:
    ```bash
    curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
-     -d "url=https://<your-app>.up.railway.app/webhook"
+     -d "url=https://<your-app>.up.railway.app/webhook" \
+     -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>"
    ```
 
 **VPS** (Ubuntu 22.04):
@@ -305,9 +307,19 @@ chmod 600 .env credentials.json
 
 Không bao giờ commit lên GitHub — `.gitignore` đã block sẵn.
 
-**2. Webhook auth opt-in.** SePay API key check support qua env var `SEPAY_SECRET`. Nếu không set, bất kỳ ai biết webhook URL có thể spam tx giả. **Khuyến nghị:** set secret + đặt Cloudflare (hoặc WAF) trước Railway app.
+**2. Webhook và trigger secrets là bắt buộc ở production.** App sẽ không start nếu thiếu `SEPAY_SECRET`, `TELEGRAM_WEBHOOK_SECRET`, hoặc `CRON_SECRET`. Payload SePay phải có API key khớp, Telegram update phải có header `X-Telegram-Bot-Api-Secret-Token`, và caller của `/trigger/*` phải gửi cron secret.
 
-**3. Dùng SSH key, không dùng password.** Nếu deploy VPS, password SSH có thể brute-force:
+**3. Đăng ký Telegram với `secret_token`.** Telegram chỉ gửi secret header sau khi bạn set webhook với token đó:
+
+```bash
+curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
+  -d "url=https://<your-domain>/webhook" \
+  -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>"
+```
+
+Dùng chuỗi random như `openssl rand -hex 32`, lưu vào `TELEGRAM_WEBHOOK_SECRET`, rồi dùng đúng chuỗi đó cho `secret_token`.
+
+**4. Dùng SSH key, không dùng password.** Nếu deploy VPS, password SSH có thể brute-force:
 
 ```bash
 ssh-keygen -t ed25519
@@ -316,11 +328,11 @@ ssh-copy-id root@your-server
 #   PasswordAuthentication no
 ```
 
-**4. Bot chỉ nói chuyện với `CHAT_ID` của bạn.** Hardcoded check — không ai khác tương tác được kể cả khi biết tên bot.
+**5. Bot chỉ nói chuyện với `CHAT_ID` của bạn.** Hardcoded check — không ai khác tương tác được kể cả khi biết tên bot.
 
-**5. Không có banking credentials nào chạy qua code này.** Bot chỉ nhận *thông báo* tx (số tiền + description) từ SePay. Login bank, số thẻ, v.v. không bao giờ đi qua.
+**6. Không có banking credentials nào chạy qua code này.** Bot chỉ nhận *thông báo* tx (số tiền + description) từ SePay. Login bank, số thẻ, v.v. không bao giờ đi qua.
 
-**6. PII trong description.** Payload SePay chứa description giao dịch thô, có thể có tên đối tác, số tài khoản, references. Những thứ này được ghi vào cột `Description`. Ai có quyền đọc Sheet đều thấy — giữ Sheet private.
+**7. PII trong description.** Payload SePay chứa description giao dịch thô, có thể có tên đối tác, số tài khoản, references. Những thứ này được ghi vào cột `Description`. Ai có quyền đọc Sheet đều thấy — giữ Sheet private.
 
 ---
 

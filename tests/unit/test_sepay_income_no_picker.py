@@ -68,6 +68,7 @@ async def test_incoming_tx_emits_notification_not_picker(
     monkeypatch.setattr(sepay.tg, "send_text", fake_send_text)
     monkeypatch.setattr(sepay.tg, "send_with_buttons", fake_send_buttons)
 
+    from config import SEPAY_SECRET
     payload = {
         "transferType":   "in",
         "transferAmount": 10_000_000,
@@ -75,6 +76,7 @@ async def test_incoming_tx_emits_notification_not_picker(
         "referenceCode":  "FT26145890185611",
         "accountNumber":  "02635252601",
         "transactionDate": "2026-05-25 14:00:00",
+        "apikey":         SEPAY_SECRET,
     }
     await sepay.handle_sepay_webhook(payload)
 

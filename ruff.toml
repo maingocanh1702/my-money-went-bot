@@ -1,0 +1,15 @@
+line-length = 120
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "I", "UP"]
+# Ignore some noisy rules for this codebase
+ignore = [
+    "E501",   # line-too-long — handled by line-length but many existing lines
+    "E741",   # ambiguous variable name (e, l, etc.)
+    "I001",   # import sorting — existing codebase has unsorted imports throughout
+    "UP007",  # Use X | Y for union types (needs Python 3.10+ syntax everywhere)
+]
+
+[lint.per-file-ignores]
+"tests/**" = ["E402"]  # module-level imports not at top (conftest sets env first)

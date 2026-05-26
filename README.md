@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
-[![Tests: 98 passing](https://img.shields.io/badge/tests-98%20passing-brightgreen.svg)](tests/)
+[![Tests: 120 passing](https://img.shields.io/badge/tests-120%20passing-brightgreen.svg)](tests/)
 
 [🇻🇳 Tiếng Việt](README.vi.md)
 
@@ -183,19 +183,21 @@ A subset (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) use **direct API in
 git clone https://github.com/maingocanh1702/my-money-went-bot.git
 cd my-money-went-bot
 cp .env.example .env
-# Edit .env: BOT_TOKEN, CHAT_ID, SHEET_ID, GOOGLE_CREDS_JSON (or GOOGLE_CREDS)
+# Edit .env: BOT_TOKEN, CHAT_ID, SHEET_ID, GOOGLE_CREDS_JSON (or GOOGLE_CREDS),
+# plus the required SEPAY_SECRET, TELEGRAM_WEBHOOK_SECRET, and CRON_SECRET.
 ```
 
 **Railway** (recommended):
 
 1. Push your fork to GitHub.
 2. [railway.app](https://railway.app) → New Project → Deploy from GitHub repo.
-3. Add env vars in Railway dashboard. For `GOOGLE_CREDS_JSON`, paste the full JSON as one line.
+3. Add env vars in Railway dashboard. For `GOOGLE_CREDS_JSON`, paste the full JSON as one line. Production startup fails closed unless `SEPAY_SECRET`, `TELEGRAM_WEBHOOK_SECRET`, and `CRON_SECRET` are all set.
 4. Railway gives you a `*.up.railway.app` URL — use that as your SePay webhook URL.
-5. Register the Telegram webhook:
+5. Register the Telegram webhook with the same secret token as `TELEGRAM_WEBHOOK_SECRET`:
    ```bash
    curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
-     -d "url=https://<your-app>.up.railway.app/webhook"
+     -d "url=https://<your-app>.up.railway.app/webhook" \
+     -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>"
    ```
 
 **VPS** (Ubuntu 22.04):
@@ -305,9 +307,19 @@ chmod 600 .env credentials.json
 
 Never commit either to GitHub — `.gitignore` already blocks them.
 
-**2. Webhook auth is opt-in.** SePay's API key check is supported via the `SEPAY_SECRET` env var. If unset, anyone who knows your webhook URL can spam fake transactions. **Recommended:** set the secret and put Cloudflare (or another WAF) in front of your Railway app.
+**2. Webhook and trigger secrets are mandatory in production.** The app refuses to start unless `SEPAY_SECRET`, `TELEGRAM_WEBHOOK_SECRET`, and `CRON_SECRET` are configured. SePay payloads must include the matching SePay API key, Telegram updates must arrive with `X-Telegram-Bot-Api-Secret-Token`, and `/trigger/*` callers must include the cron secret.
 
-**3. Use SSH keys, not passwords.** If you VPS-deploy, password SSH is brute-forceable:
+**3. Register Telegram with `secret_token`.** The Telegram webhook secret header is only sent after you register it:
+
+```bash
+curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
+  -d "url=https://<your-domain>/webhook" \
+  -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>"
+```
+
+Use a random value such as `openssl rand -hex 32`, store it as `TELEGRAM_WEBHOOK_SECRET`, and pass the same value in `secret_token`.
+
+**4. Use SSH keys, not passwords.** If you VPS-deploy, password SSH is brute-forceable:
 
 ```bash
 ssh-keygen -t ed25519
@@ -316,11 +328,11 @@ ssh-copy-id root@your-server
 #   PasswordAuthentication no
 ```
 
-**4. Bot only talks to your `CHAT_ID`.** Hardcoded check — no one else can interact even if they find the bot name.
+**5. Bot only talks to your `CHAT_ID`.** Hardcoded check — no one else can interact even if they find the bot name.
 
-**5. No banking credentials touch this code.** The bot receives transaction *notifications* (amount + description) from SePay. Your bank login, card numbers, etc. never pass through.
+**6. No banking credentials touch this code.** The bot receives transaction *notifications* (amount + description) from SePay. Your bank login, card numbers, etc. never pass through.
 
-**6. PII in descriptions.** SePay's payload includes raw transfer descriptions which may contain partner names, account numbers, references. These get written to the `Description` column. Anyone with read access to your Sheet sees this — keep the Sheet private.
+**7. PII in descriptions.** SePay's payload includes raw transfer descriptions which may contain partner names, account numbers, references. These get written to the `Description` column. Anyone with read access to your Sheet sees this — keep the Sheet private.
 
 ---
 

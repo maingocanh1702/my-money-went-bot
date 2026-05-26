@@ -4,13 +4,36 @@ Triggered when a bank transaction arrives.
 """
 import hashlib
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 import pytz
 
-from config import CHAT_ID, TIMEZONE, DAILY_BUCKET_ID, SEPAY_SECRET
+from config import CHAT_ID, TIMEZONE, SEPAY_SECRET
 import sheets as sh
 import telegram_api as tg
 from handlers.account_resolver import resolve_account
 from handlers.accounts import prompt_new_account
+
+
+def _append_transaction_and_commit(ref_code: str, tx_date, description, amount, month_key, **kwargs) -> int:
+    try:
+        row_num = sh.append_transaction(tx_date, description, amount, ref_code, month_key, **kwargs)
+    except Exception:
+        sh.mark_ref_failed(ref_code)
+        raise
+    sh.mark_ref_committed(ref_code)
+    return row_num
+
+
+def _parse_webhook_amount(raw_amount, currency: str):
+    try:
+        parsed = Decimal(str(raw_amount).replace(",", "").strip())
+    except (InvalidOperation, AttributeError):
+        raise ValueError(f"invalid webhook amount: {raw_amount!r}")
+
+    amount_abs = abs(parsed)
+    if (currency or "VND").upper() == "VND":
+        return int(amount_abs)
+    return float(amount_abs)
 
 
 async def _ensure_buckets(month_key: str) -> tuple[list[dict], int]:
@@ -34,18 +57,19 @@ async def _ensure_buckets(month_key: str) -> tuple[list[dict], int]:
 
 
 async def handle_sepay_webhook(payload: dict):
-    # Optional: validate SePay webhook secret
-    # Set SEPAY_SECRET in .env to match the token configured in SePay dashboard
-    if SEPAY_SECRET:
-        incoming_secret = (
-            payload.get("apikey")
-            or payload.get("token")
-            or payload.get("secret")
-            or (payload.get("data") or {}).get("apikey")
-        )
-        if incoming_secret != SEPAY_SECRET:
-            print(f"[sepay] rejected: invalid secret")
-            return
+    import hmac as _hmac
+
+    # Validate SePay webhook secret (mandatory — SEPAY_SECRET is required at startup)
+    incoming_secret = (
+        payload.get("apikey")
+        or payload.get("token")
+        or payload.get("secret")
+        or (payload.get("data") or {}).get("apikey")
+        or ""
+    )
+    if not _hmac.compare_digest(str(incoming_secret), SEPAY_SECRET):
+        print("[sepay] rejected: invalid or missing webhook secret")
+        return
 
     data = payload.get("data") if "data" in payload else payload
 
@@ -58,26 +82,26 @@ async def handle_sepay_webhook(payload: dict):
         (data[k] for k in ("transferAmount", "transfer_amount", "amount") if data.get(k) is not None),
         None
     )
+    # Currency: VND default cho mọi nguồn cũ (SePay luôn là VND).
+    # Email parsers (TCB/Cake) tự set "VND"; Hang Seng set "HKD".
+    currency = str(data.get("currency") or "VND").upper().strip() or "VND"
     if raw_amount is None:
         print("[sepay] skipping: no amount field found")
         return
-    amount = abs(float(raw_amount))
+    amount = _parse_webhook_amount(raw_amount, currency)
+    signed_amount = Decimal(str(raw_amount).replace(",", "").strip())
 
     tx_type_raw = str(data.get("transferType") or data.get("transfer_type") or data.get("type") or "").lower()
 
     # Determine direction: outgoing (debit) vs incoming (credit)
-    is_outgoing = "out" in tx_type_raw or "debit" in tx_type_raw or float(raw_amount) < 0
-    is_incoming = "in" in tx_type_raw or "credit" in tx_type_raw or (not is_outgoing and float(raw_amount) > 0)
+    is_outgoing = "out" in tx_type_raw or "debit" in tx_type_raw or signed_amount < 0
+    is_incoming = "in" in tx_type_raw or "credit" in tx_type_raw or (not is_outgoing and signed_amount > 0)
 
     if not is_outgoing and not is_incoming:
         print(f"[sepay] skipping unknown tx type={tx_type_raw!r}")
         return
 
     description = (data.get("description") or data.get("content") or "Không có mô tả").strip()
-
-    # Currency: VND default cho mọi nguồn cũ (SePay luôn là VND).
-    # Email parsers (TCB/Cake) tự set "VND"; Hang Seng set "HKD".
-    currency = str(data.get("currency") or "VND").upper().strip() or "VND"
 
     # Deterministic fallback ref_code — stable across SePay retries
     # (hash of amount + description + date so duplicate deliveries are correctly deduped)
@@ -133,8 +157,9 @@ async def handle_sepay_webhook(payload: dict):
 
     # ─── INCOMING (Tiền vào) ──────────────────────────────────
     if is_incoming:
-        row_num = sh.append_transaction(
-            tx_date, description, amount, ref_code, month_key,
+        row_num = _append_transaction_and_commit(
+            ref_code,
+            tx_date, description, amount, month_key,
             tx_type="Tiền vào",
             currency=currency,
             account_id=resolved_account_id,
@@ -173,8 +198,9 @@ async def handle_sepay_webhook(payload: dict):
         return
 
     # ─── OUTGOING (Tiền ra) ───────────────────────────────────
-    row_num = sh.append_transaction(
-        tx_date, description, amount, ref_code, month_key,
+    row_num = _append_transaction_and_commit(
+        ref_code,
+        tx_date, description, amount, month_key,
         currency=currency,
         account_id=resolved_account_id,
         ledger_tx_type="expense",

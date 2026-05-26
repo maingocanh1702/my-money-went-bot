@@ -473,20 +473,59 @@ def find_recent_duplicate(amount: float, tx_type: str, tx_date: str, currency: s
 
 
 # -----------------------------------------------------
-# Transaction Write
+# Transaction Write — Durable Idempotency
 # -----------------------------------------------------
-_processed_refs: dict[str, float] = {}  # ref_code → timestamp
+_processed_refs: dict[str, float] = {}  # committed ref_code → timestamp (in-memory fast path)
+
+
+def _ensure_processed_refs_tab():
+    """Create the Processed Refs tab if it doesn't exist. Idempotent."""
+    ss = _get_spreadsheet()
+    try:
+        ws = ss.worksheet(S.PROCESSED_REFS)
+    except gspread.WorksheetNotFound:
+        ws = ss.add_worksheet(title=S.PROCESSED_REFS, rows=500, cols=3)
+        ws.update("A1:C1", [["ref_code", "status", "created_at"]])
+        print(f"[dedup] created tab {S.PROCESSED_REFS!r}")
+    return ws
+
+
+def _get_processed_ref(ref_code: str) -> tuple[str | None, int | None]:
+    """Return (status, row_num) for a ref in Processed Refs.
+
+    Lookup failures are fail-closed: callers treat the ref as committed
+    because idempotency is unknowable without this sheet.
+    """
+    if not ref_code:
+        return None, None
+    try:
+        ws = _ensure_processed_refs_tab()
+        rows = ws.get_all_values()[1:]
+        for i, r in enumerate(rows, start=2):
+            if len(r) >= 1 and r[0] == ref_code:
+                status = (r[1] if len(r) > 1 else "").strip().lower()
+                return status or "reserved", i
+        return None, None
+    except Exception as e:
+        print(f"[dedup] processed_refs lookup error (FAIL-CLOSED): {e}")
+        return "committed", None
+
 
 def tx_exists(ref_code: str) -> bool:
     """Dedup transaction by ref_code.
 
     Layered check:
-    1. In-memory cache (5-min TTL) — fast path cho SePay retry burst
-    2. Sheet lookup — bắt cả case re-process email cũ (vd Apps Script
-       bootstrap re-trigger), dùng cột I trong "Đầu ra"
+    1. In-memory cache (5-min TTL) — committed refs only
+    2. Transactions sheet lookup — cột I (legacy, still useful for backcompat)
+    3. Processed Refs tab — durable reservation state
 
-    Trả về True nếu ref_code đã tồn tại → caller sẽ skip ghi.
-    Fail-open: nếu sheet không đọc được, fallback về cache only.
+    Only committed refs are duplicates. Recoverable states such as reserved,
+    processing, and failed are allowed to retry because a prior append may
+    have failed after reserving the ref.
+
+    Fail-CLOSED: nếu sheet không đọc được, trả True (assume duplicate).
+    Rationale: missing a tx is recoverable (webhook retry), duplicating
+    one corrupts financial data.
     """
     import time
     now = time.time()
@@ -499,20 +538,74 @@ def tx_exists(ref_code: str) -> bool:
     if ref_code in _processed_refs:
         return True
 
-    # Layer 2: sheet lookup — cột I (index 8 = position 9 in 1-based)
+    # Layer 2: Transactions sheet lookup (legacy — column I)
     if _ref_in_sheet(ref_code):
-        # Cache để lần sau nhanh hơn
         _processed_refs[ref_code] = now
         return True
 
-    _processed_refs[ref_code] = now
+    # Layer 3: Processed Refs durable tab
+    status, row_num = _get_processed_ref(ref_code)
+    if status == "committed":
+        _processed_refs[ref_code] = now
+        return True
+
+    # Not committed — reserve/claim the ref before returning False.
+    try:
+        ws = _ensure_processed_refs_tab()
+        now_str = datetime.utcnow().isoformat()
+        if row_num is not None:
+            ws.update(f"B{row_num}:C{row_num}", [["processing", now_str]])
+        else:
+            next_row = _next_row(ws, col=1)
+            ws.update(f"A{next_row}:C{next_row}", [[ref_code, "processing", now_str]])
+    except Exception as e:
+        print(f"[dedup] reservation write failed (FAIL-CLOSED): {e}")
+        return True  # can't reserve → refuse to process
+
     return False
 
 
+def mark_ref_committed(ref_code: str):
+    """Update a reserved/processing/failed ref to committed after tx write."""
+    if not ref_code:
+        return
+    try:
+        ws = _ensure_processed_refs_tab()
+        rows = ws.get_all_values()[1:]
+        for i, r in enumerate(rows):
+            if len(r) >= 1 and r[0] == ref_code:
+                ws.update_cell(i + 2, 2, "committed")
+                _processed_refs[ref_code] = datetime.utcnow().timestamp()
+                return
+        next_row = _next_row(ws, col=1)
+        ws.update(f"A{next_row}:C{next_row}", [[ref_code, "committed", datetime.utcnow().isoformat()]])
+        _processed_refs[ref_code] = datetime.utcnow().timestamp()
+    except Exception as e:
+        print(f"[dedup] mark_ref_committed error: {e}")
+
+
+def mark_ref_failed(ref_code: str):
+    """Mark a ref recoverable after processing fails post-reservation."""
+    if not ref_code:
+        return
+    _processed_refs.pop(ref_code, None)
+    try:
+        ws = _ensure_processed_refs_tab()
+        rows = ws.get_all_values()[1:]
+        now_str = datetime.utcnow().isoformat()
+        for i, r in enumerate(rows):
+            if len(r) >= 1 and r[0] == ref_code:
+                ws.update(f"B{i + 2}:C{i + 2}", [["failed", now_str]])
+                return
+        next_row = _next_row(ws, col=1)
+        ws.update(f"A{next_row}:C{next_row}", [[ref_code, "failed", now_str]])
+    except Exception as e:
+        print(f"[dedup] mark_ref_failed error: {e}")
+
+
 def _ref_in_sheet(ref_code: str) -> bool:
-    """Check if ref_code exists in column I of "Đầu ra" sheet.
-    Dùng cache TTL 30s để tránh đọc sheet nhiều lần khi xử lý burst email.
-    Fail-open: trả False nếu có exception (thà ghi trùng còn hơn miss GD)."""
+    """Check if ref_code exists in column I of Transactions sheet.
+    Fail-CLOSED: trả True nếu có exception (thà skip còn hơn duplicate)."""
     if not ref_code:
         return False
     try:
@@ -523,8 +616,8 @@ def _ref_in_sheet(ref_code: str) -> bool:
                 return True
         return False
     except Exception as e:
-        print(f"[tx_exists] sheet lookup error (fail-open): {e}")
-        return False
+        print(f"[tx_exists] sheet lookup error (FAIL-CLOSED): {e}")
+        return True  # fail-closed
 
 
 def append_transaction(

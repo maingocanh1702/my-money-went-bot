@@ -1,0 +1,37 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    env:
+      BOT_TOKEN: "test:ci_dummy"
+      CHAT_ID: "0"
+      SHEET_ID: "ci_sheet_id"
+      GOOGLE_CREDS: "credentials.json"
+      TELEGRAM_WEBHOOK_SECRET: "ci_tg_secret"
+      SEPAY_SECRET: "ci_sepay_secret"
+      CRON_SECRET: "ci_cron_secret"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff
+
+      - name: Lint with Ruff
+        run: ruff check .
+
+      - name: Run tests
+        run: python -m pytest -q
