@@ -5,7 +5,7 @@ Pre-Phase-2 this file also hosted /status (monthly category report),
 into the unified /report (handlers/report.py, singular) with period
 buttons and lens toggle. Only the today-snapshot + recap paths remain here.
 """
-from datetime import datetime, date
+from datetime import datetime
 import pytz
 
 from config import CHAT_ID, TIMEZONE, DAILY_BUCKET_ID

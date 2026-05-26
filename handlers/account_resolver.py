@@ -23,7 +23,7 @@ already cached in sheets.py, so this is cheap to call per webhook.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Literal
 
 import sheets as sh
 
@@ -34,9 +34,9 @@ ResolveStatus = Literal["matched", "new_identifier", "no_identifier"]
 @dataclass
 class ResolveResult:
     status:      ResolveStatus
-    account_id:  Optional[str] = None   # set when status == "matched"
-    identifier:  Optional[str] = None   # raw extracted, e.g. "1903xxxxxxx888"
-    source_key:  Optional[str] = None   # full "{source}:{identifier}"
+    account_id:  str | None = None   # set when status == "matched"
+    identifier:  str | None = None   # raw extracted, e.g. "1903xxxxxxx888"
+    source_key:  str | None = None   # full "{source}:{identifier}"
 
 
 def _norm(s: str | None) -> str:
