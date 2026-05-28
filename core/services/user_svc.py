@@ -68,6 +68,7 @@ class User:
     channel_type: str
     channel_user_id: str
     chat_id: int | None
+    channel_chat_id: str | None
     locale: str
     timezone: str
     plan: str
@@ -98,6 +99,7 @@ def _row_to_user(row: Any) -> User:
         channel_type=str(row["channel_type"]),
         channel_user_id=str(row["channel_user_id"]),
         chat_id=row["chat_id"],
+        channel_chat_id=row["channel_chat_id"],
         locale=str(row["locale"]),
         timezone=str(row["timezone"]),
         plan=str(row["plan"]),
@@ -111,6 +113,7 @@ async def create_or_get_user(
     channel_type: str,
     channel_user_id: str,
     chat_id: int | None = None,
+    channel_chat_id: str | None = None,
     locale: str = "vi",
 ) -> tuple[User, bool]:
     """Idempotent user creation.
@@ -134,16 +137,17 @@ async def create_or_get_user(
             inserted = await conn.fetchrow(
                 """
                 INSERT INTO users (
-                    channel_type, channel_user_id, chat_id,
+                    channel_type, channel_user_id, chat_id, channel_chat_id,
                     plan, trial_ends_at, locale
                 )
-                VALUES ($1, $2, $3, 'free', $4, $5)
+                VALUES ($1, $2, $3, $4, 'free', $5, $6)
                 ON CONFLICT (channel_type, channel_user_id) DO NOTHING
                 RETURNING id;
                 """,
                 channel_type,
                 channel_user_id,
                 chat_id,
+                channel_chat_id,
                 trial_end,
                 locale,
             )
@@ -176,6 +180,21 @@ async def create_or_get_user(
                         """,
                         existing["id"],
                         chat_id,
+                    )
+                    if refreshed is not None:
+                        existing = refreshed
+                # Same self-heal pattern for string channel routing IDs used
+                # by non-Telegram platforms. Preserve any existing value.
+                if channel_chat_id is not None and existing["channel_chat_id"] is None:
+                    refreshed = await conn.fetchrow(
+                        """
+                        UPDATE users
+                        SET channel_chat_id = $2, updated_at = NOW()
+                        WHERE id = $1 AND channel_chat_id IS NULL
+                        RETURNING *;
+                        """,
+                        existing["id"],
+                        channel_chat_id,
                     )
                     if refreshed is not None:
                         existing = refreshed

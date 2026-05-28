@@ -109,6 +109,7 @@ async def handle_start(
     channel_type: str,
     channel_user_id: str,
     chat_id: int | None = None,
+    channel_chat_id: str | None = None,
     language_code: str | None = None,
     display_name: str | None = None,
 ) -> None:
@@ -127,6 +128,7 @@ async def handle_start(
             channel_type=channel_type,
             channel_user_id=channel_user_id,
             chat_id=chat_id,
+            channel_chat_id=channel_chat_id,
             locale="vi",
         )
     except Exception as exc:
