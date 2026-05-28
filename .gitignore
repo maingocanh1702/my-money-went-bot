@@ -49,6 +49,7 @@ Thumbs.db
 # Allow screenshots for README
 !docs/
 docs/*
+!docs/*.md
 !docs/screenshots/
 !docs/screenshots/**
 !docs/media/

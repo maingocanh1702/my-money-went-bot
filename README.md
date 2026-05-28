@@ -67,9 +67,20 @@ Need step-by-step help beyond the README?
 - [Setup for non-technical users](https://github.com/maingocanh1702/my-money-went-bot/wiki/Setup-for-Non-Technical-Users)
 - [Vietnamese setup guide](https://github.com/maingocanh1702/my-money-went-bot/wiki/Setup-cho-nguoi-khong-ranh-ky-thuat)
 - [Railway deployment](https://github.com/maingocanh1702/my-money-went-bot/wiki/Railway-Deployment)
+- [AI assistant setup guide](docs/AI_SETUP.md)
 - [Troubleshooting](https://github.com/maingocanh1702/my-money-went-bot/wiki/Troubleshooting)
 - [Security and privacy](https://github.com/maingocanh1702/my-money-went-bot/wiki/Security-and-Privacy)
 - [Command reference](https://github.com/maingocanh1702/my-money-went-bot/wiki/Command-Reference)
+
+Want Codex, Claude, Cursor, or ChatGPT to guide the setup? Copy this prompt:
+
+```text
+Help me set up this repo:
+https://github.com/maingocanh1702/my-money-went-bot
+
+I am not technical. Follow docs/AI_SETUP.md and guide me through the simplest Railway setup step by step.
+Do not ask me to edit code or paste real secrets into public chat.
+```
 
 ---
 
