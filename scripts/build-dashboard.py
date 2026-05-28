@@ -1008,13 +1008,11 @@ def render_html(
         feat = _strip_id_prefix(pr.feature, pr.pr_id)
         # truncate name to ~40 chars
         feat_short = feat if len(feat) <= 40 else feat[:38] + "…"
-        chips.append(
-            f"""<span class="next-chip">
+        chips.append(f"""<span class="next-chip">
   <span class="dot not-started"></span>
   <span class="pr-id">{html.escape(pr.pr_id)}</span>
   {html.escape(feat_short)}
-</span>"""
-        )
+</span>""")
     next_strip = f"""<div class="next-strip">
   <span class="next-label">Next</span>
   {''.join(chips) if chips else '<span style="font-size:12px;color:var(--text-tertiary);">Hết PR not-started.</span>'}
@@ -1085,29 +1083,25 @@ def render_html(
                     f"{human} {urgency_emoji}{overlay_html}</span>"
                 )
 
-            pr_rows.append(
-                f"""<div class="{row_cls}" title="{html.escape(tooltip)}">
+            pr_rows.append(f"""<div class="{row_cls}" title="{html.escape(tooltip)}">
   <span class="dot {pr.status_slug}"></span>
   <span class="pr-id">{html.escape(pr.pr_id)}</span>
   <span class="pr-name"><span class="pr-name-text">{html.escape(feat)}</span>{sync_badges}{state_badge_html}</span>
-</div>"""
-            )
+</div>""")
         rows_html = (
             "".join(pr_rows)
             if pr_rows
             else '<div style="font-size:11px;color:var(--text-tertiary);padding:4px 6px;">(no PRs)</div>'
         )
 
-        phase_cards.append(
-            f"""<div class="phase-card{active_cls}">
+        phase_cards.append(f"""<div class="phase-card{active_cls}">
   <div class="phase-card-head">
     <p class="phase-card-name">{html.escape(s.key)}</p>
     <span class="phase-card-meta">{s.merged}/{s.total} · {s.percent}%</span>
   </div>
   <div class="phase-card-bar"><div class="{zero_class}" style="width:{width};"></div></div>
   <div class="phase-prs">{rows_html}</div>
-</div>"""
-        )
+</div>""")
 
     board_html = f'<div class="board">\n{"".join(phase_cards)}\n</div>'
 

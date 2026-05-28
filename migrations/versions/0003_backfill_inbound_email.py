@@ -37,14 +37,12 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.execute(
-        """
+    op.execute("""
         UPDATE users
         SET inbound_email = 'u' || id::text || '@in.mymoneywent.com',
             updated_at = NOW()
         WHERE inbound_email IS NULL;
-        """
-    )
+        """)
 
 
 def downgrade() -> None:

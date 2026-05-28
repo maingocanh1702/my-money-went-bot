@@ -92,9 +92,7 @@ CHUNK_FOOTER_RULES = """\
 - Tenant isolation test if DB involved (MANDATORY).
 """
 
-CHUNK_I_PROMPT = (
-    CHUNK_HEADER
-    + """\
+CHUNK_I_PROMPT = CHUNK_HEADER + """\
 
 ## Your task (chunk I — plan)
 
@@ -107,13 +105,9 @@ CHUNK_I_PROMPT = (
 
 When done, output the literal line: {done_marker}
 
-"""
-    + CHUNK_FOOTER_RULES
-)
+""" + CHUNK_FOOTER_RULES
 
-CHUNK_II_PROMPT = (
-    CHUNK_HEADER
-    + """\
+CHUNK_II_PROMPT = CHUNK_HEADER + """\
 
 ## Your task (chunk II — code skeleton)
 
@@ -134,13 +128,9 @@ Prior chunks visible via `git log --oneline -5`. The plan is at
 
 When done, output the literal line: {done_marker}
 
-"""
-    + CHUNK_FOOTER_RULES
-)
+""" + CHUNK_FOOTER_RULES
 
-CHUNK_III_PROMPT = (
-    CHUNK_HEADER
-    + """\
+CHUNK_III_PROMPT = CHUNK_HEADER + """\
 
 ## Your task (chunk III — tests)
 
@@ -156,13 +146,9 @@ branch already; now write tests against it.
 
 When done, output the literal line: {done_marker}
 
-"""
-    + CHUNK_FOOTER_RULES
-)
+""" + CHUNK_FOOTER_RULES
 
-CHUNK_IV_PROMPT = (
-    CHUNK_HEADER
-    + """\
+CHUNK_IV_PROMPT = CHUNK_HEADER + """\
 
 ## Your task (chunk IV — verify + CHANGELOG)
 
@@ -185,9 +171,7 @@ branch. Make verify green.
 
 When done, output the literal line: {done_marker}
 
-"""
-    + CHUNK_FOOTER_RULES
-)
+""" + CHUNK_FOOTER_RULES
 
 
 @dataclass

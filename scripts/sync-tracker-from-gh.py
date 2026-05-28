@@ -15,6 +15,7 @@ Can also run locally with `gh auth login` for ad-hoc sync.
 Usage:
     python scripts/sync-tracker-from-gh.py [--dry-run]
 """
+
 from __future__ import annotations
 
 import json
