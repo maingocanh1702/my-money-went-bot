@@ -85,19 +85,15 @@ async def test_verify_fails_on_orphan_tx(pool: asyncpg.Pool) -> None:
         await conn.execute("TRUNCATE users RESTART IDENTITY CASCADE;")
         # Insert a user + tx, then drop the FK and delete the user so the
         # tx becomes orphan.
-        await conn.execute(
-            """
+        await conn.execute("""
             INSERT INTO users (channel_type, channel_user_id, display_name)
             VALUES ('telegram', 'orphan-test', 'O');
-            """
-        )
-        await conn.execute(
-            """
+            """)
+        await conn.execute("""
             INSERT INTO transactions
                 (user_id, tx_date, direction, amount, source, month_key)
             VALUES (1, NOW(), 'out', 1, 'sepay', '2026-05');
-            """
-        )
+            """)
         await conn.execute("ALTER TABLE transactions DROP CONSTRAINT transactions_user_id_fkey;")
         await conn.execute("DELETE FROM users WHERE id = 1;")
 
@@ -108,10 +104,8 @@ async def test_verify_fails_on_orphan_tx(pool: asyncpg.Pool) -> None:
         # Restore the FK so downstream tests don't trip.
         async with pool.acquire() as conn:
             await conn.execute("DELETE FROM transactions;")
-            await conn.execute(
-                """
+            await conn.execute("""
                 ALTER TABLE transactions
                 ADD CONSTRAINT transactions_user_id_fkey
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
-                """
-            )
+                """)

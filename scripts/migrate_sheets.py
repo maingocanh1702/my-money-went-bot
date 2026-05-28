@@ -170,23 +170,19 @@ async def _verify() -> None:
     """
     pool = db.get_pool()
     async with pool.acquire() as conn:
-        orphan_tx = await conn.fetchval(
-            """
+        orphan_tx = await conn.fetchval("""
             SELECT COUNT(*) FROM transactions t
             LEFT JOIN users u ON u.id = t.user_id
             WHERE u.id IS NULL;
-            """
-        )
+            """)
         if orphan_tx > 0:
             raise RuntimeError(f"Verification: {orphan_tx} orphan transactions found")
 
-        orphan_cat = await conn.fetchval(
-            """
+        orphan_cat = await conn.fetchval("""
             SELECT COUNT(*) FROM categories c
             LEFT JOIN users u ON u.id = c.user_id
             WHERE u.id IS NULL;
-            """
-        )
+            """)
         if orphan_cat > 0:
             raise RuntimeError(f"Verification: {orphan_cat} orphan categories found")
 

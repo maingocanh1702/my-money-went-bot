@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Minimal Linear label add/remove. Called from linear-status-sync workflow."""
+
 import argparse
 import os
 import sys

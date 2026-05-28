@@ -53,16 +53,14 @@ def test_upgrade_creates_all_tables(migrated_db: str) -> None:
 def test_funding_source_fk_on_transactions(migrated_db: str) -> None:
     """Gap 1: transactions.funding_source_id FK exists, nullable, SET NULL on delete."""
     with psycopg.connect(migrated_db) as conn:
-        cur = conn.execute(
-            """
+        cur = conn.execute("""
             SELECT a.attname, a.attnotnull, c.confdeltype
             FROM pg_attribute a
             LEFT JOIN pg_constraint c
               ON c.conrelid = a.attrelid AND a.attnum = ANY(c.conkey) AND c.contype = 'f'
             WHERE a.attrelid = 'transactions'::regclass
               AND a.attname = 'funding_source_id';
-            """
-        )
+            """)
         row = cur.fetchone()
     assert row is not None, "transactions.funding_source_id column missing"
     name, notnull, deltype = row
@@ -74,24 +72,20 @@ def test_funding_source_fk_on_transactions(migrated_db: str) -> None:
 def test_webhook_tokens_shape(migrated_db: str) -> None:
     """Gap 3: webhook_tokens has token_hash UNIQUE + kind check constraint."""
     with psycopg.connect(migrated_db) as conn:
-        cur = conn.execute(
-            """
+        cur = conn.execute("""
             SELECT column_name, data_type, is_nullable
             FROM information_schema.columns
             WHERE table_name = 'webhook_tokens'
             ORDER BY ordinal_position;
-            """
-        )
+            """)
         cols = {row[0]: (row[1], row[2]) for row in cur.fetchall()}
 
-        cur = conn.execute(
-            """
+        cur = conn.execute("""
             SELECT pg_get_constraintdef(oid)
             FROM pg_constraint
             WHERE conrelid = 'webhook_tokens'::regclass
               AND contype = 'c';
-            """
-        )
+            """)
         checks = [row[0] for row in cur.fetchall()]
 
     assert "token_hash" in cols, "webhook_tokens.token_hash missing"
@@ -152,12 +146,10 @@ def test_insert_select_smoke(migrated_db: str) -> None:
     with psycopg.connect(migrated_db, autocommit=True) as conn:
         # Cleanup any prior data in this session
         conn.execute("TRUNCATE users RESTART IDENTITY CASCADE;")
-        conn.execute(
-            """
+        conn.execute("""
             INSERT INTO users (channel_type, channel_user_id, display_name)
             VALUES ('telegram', '999', 'Smoke User') RETURNING id;
-            """
-        )
+            """)
         cur = conn.execute("SELECT id, plan, role FROM users WHERE channel_user_id='999';")
         row = cur.fetchone()
         assert row is not None

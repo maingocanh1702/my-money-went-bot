@@ -43,8 +43,7 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     # ── 1. users ────────────────────────────────────────────────
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE users (
             id                   SERIAL PRIMARY KEY,
             channel_type         VARCHAR(16)  NOT NULL,
@@ -73,8 +72,7 @@ def upgrade() -> None:
             CONSTRAINT chk_role         CHECK (role IN ('user', 'founder', 'admin')),
             CONSTRAINT uniq_channel_user UNIQUE (channel_type, channel_user_id)
         );
-        """
-    )
+        """)
     op.execute("CREATE INDEX idx_users_channel ON users(channel_type, channel_user_id);")
     op.execute(
         "CREATE INDEX idx_users_telegram_legacy ON users(telegram_id) "
@@ -82,8 +80,7 @@ def upgrade() -> None:
     )
 
     # ── 2. bank_connections ────────────────────────────────────
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE bank_connections (
             id          SERIAL PRIMARY KEY,
             user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -94,13 +91,11 @@ def upgrade() -> None:
             created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             CONSTRAINT chk_conn_type CHECK (type IN ('sepay', 'email'))
         );
-        """
-    )
+        """)
     op.execute("CREATE INDEX idx_bank_conn_user ON bank_connections(user_id);")
 
     # ── 3. categories ──────────────────────────────────────────
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE categories (
             id          SERIAL PRIMARY KEY,
             user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -113,13 +108,11 @@ def upgrade() -> None:
             created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             UNIQUE(user_id, slug, month_key)
         );
-        """
-    )
+        """)
     op.execute("CREATE INDEX idx_cat_user_month ON categories(user_id, month_key);")
 
     # ── 4. funding_sources (Gap 1) ─────────────────────────────
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE funding_sources (
             id              SERIAL PRIMARY KEY,
             user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -142,15 +135,13 @@ def upgrade() -> None:
                 OR (status <> 'archived' AND archived_at IS NULL)
             )
         );
-        """
-    )
+        """)
     op.execute("CREATE INDEX idx_fs_user_status  ON funding_sources(user_id, status);")
     op.execute("CREATE INDEX idx_fs_user_lasttx  ON funding_sources(user_id, last_tx_at DESC);")
     op.execute("CREATE INDEX idx_fs_user_display ON funding_sources(user_id, display_id);")
 
     # ── 5. transactions (with funding_source_id FK) ────────────
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE transactions (
             id                SERIAL PRIMARY KEY,
             user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -168,15 +159,13 @@ def upgrade() -> None:
             UNIQUE(user_id, ref_code),
             CONSTRAINT chk_direction CHECK (direction IN ('in', 'out'))
         );
-        """
-    )
+        """)
     op.execute("CREATE INDEX idx_tx_user_month ON transactions(user_id, month_key);")
     op.execute("CREATE INDEX idx_tx_user_date  ON transactions(user_id, tx_date);")
     op.execute("CREATE INDEX idx_tx_user_fs    ON transactions(user_id, funding_source_id);")
 
     # ── 6. webhook_tokens (Gap 3) ──────────────────────────────
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE webhook_tokens (
             id          SERIAL PRIMARY KEY,
             user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -187,26 +176,22 @@ def upgrade() -> None:
             CONSTRAINT chk_webhook_token_kind CHECK (kind IN ('sepay', 'email_inbound')),
             UNIQUE(user_id, kind)
         );
-        """
-    )
+        """)
     op.execute("CREATE INDEX idx_webhook_tokens_user ON webhook_tokens(user_id);")
 
     # ── 7. bot_state ───────────────────────────────────────────
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE bot_state (
             user_id     INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
             step        VARCHAR(48),
             payload     JSONB NOT NULL DEFAULT '{}',
             updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
-        """
-    )
+        """)
     op.execute("CREATE INDEX idx_bot_state_step ON bot_state(step) WHERE step IS NOT NULL;")
 
     # ── 8. scheduled_jobs ──────────────────────────────────────
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE scheduled_jobs (
             id           SERIAL PRIMARY KEY,
             user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -217,15 +202,13 @@ def upgrade() -> None:
             config       JSONB DEFAULT '{}',
             UNIQUE(user_id, job_type)
         );
-        """
-    )
+        """)
     op.execute(
         "CREATE INDEX idx_jobs_next_run ON scheduled_jobs(next_run_utc) WHERE enabled = TRUE;"
     )
 
     # ── 9. monthly_reports ─────────────────────────────────────
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE monthly_reports (
             id            SERIAL PRIMARY KEY,
             user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -237,12 +220,10 @@ def upgrade() -> None:
             pct           INTEGER,
             created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
-        """
-    )
+        """)
 
     # ── 10. admin_audit_log ────────────────────────────────────
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE admin_audit_log (
             id                BIGSERIAL PRIMARY KEY,
             admin_telegram_id BIGINT NOT NULL,
@@ -253,8 +234,7 @@ def upgrade() -> None:
             error_message     TEXT,
             executed_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
-        """
-    )
+        """)
     op.execute(
         "CREATE INDEX idx_admin_audit_admin "
         "ON admin_audit_log(admin_telegram_id, executed_at DESC);"
@@ -265,8 +245,7 @@ def upgrade() -> None:
     )
 
     # ── 11. analytics_events ───────────────────────────────────
-    op.execute(
-        """
+    op.execute("""
         CREATE TABLE analytics_events (
             id          SERIAL PRIMARY KEY,
             user_id     INTEGER,
@@ -274,8 +253,7 @@ def upgrade() -> None:
             properties  JSONB DEFAULT '{}',
             created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
-        """
-    )
+        """)
     op.execute("CREATE INDEX idx_analytics_event ON analytics_events(event_name, created_at);")
 
 
