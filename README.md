@@ -384,6 +384,36 @@ Paste that output into `GOOGLE_CREDS_JSON`. For VPS/local, keep `credentials.jso
    curl "https://api.telegram.org/bot<BOT_TOKEN>/getWebhookInfo"
    ```
 
+**Docker / GitHub Packages** (for a VPS or your own server):
+
+This repo can publish a Docker image to GitHub Packages / GHCR. After the workflow runs, the image is available at:
+
+```text
+ghcr.io/maingocanh1702/my-money-went-bot:latest
+```
+
+Run the bot from the image:
+
+```bash
+cp .env.example .env
+# fill BOT_TOKEN, CHAT_ID, SHEET_ID, GOOGLE_CREDS_JSON, SEPAY_SECRET,
+# TELEGRAM_WEBHOOK_SECRET, and CRON_SECRET
+docker run -d \
+  --name my-money-went-bot \
+  --env-file .env \
+  -p 8000:8000 \
+  --restart unless-stopped \
+  ghcr.io/maingocanh1702/my-money-went-bot:latest
+```
+
+Check health:
+
+```bash
+curl http://localhost:8000/
+```
+
+If you fork the repo, the image name becomes `ghcr.io/<github-username>/my-money-went-bot:latest`. The Docker image only removes the need to install Python/dependencies yourself; you still need env vars, public HTTPS, the Telegram webhook, and the SePay webhook.
+
 **VPS** (Ubuntu 22.04):
 
 ```bash

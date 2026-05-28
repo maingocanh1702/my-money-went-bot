@@ -383,6 +383,36 @@ Paste output đó vào `GOOGLE_CREDS_JSON`. Với VPS/local, giữ `credentials.
    curl "https://api.telegram.org/bot<BOT_TOKEN>/getWebhookInfo"
    ```
 
+**Docker / GitHub Packages** (cho VPS hoặc server riêng):
+
+Repo này có thể publish Docker image lên GitHub Packages / GHCR. Khi workflow chạy xong, image sẽ nằm ở:
+
+```text
+ghcr.io/maingocanh1702/my-money-went-bot:latest
+```
+
+Chạy bot từ image:
+
+```bash
+cp .env.example .env
+# điền đủ BOT_TOKEN, CHAT_ID, SHEET_ID, GOOGLE_CREDS_JSON, SEPAY_SECRET,
+# TELEGRAM_WEBHOOK_SECRET, CRON_SECRET
+docker run -d \
+  --name my-money-went-bot \
+  --env-file .env \
+  -p 8000:8000 \
+  --restart unless-stopped \
+  ghcr.io/maingocanh1702/my-money-went-bot:latest
+```
+
+Check health:
+
+```bash
+curl http://localhost:8000/
+```
+
+Nếu fork repo, image sẽ theo tên repo của bạn: `ghcr.io/<github-username>/my-money-went-bot:latest`. Docker image chỉ giúp khỏi tự cài Python/dependencies; bạn vẫn phải tự cấu hình env vars, HTTPS public, Telegram webhook và SePay webhook.
+
 **VPS** (Ubuntu 22.04):
 
 ```bash
