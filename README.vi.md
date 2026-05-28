@@ -64,6 +64,7 @@ flowchart LR
 Cần hướng dẫn từng bước ngoài README?
 
 - [Wiki home](https://github.com/maingocanh1702/my-money-went-bot/wiki)
+- [Quick intro](docs/QUICK_INTRO.md)
 - [Setup cho người không rành kỹ thuật](https://github.com/maingocanh1702/my-money-went-bot/wiki/Setup-cho-nguoi-khong-ranh-ky-thuat)
 - [Deploy bằng Railway](https://github.com/maingocanh1702/my-money-went-bot/wiki/Railway-Deployment)
 - [Setup bằng AI assistant](docs/AI_SETUP.md)

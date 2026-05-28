@@ -64,6 +64,7 @@ flowchart LR
 Need step-by-step help beyond the README?
 
 - [Wiki home](https://github.com/maingocanh1702/my-money-went-bot/wiki)
+- [Quick intro](docs/QUICK_INTRO.md)
 - [Setup for non-technical users](https://github.com/maingocanh1702/my-money-went-bot/wiki/Setup-for-Non-Technical-Users)
 - [Vietnamese setup guide](https://github.com/maingocanh1702/my-money-went-bot/wiki/Setup-cho-nguoi-khong-ranh-ky-thuat)
 - [Railway deployment](https://github.com/maingocanh1702/my-money-went-bot/wiki/Railway-Deployment)
