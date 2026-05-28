@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | v0.3.0 |
+| Version | v0.4.0 |
 | Tạo ngày | 2026-05-28 |
 | Cập nhật | 2026-05-28 |
 | Tác giả | Antigravity (review & rewrite) |
@@ -16,6 +16,7 @@
 | v0.1.0 | 2026-05-28 | Draft gốc — scope V1, messenger adapter, webhook route, numbered category flow |
 | v0.2.0 | 2026-05-28 | Rewrite sau review 13 issues: fix webhook auth (X-ZEvent-Signature), thêm OAuth token lifecycle, fix schema (channel_chat_id TEXT), fix migration DROP+ADD, thêm categorize.py handler, queue-based concurrent categorization, env vars spec, tech debt section |
 | v0.3.0 | 2026-05-28 | Incorporate review findings: mark Zalo webhook signature/payload as live-fixture-gated, clarify OAuth v4 facts verified from Zalo docs, soften `/today`/`/report` acceptance until core builders exist, require API Explorer/manual probe before hardcoding send limits and signature parser |
+| v0.4.0 | 2026-05-28 | Cowork review round: (1) move category picker trigger from `_persist()` to `handle_sepay_webhook()` orchestration layer, (2) `_persist()` must return `int | None` so caller knows if row was inserted (avoid duplicate pickers on webhook retries), (3) explicitly document `User` dataclass + `_row_to_user()` + INSERT query updates for `channel_chat_id`, (4) reword `bot_state` PK tech debt — current PK works fine when Telegram migrates; only needs change if user model moves to multi-channel-per-user |
 
 ---
 
@@ -66,11 +67,14 @@ CREATE INDEX idx_users_channel_chat_id
 
 Decision rationale: Adding a new column is preferred over migrating `chat_id BIGINT → TEXT` because it avoids breaking Telegram queries that rely on integer `chat_id` throughout the codebase (TelegramSender._resolve_chat_id returns `int`).
 
-**Update `core.services.user_svc.create_or_get_user()`**:
+**Update `core.services.user_svc`**:
 
-- Add optional param `channel_chat_id: str | None = None`.
-- INSERT includes `channel_chat_id` column.
-- Self-heal backfill for `channel_chat_id` (same pattern as existing `chat_id` backfill).
+- **`User` dataclass**: Add field `channel_chat_id: str | None` (after `chat_id`).
+- **`_row_to_user()`**: Map `row["channel_chat_id"]` to the new field.
+- **`create_or_get_user()`**:
+  - Add optional param `channel_chat_id: str | None = None`.
+  - INSERT query: add `channel_chat_id` as new column + positional param (`$6`).
+  - Self-heal backfill: same pattern as existing `chat_id` backfill — if `channel_chat_id` is provided and existing row has NULL, UPDATE it.
 
 **Update `core.handlers.start.handle_start()`**:
 
@@ -174,13 +178,44 @@ Required env vars: `ZALO_APP_ID`, `ZALO_OA_SECRET_KEY`, `ZALO_OA_ACCESS_TOKEN`, 
 
 ### 4. Numbered category flow: `core/handlers/categorize.py` (NEW)
 
-Decoupled core handler for post-transaction category selection, called from `markets/vn/capture/sepay_webhook.py` after `_persist()`.
+Decoupled core handler for post-transaction category selection, called from `markets/vn/capture/sepay_webhook.py`.
 
-**Trigger point**: After a new SePay transaction is successfully inserted in `sepay_webhook.py._persist()`, call:
+**Trigger point**: In `handle_sepay_webhook()`, AFTER `_persist()` returns. `_persist()` is a pure DB function and MUST NOT contain messaging side-effects. The orchestration layer (`handle_sepay_webhook`) owns the decision to send notifications.
+
+**`_persist()` return value change**: Currently `_persist()` returns `None` and uses `ON CONFLICT DO NOTHING` without `RETURNING`. To avoid sending duplicate category pickers on SePay webhook retries, `_persist()` must be modified to return the inserted transaction ID (or `None` if the row already existed):
 
 ```python
-from core.handlers.categorize import send_category_picker
-await send_category_picker(user_id=user_id, tx_id=tx_id)
+async def _persist(user_id: int, tx: CanonicalTx, month_key: str) -> int | None:
+    """Persist transaction. Returns tx_id if newly inserted, None if duplicate."""
+    # ... existing ref_code logic ...
+    pool = db.get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO transactions
+                (user_id, tx_date, description, direction, amount,
+                 ref_code, source, month_key)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            ON CONFLICT (user_id, ref_code) DO NOTHING
+            RETURNING id;
+            """,
+            user_id, tx.tx_date, tx.description, tx.direction,
+            tx.amount, ref_code, tx.source, month_key,
+        )
+    return int(row["id"]) if row is not None else None
+```
+
+Then in `handle_sepay_webhook()`:
+
+```python
+tx_id = await _persist(user_id, tx, month_key)
+if tx_id is not None:
+    log.info("sepay.webhook.persisted", ...)
+    # Only send category picker for genuinely new transactions
+    from core.handlers.categorize import send_category_picker
+    await send_category_picker(user_id=user_id, tx_id=tx_id)
+else:
+    log.info("sepay.webhook.duplicate_skipped", ref_code=...)
 ```
 
 This sends the user a channel-abstract category picker using active parent categories for the current month.
@@ -221,7 +256,7 @@ This sends the user a channel-abstract category picker using active parent categ
 
 1. Telegram `/start` uses core `handle_start()` but all other Telegram flows use legacy Sheets state.
 2. Zalo category flow uses DB `bot_state` exclusively.
-3. When Telegram migrates to core pipeline (future), `bot_state` PK must change to `(user_id, channel_type)` — **document this as tech debt**.
+3. Each `user_id` implies exactly one `channel_type` (via `UNIQUE(channel_type, channel_user_id)` on `users`), so `bot_state` PK `user_id` is sufficient even when Telegram eventually migrates to DB state. See Tech Debt §1 for the only scenario requiring PK change.
 
 **Edge case handling**:
 
@@ -262,16 +297,19 @@ This sends the user a channel-abstract category picker using active parent categ
 - Numbered reply resolver maps valid numbers and rejects invalid/expired replies.
 - Queue logic: append, shift, empty, duplicate tx_id detection.
 - Access token refresh: 401 triggers refresh, new tokens are used on retry.
+- `_persist()` returns `int` on new insert, `None` on duplicate (ON CONFLICT).
 
 ### Integration
 
 - Migration `0004` permits inserting `users(channel_type='zalo')` and `channel_chat_id`.
 - Migration `0004` DROP + ADD constraint works with existing data (no rows have channel_type outside the new constraint).
-- `create_or_get_user(channel_type="zalo", channel_chat_id="2911254799136969152")` inserts correctly.
+- `create_or_get_user(channel_type="zalo", channel_chat_id="2911254799136969152")` inserts correctly; `User` dataclass includes `channel_chat_id` field.
+- `create_or_get_user()` self-heals `channel_chat_id` on re-call (same pattern as `chat_id` backfill).
 - `/zalo/webhook` rejects bad signature, disabled flags, non-text events.
 - Zalo `/start` creates or reuses a user row and seeds default categories.
 - `/today`, `/report`, `/accounts` either return core data if builders exist or a clear Telegram-only fallback; they are not required to call legacy report handlers.
-- SePay insert for a Zalo user calls `send_category_picker` and creates `bot_state` row.
+- SePay insert for a Zalo user: `_persist()` returns tx_id → `handle_sepay_webhook()` calls `send_category_picker` → `bot_state` row created.
+- SePay duplicate webhook: `_persist()` returns `None` → no category picker sent.
 - Reply `1` confirms the correct transaction category and shifts queue.
 - Second concurrent SePay transaction appends to queue correctly.
 - Queue exhaustion sends final confirmation and clears `bot_state`.
@@ -283,7 +321,7 @@ This sends the user a channel-abstract category picker using active parent categ
 - Set webhook URL in Zalo Developer Console.
 - Capture and save a sanitized webhook fixture before implementing final signature parsing.
 - Use API Explorer or a one-off local probe to confirm `recipient.user_id`, send endpoint, and text length limit.
-- Send `/start` from Zalo and confirm user row has `channel_type='zalo'`.
+- Send `/start` from Zalo and confirm user row has `channel_type='zalo'` and `channel_chat_id` populated.
 - Trigger one small SePay transaction and confirm Zalo receives numbered category choices.
 - Reply with `1` and verify the transaction row is confirmed with the expected category.
 - Trigger 2 rapid SePay transactions, confirm queue behavior, reply to both sequentially.
@@ -301,8 +339,8 @@ This sends the user a channel-abstract category picker using active parent categ
 
 ## Tech Debt (Documented for V2)
 
-1. **bot_state PK**: Change to `(user_id, channel_type)` when Telegram migrates off Sheets state.
-2. **Token persistence**: Store Zalo OAuth tokens in DB table (e.g., `oauth_tokens`) with auto-refresh background job, eliminating manual Railway env updates.
+1. **bot_state PK**: Current PK `user_id` is correct as long as each `user_id` maps to exactly one channel (enforced by `UNIQUE(channel_type, channel_user_id)` on `users`). PK only needs to change to `(user_id, channel_type)` if the user model evolves to support **multi-channel per user** (identity merging). Not needed when Telegram migrates off Sheets state — that just means more channel types writing to `bot_state`, each under their own `user_id`.
+2. **Token persistence**: Store Zalo OAuth tokens in DB table (e.g., `oauth_tokens`) with auto-refresh background job, eliminating manual Railway env updates. When enabling `ZALO_AUTO_REFRESH=true`, add a mutex/lock to prevent concurrent 401 responses from racing two refresh calls (Zalo refresh tokens are single-use — the second call would get an invalid token).
 3. **Zalo text limit**: Verify exact char limit (640 vs 2000) during development; adjust chunking accordingly.
 4. **Zalo rich messages**: Explore Zalo list/article templates for better category picker UX (instead of numbered text).
 5. **Core reports**: Move `/today`, `/report`, and `/accounts` builders into core services so every channel can use the same read-only data paths without legacy handlers.
