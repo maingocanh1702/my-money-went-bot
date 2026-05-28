@@ -11,12 +11,14 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from typing import Any, Literal
 
 import asyncpg
 import pytest
 
 from core.handlers.start import handle_start
+from core.services import user_svc
 
 TokenKind = Literal["sepay", "email_inbound"]
 
@@ -42,6 +44,26 @@ async def _fetch_user(
         )
     assert row is not None, f"expected user row for ({channel_type}, {channel_user_id})"
     return row
+
+
+def test_row_to_user_includes_channel_chat_id() -> None:
+    """User projection includes the Zalo routing ID column."""
+    row = {
+        "id": 1,
+        "channel_type": "zalo",
+        "channel_user_id": "zalo-user-projection",
+        "chat_id": None,
+        "channel_chat_id": "123456789012345678901234567890",
+        "locale": "vi",
+        "timezone": "Asia/Ho_Chi_Minh",
+        "plan": "free",
+        "trial_ends_at": None,
+        "inbound_email": "u1@in.mymoneywent.com",
+    }
+
+    user = user_svc._row_to_user(row)
+
+    assert user.channel_chat_id == "123456789012345678901234567890"
 
 
 # ─── Positive (5) ────────────────────────────────────────────────────
@@ -80,6 +102,55 @@ async def test_discord_start_creates_user(
     assert row["chat_id"] is None
 
 
+async def test_zalo_start_creates_user_with_channel_chat_id(
+    monkeypatch: pytest.MonkeyPatch,
+    send_calls: list[dict[str, Any]],
+) -> None:
+    """Zalo /start passes a string routing ID without using Telegram chat_id."""
+    captured: dict[str, Any] = {}
+    channel_chat_id = "123456789012345678901234567890"
+
+    async def fake_create_or_get_user(**kwargs: Any) -> tuple[SimpleNamespace, bool]:
+        captured.update(kwargs)
+        return (
+            SimpleNamespace(
+                id=321,
+                locale="vi",
+                timezone="Asia/Ho_Chi_Minh",
+                trial_ends_at=datetime.now(UTC),
+            ),
+            True,
+        )
+
+    async def fake_seed_default_categories(user_id: int, *, locale: str = "vi") -> None:
+        captured["seed_user_id"] = user_id
+        captured["seed_locale"] = locale
+
+    async def fake_mint_with_retry(user_id: int) -> str:
+        captured["mint_user_id"] = user_id
+        return "raw-token"
+
+    monkeypatch.setattr("core.services.user_svc.create_or_get_user", fake_create_or_get_user)
+    monkeypatch.setattr(
+        "core.services.user_svc.seed_default_categories", fake_seed_default_categories
+    )
+    monkeypatch.setattr("core.handlers.start._mint_with_retry", fake_mint_with_retry)
+
+    await handle_start(
+        channel_type="zalo",
+        channel_user_id="zalo-user-1",
+        channel_chat_id=channel_chat_id,
+    )
+
+    assert captured["channel_type"] == "zalo"
+    assert captured["channel_user_id"] == "zalo-user-1"
+    assert captured["chat_id"] is None
+    assert captured["channel_chat_id"] == channel_chat_id
+    assert captured["mint_user_id"] == 321
+    assert captured["seed_user_id"] == 321
+    assert send_calls[-1]["user_id"] == 321
+
+
 async def test_existing_user_restart_idempotent(
     settings_pool: asyncpg.Pool,
     send_calls: list[dict[str, Any]],
@@ -94,6 +165,35 @@ async def test_existing_user_restart_idempotent(
             "SELECT COUNT(*) FROM users WHERE channel_type = 'telegram' AND channel_user_id = '55555';"
         )
     assert count == 1
+    last = _last_text(send_calls)
+    assert "welcome_back" in last or "quay lại" in last
+
+
+async def test_zalo_restart_backfills_missing_channel_chat_id(
+    settings_pool: asyncpg.Pool,
+    send_calls: list[dict[str, Any]],
+) -> None:
+    """Existing Zalo users self-heal a missing channel_chat_id on restart."""
+    channel_chat_id = "987654321098765432109876543210"
+    async with settings_pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO users (
+                channel_type, channel_user_id, plan, locale, inbound_email
+            )
+            VALUES ('zalo', 'zalo-backfill', 'free', 'vi', 'u-zalo@in.mymoneywent.com');
+            """
+        )
+
+    await handle_start(
+        channel_type="zalo",
+        channel_user_id="zalo-backfill",
+        channel_chat_id=channel_chat_id,
+    )
+
+    row = await _fetch_user(settings_pool, "zalo", "zalo-backfill")
+    assert row["chat_id"] is None
+    assert row["channel_chat_id"] == channel_chat_id
     last = _last_text(send_calls)
     assert "welcome_back" in last or "quay lại" in last
 
