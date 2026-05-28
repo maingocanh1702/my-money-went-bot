@@ -66,9 +66,20 @@ Cần hướng dẫn từng bước ngoài README?
 - [Wiki home](https://github.com/maingocanh1702/my-money-went-bot/wiki)
 - [Setup cho người không rành kỹ thuật](https://github.com/maingocanh1702/my-money-went-bot/wiki/Setup-cho-nguoi-khong-ranh-ky-thuat)
 - [Deploy bằng Railway](https://github.com/maingocanh1702/my-money-went-bot/wiki/Railway-Deployment)
+- [Setup bằng AI assistant](docs/AI_SETUP.md)
 - [Troubleshooting](https://github.com/maingocanh1702/my-money-went-bot/wiki/Troubleshooting)
 - [Bảo mật và riêng tư](https://github.com/maingocanh1702/my-money-went-bot/wiki/Security-and-Privacy)
 - [Command reference](https://github.com/maingocanh1702/my-money-went-bot/wiki/Command-Reference)
+
+Muốn nhờ Codex, Claude, Cursor, ChatGPT hướng dẫn setup? Copy prompt này:
+
+```text
+Hãy giúp tôi setup repo này:
+https://github.com/maingocanh1702/my-money-went-bot
+
+Tôi không rành kỹ thuật. Hãy làm theo docs/AI_SETUP.md và hướng dẫn tôi setup bằng Railway theo từng bước đơn giản.
+Đừng yêu cầu tôi sửa code hay paste secret thật vào chat công khai.
+```
 
 ---
 
