@@ -29,7 +29,7 @@ FastAPI backend, Python 3.11+, Postgres (asyncpg + SQLAlchemy 2.x async), Alembi
 | Autopilot prompt skeleton | `docs/autopilot/autopilot-prompt-template.md` |
 | ADRs | `docs/adr/` |
 
-Auto-generated views (never hand-edit, rebuild via `scripts/build-dashboard.py`): `docs/dashboard.{html,md,json}`.
+Auto-generated views (never hand-edit, rebuild via `tools/dashboard-engine/build_dashboard.py`): `docs/dashboard.{html,md,json}`.
 
 ## Layout
 
@@ -80,7 +80,7 @@ python -m tools.autopilot run <feature-id>        # walk away
 python -m tools.autopilot resume <feature-id>     # after halt
 
 # Dashboard (auto-rebuilt by pre-commit when tracker changes)
-python scripts/build-dashboard.py
+python tools/dashboard-engine/build_dashboard.py
 ```
 
 ## Quality gates (CI-enforced, blocking)

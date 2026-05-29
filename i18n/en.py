@@ -33,6 +33,17 @@ EN: dict[str, str] = {
     "cat.default.daily_spending": "🛒 Daily Spending",
     "cat.default.saving": "🏦 Saving",
     "cat.default.subscription": "📱 Subscription",
+    # ── categorize flow (Zalo numbered picker) ───────────────────
+    "categorize.no_categories": "New transaction recorded. You have no active categories for this month.",
+    "categorize.pick_prefix": "Pick a category for this transaction:",
+    "categorize.pick_invalid": "Invalid number. Pick again:",
+    "categorize.confirmed": "Categorized transaction as {name}.",
+    "categorize.queue_added": "Added new transaction to categorization queue ({count} transactions).",
+    "categorize.expired": "Categorization session expired. I'll ask again on the next transaction.",
+    "categorize.direction_in": "in",
+    "categorize.direction_out": "out",
+    "categorize.no_description": "(no description)",
+    "categorize.help_fallback": "Message received. Zalo currently supports /start and numbered category selection.",
     # ── manage ───────────────────────────────────────────────────
     "manage.list_header": "Your categories:",
     "manage.deleted": "🗑️ Deleted category “{name}”.",

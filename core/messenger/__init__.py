@@ -17,11 +17,10 @@ specifics out of business logic — see ADR-0001.
 
 from __future__ import annotations
 
-# Side-effect import: triggers @register_sender("telegram") so callers
-# of `senders_for("telegram")` find a factory without having to import
-# the adapter module themselves. Future adapters (discord, messenger)
-# self-register the same way.
+# Side-effect imports: trigger @register_sender(...) so callers of
+# `senders_for(...)` find factories without importing adapter modules.
 from . import telegram as _telegram  # noqa: F401
+from . import zalo as _zalo  # noqa: F401
 from .base import (
     PARSER_MODE_HTML,
     PARSER_MODE_MARKDOWN,

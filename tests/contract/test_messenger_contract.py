@@ -21,25 +21,31 @@ import pytest
 
 from core.messenger import BaseSender, SendPayload, senders_for
 from core.messenger.telegram import TelegramSender
+from core.messenger.zalo import ZaloSender
 
 # (channel_type, factory-that-builds-an-instance-with-mocked-transport)
 ADAPTERS: list[tuple[str, type[BaseSender]]] = [
     ("telegram", TelegramSender),
+    ("zalo", ZaloSender),
 ]
 
 
 def _build(adapter_cls: type[BaseSender]) -> BaseSender:
     """Build an adapter with all I/O mocked.
 
-    Today only TelegramSender exists. When we add Discord/Messenger in
-    W6 we'll branch here so each gets the right mock transport.
+    Build each adapter with the right mocked transport/config.
     """
     client = MagicMock(spec=httpx.AsyncClient)
     resp = MagicMock(spec=httpx.Response)
+    resp.status_code = 200
     resp.raise_for_status = MagicMock(return_value=None)
     resp.json = MagicMock(return_value={"ok": True})
     client.post = AsyncMock(return_value=resp)
-    return adapter_cls(bot_token="TEST", http_client=client)  # type: ignore[call-arg]
+    if adapter_cls is TelegramSender:
+        return TelegramSender(bot_token="TEST", http_client=client)
+    if adapter_cls is ZaloSender:
+        return ZaloSender(access_token="TEST", http_client=client)
+    raise AssertionError(f"unknown adapter class: {adapter_cls}")
 
 
 @pytest.fixture
@@ -49,7 +55,11 @@ def mock_chat_id(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _fake(_self: Any, user_id: int) -> int:
         return 1000 + user_id
 
+    async def _fake_zalo(_self: Any, user_id: int) -> str:
+        return f"zalo-{user_id}"
+
     monkeypatch.setattr("core.messenger.telegram.TelegramSender._resolve_chat_id", _fake)
+    monkeypatch.setattr("core.messenger.zalo.ZaloSender._resolve_recipient_id", _fake_zalo)
 
 
 @pytest.mark.parametrize("channel_type,adapter_cls", ADAPTERS)
