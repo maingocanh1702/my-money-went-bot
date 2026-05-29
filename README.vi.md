@@ -16,35 +16,45 @@
 
 ![Cách hoạt động — 5 bước: giao dịch ngân hàng, SePay webhook, bot xử lý, ghi Google Sheet, báo cáo Telegram](docs/screenshots/how-it-works.png)
 
-**My Money Went Bot là 1 bot Telegram theo dõi chi tiêu cá nhân.** Mỗi lần ngân hàng VN gửi thông báo giao dịch (qua [SePay](https://sepay.vn)), bot ghi vào Google Sheet *của bạn* và hỏi bạn tap phân loại — hoặc skip luôn nếu bạn đã dạy nó 1 keyword rule. Gõ `/report` bất cứ lúc nào để xem tiền đã đi đâu, slice theo account, category, và khoảng thời gian.
+**My Money Went Bot là 1 bot Telegram theo dõi chi tiêu cá nhân.** Khi tài khoản ngân hàng của bạn phát sinh giao dịch và SePay nhận được biến động đó, SePay gửi webhook sang bot. Bot ghi giao dịch vào Google Sheet *của bạn* và hỏi bạn tap phân loại — hoặc skip luôn nếu bạn đã dạy nó 1 keyword rule. Gõ `/report` bất cứ lúc nào để xem tiền đã đi đâu, slice theo account, category, và khoảng thời gian.
+
+### An toàn tài khoản ngân hàng
+
+My Money Went Bot **không đăng nhập ngân hàng, không đọc biến động số dư trực tiếp, không truy cập lịch sử giao dịch, và không giữ username/password/OTP/số thẻ** của bạn. Bot chỉ nhận phần dữ liệu giao dịch mà **SePay gửi qua webhook** sau khi bạn cấu hình SePay.
+
+Nói ngắn gọn: **ngân hàng của bạn phát sinh giao dịch → SePay nhận biến động qua kết nối ngân hàng → SePay gửi webhook → My Money Went Bot ghi chép và hỏi bạn phân loại.** SePay là bên kết nối với ngân hàng; My Money Went Bot chỉ xử lý thông báo giao dịch do SePay truyền sang.
+
+**SePay là gì?** [SePay](https://sepay.vn/gioi-thieu.html) là công ty hạ tầng Open Banking tại Việt Nam, cung cấp API ngân hàng và giải pháp tự động hóa dòng tiền cho doanh nghiệp. SePay công bố đã kết nối với nhiều ngân hàng lớn tại Việt Nam và có [quy định sử dụng dịch vụ](https://sepay.vn/terms-of-service.html) nêu rõ trách nhiệm bảo vệ tính bảo mật, toàn vẹn của dữ liệu khách hàng. Việc tách vai trò như vậy giúp minh bạch hơn: ngân hàng ↔ SePay là lớp kết nối tài chính; SePay ↔ bot là webhook thông báo; bot ↔ Google Sheet của bạn là lớp ghi chép cá nhân.
 
 <details>
 <summary>📐 Flow chi tiết (có nhánh auto-categorize + onboarding)</summary>
 
 ```mermaid
 flowchart LR
-    A[🏦 Tx ngân<br/>hàng VN] -->|SePay<br/>webhook| B[🤖 Bot]
-    B --> C[📊 Ghi row<br/>Google Sheet]
-    C --> D{Match<br/>keyword<br/>rule?}
-    D -->|✅ Có| E[🎯 Auto-<br/>categorize]
-    D -->|❌ Không| F[💬 'Thuộc mục<br/>nào?']
-    F --> G[👆 Bạn tap]
-    E --> H[📈 /report<br/>account ×<br/>category ×<br/>period]
-    G --> H
+    A[🏦 Tài khoản bank<br/>của bạn] -->|phát sinh<br/>giao dịch| B[🏦 Ngân hàng VN]
+    B -->|SePay nhận<br/>biến động| C[🔐 SePay]
+    C -->|webhook| D[🤖 Bot]
+    D --> E[📊 Ghi row<br/>Google Sheet]
+    E --> F{Match<br/>keyword<br/>rule?}
+    F -->|✅ Có| G[🎯 Auto-<br/>categorize]
+    F -->|❌ Không| H[💬 'Thuộc mục<br/>nào?']
+    H --> I[👆 Bạn tap]
+    G --> J[📈 /report<br/>account ×<br/>category ×<br/>period]
+    I --> J
 
-    B -. nguồn<br/>chưa biết? .-> I[📝 Wizard<br/>onboard]
-    I -. tx sau<br/>auto-route .-> B
+    D -. nguồn<br/>chưa biết? .-> K[📝 Wizard<br/>onboard]
+    K -. tx sau<br/>auto-route .-> D
 
     classDef bank fill:#fef3c7,stroke:#d97706,color:#92400e
     classDef bot fill:#dbeafe,stroke:#2563eb,color:#1e40af
     classDef store fill:#dcfce7,stroke:#16a34a,color:#15803d
     classDef user fill:#fce7f3,stroke:#db2777,color:#9d174d
     classDef out fill:#f3e8ff,stroke:#9333ea,color:#6b21a8
-    class A bank
-    class B,E,I bot
-    class C store
-    class F,G user
-    class H out
+    class A,B,C bank
+    class D,G,K bot
+    class E store
+    class H,I user
+    class J out
 ```
 
 </details>
@@ -486,19 +496,32 @@ Tx sau từ cùng account auto-route. Setup `/keywords` rules để auto-categor
 
 ---
 
-## Architecture
+## Kiến trúc
 
 ```
-┌──────────┐   webhook    ┌────────────────┐    rows      ┌──────────────┐
-│  SePay   │ ───────────► │  FastAPI bot   │ ───────────► │ Google Sheet │
-└──────────┘              │  (Railway/VPS) │              │   (của bạn)  │
-                          └──────┬─────────┘              └──────────────┘
-                                 │ Telegram Bot API
-                                 ▼
-                          ┌────────────────┐
-                          │   Bạn (chat)   │
-                          └────────────────┘
+┌────────────────┐  phát sinh tx  ┌──────────────┐  kết nối bank  ┌──────────┐
+│ Tài khoản bank │ ─────────────► │ Ngân hàng VN │ ─────────────► │  SePay   │
+│   của bạn      │                │              │                │          │
+└────────────────┘                └──────────────┘                └────┬─────┘
+                                                                        │ webhook
+                                                                        ▼
+                                                              ┌────────────────┐
+                                                              │  FastAPI bot   │
+                                                              │  (Railway/VPS) │
+                                                              └──────┬────┬────┘
+                                                                     │    │ rows
+                                                   Telegram Bot API  │    ▼
+                                                                     │  ┌──────────────┐
+                                                                     │  │ Google Sheet │
+                                                                     │  │   (của bạn)  │
+                                                                     │  └──────────────┘
+                                                                     ▼
+                                                              ┌────────────────┐
+                                                              │   Bạn (chat)   │
+                                                              └────────────────┘
 ```
+
+**Ranh giới truy cập:** bot chỉ nằm sau SePay webhook. Bot không đi ngược về ngân hàng, không gọi API ngân hàng, và không đọc số dư trực tiếp từ tài khoản của bạn.
 
 **Source of truth = ledger table.** `running_balance` là cache được recompute từ ledger mỗi lần write. Xem [`handlers/account_resolver.py`](handlers/account_resolver.py) và [`sheets.py`](sheets.py).
 
@@ -565,7 +588,7 @@ ssh-copy-id root@your-server
 
 **5. Bot chỉ nói chuyện với `CHAT_ID` của bạn.** Hardcoded check — không ai khác tương tác được kể cả khi biết tên bot.
 
-**6. Không có banking credentials nào chạy qua code này.** Bot chỉ nhận *thông báo* tx (số tiền + description) từ SePay. Login bank, số thẻ, v.v. không bao giờ đi qua.
+**6. Bot không truy cập tài khoản ngân hàng của bạn.** My Money Went Bot không có quyền đăng nhập ngân hàng, không tự đọc biến động số dư, không truy vấn lịch sử giao dịch, và không giữ username/password/OTP/số thẻ. Bot chỉ nhận payload webhook do SePay gửi sang, thường gồm số tiền, chiều tiền vào/ra, thời gian, mô tả giao dịch, mã tham chiếu, và thông tin nguồn mà SePay cung cấp. SePay mới là bên bạn cấu hình để kết nối với ngân hàng.
 
 **7. PII trong description.** Payload SePay chứa description giao dịch thô, có thể có tên đối tác, số tài khoản, references. Những thứ này được ghi vào cột `Description`. Ai có quyền đọc Sheet đều thấy — giữ Sheet private.
 

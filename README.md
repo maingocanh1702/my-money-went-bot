@@ -16,35 +16,45 @@
 
 ![How it works — 5-step flow: bank transaction, SePay webhook, bot processes, write to Google Sheet, Telegram report](docs/screenshots/how-it-works.png)
 
-**My Money Went Bot is a personal expense tracker that lives in your Telegram chat.** Every time a Vietnamese bank sends a transaction notification (via [SePay](https://sepay.vn)), the bot logs it to a Google Sheet *you own* and asks you to tap a category — or skips that step entirely if you've taught it a keyword rule. Type `/report` anytime to see where your money went, sliced by account, category, and time period.
+**My Money Went Bot is a personal expense tracker that lives in your Telegram chat.** When your bank account has a transaction and SePay receives that balance-change event, SePay sends a webhook to the bot. The bot logs the transaction to a Google Sheet *you own* and asks you to tap a category — or skips that step entirely if you've taught it a keyword rule. Type `/report` anytime to see where your money went, sliced by account, category, and time period.
+
+### Bank Account Safety
+
+My Money Went Bot **does not log in to your bank, does not read balance changes directly, does not access your transaction history, and does not store your username/password/OTP/card number**. The bot only receives the transaction data that **SePay sends through a webhook** after you configure SePay.
+
+In short: **your bank account has a transaction → SePay receives the bank event through its bank connection → SePay sends a webhook → My Money Went Bot records it and asks you to categorize it.** SePay is the party connected to your bank; My Money Went Bot only processes the transaction notification SePay passes along.
+
+**What is SePay?** [SePay](https://sepay.vn/gioi-thieu.html) is an Open Banking infrastructure company in Vietnam that provides banking APIs and cash-flow automation for businesses. SePay says it is connected with multiple major Vietnamese banks, and its [terms of service](https://sepay.vn/terms-of-service.html) describe responsibilities around protecting the confidentiality and integrity of customer data. This separation keeps the flow transparent: bank ↔ SePay is the financial connection layer; SePay ↔ bot is the notification webhook; bot ↔ your Google Sheet is your personal bookkeeping layer.
 
 <details>
 <summary>📐 Detailed flow (with auto-categorize + onboarding branches)</summary>
 
 ```mermaid
 flowchart LR
-    A[🏦 Vietnamese<br/>bank tx] -->|SePay<br/>webhook| B[🤖 Bot]
-    B --> C[📊 Row in<br/>Google Sheet]
-    C --> D{Match<br/>keyword<br/>rule?}
-    D -->|✅ Yes| E[🎯 Auto-<br/>categorize]
-    D -->|❌ No| F[💬 'What<br/>category?']
-    F --> G[👆 You tap]
-    E --> H[📈 /report<br/>account ×<br/>category ×<br/>period]
-    G --> H
+    A[🏦 Your bank<br/>account] -->|transaction<br/>happens| B[🏦 Vietnamese<br/>bank]
+    B -->|SePay receives<br/>bank event| C[🔐 SePay]
+    C -->|webhook| D[🤖 Bot]
+    D --> E[📊 Row in<br/>Google Sheet]
+    E --> F{Match<br/>keyword<br/>rule?}
+    F -->|✅ Yes| G[🎯 Auto-<br/>categorize]
+    F -->|❌ No| H[💬 'What<br/>category?']
+    H --> I[👆 You tap]
+    G --> J[📈 /report<br/>account ×<br/>category ×<br/>period]
+    I --> J
 
-    B -. unknown<br/>source? .-> I[📝 Onboard<br/>wizard]
-    I -. future tx<br/>auto-route .-> B
+    D -. unknown<br/>source? .-> K[📝 Onboard<br/>wizard]
+    K -. future tx<br/>auto-route .-> D
 
     classDef bank fill:#fef3c7,stroke:#d97706,color:#92400e
     classDef bot fill:#dbeafe,stroke:#2563eb,color:#1e40af
     classDef store fill:#dcfce7,stroke:#16a34a,color:#15803d
     classDef user fill:#fce7f3,stroke:#db2777,color:#9d174d
     classDef out fill:#f3e8ff,stroke:#9333ea,color:#6b21a8
-    class A bank
-    class B,E,I bot
-    class C store
-    class F,G user
-    class H out
+    class A,B,C bank
+    class D,G,K bot
+    class E store
+    class H,I user
+    class J out
 ```
 
 </details>
@@ -490,16 +500,29 @@ Future tx from the same account auto-route. Set up `/keywords` rules to auto-cat
 ## Architecture
 
 ```
-┌──────────┐   webhook    ┌────────────────┐    rows      ┌──────────────┐
-│  SePay   │ ───────────► │  FastAPI bot   │ ───────────► │ Google Sheet │
-└──────────┘              │  (Railway/VPS) │              │   (yours)    │
-                          └──────┬─────────┘              └──────────────┘
-                                 │ Telegram Bot API
-                                 ▼
-                          ┌────────────────┐
-                          │   You (chat)   │
-                          └────────────────┘
+┌────────────────┐  tx happens   ┌──────────────┐  bank feed/API  ┌──────────┐
+│ Your bank      │ ────────────► │ Vietnamese   │ ──────────────► │  SePay   │
+│ account        │               │    bank      │                 │          │
+└────────────────┘               └──────────────┘                 └────┬─────┘
+                                                                        │ webhook
+                                                                        ▼
+                                                              ┌────────────────┐
+                                                              │  FastAPI bot   │
+                                                              │  (Railway/VPS) │
+                                                              └──────┬────┬────┘
+                                                                     │    │ rows
+                                                   Telegram Bot API  │    ▼
+                                                                     │  ┌──────────────┐
+                                                                     │  │ Google Sheet │
+                                                                     │  │   (yours)    │
+                                                                     │  └──────────────┘
+                                                                     ▼
+                                                              ┌────────────────┐
+                                                              │   You (chat)   │
+                                                              └────────────────┘
 ```
+
+**Access boundary:** the bot sits behind the SePay webhook. It does not call bank APIs, reach back into your bank, or read balances directly from your account.
 
 **Source of truth = ledger table.** `running_balance` is a cache recomputed from the ledger on every write. See [`handlers/account_resolver.py`](handlers/account_resolver.py) and [`sheets.py`](sheets.py).
 
@@ -566,7 +589,7 @@ ssh-copy-id root@your-server
 
 **5. Bot only talks to your `CHAT_ID`.** Hardcoded check — no one else can interact even if they find the bot name.
 
-**6. No banking credentials touch this code.** The bot receives transaction *notifications* (amount + description) from SePay. Your bank login, card numbers, etc. never pass through.
+**6. The bot does not access your bank account.** My Money Went Bot cannot log in to your bank, read balance changes directly, query your transaction history, or store your username/password/OTP/card number. It only receives webhook payloads from SePay, typically including amount, money direction, timestamp, transaction description, reference code, and source information provided by SePay. SePay is the service you configure to connect to your bank.
 
 **7. PII in descriptions.** SePay's payload includes raw transfer descriptions which may contain partner names, account numbers, references. These get written to the `Description` column. Anyone with read access to your Sheet sees this — keep the Sheet private.
 
