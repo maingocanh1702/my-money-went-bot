@@ -1,14 +1,14 @@
 # Tiền Về Nơi Đâu — Technical Design Document (TDD)
 
-> **Version:** v1.8.1
+> **Version:** v1.9.0
 > **Ngày tạo:** 2026-05-05
-> **Cập nhật lần cuối:** 2026-05-10
+> **Cập nhật lần cuối:** 2026-05-30
 > **Trạng thái:** Draft
-> **Tham chiếu:** [BRD-vi v3.1.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/brd-vi.md) · [PRD-vi v1.7.1](file:///Users/maingocanh/Projects/MyMoneyWent/docs/prd-vi.md) · [Feature: SaaS Refactor](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-saas-refactor.md) · [Feature: Payment](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-payment.md) · [Feature: Messenger](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-messenger-channel.md) · [Impl Plan VietQR+Email](file:///Users/maingocanh/Projects/MyMoneyWent/docs/implementation-plans/implementation-plan-payment-vietqr-email.md) · [Feature: Admin Tools](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-admin-tools.md) · [DR Runbook](file:///Users/maingocanh/Projects/MyMoneyWent/docs/runbooks/disaster-recovery.md) · [Observability](file:///Users/maingocanh/Projects/MyMoneyWent/docs/operations/observability-plan.md)
+> **Tham chiếu:** [BRD-vi v3.1.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/brd-vi.md) · [PRD-vi v1.7.1](file:///Users/maingocanh/Projects/MyMoneyWent/docs/prd-vi.md) · [Feature: SaaS Refactor](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-saas-refactor.md) · [Feature: Payment](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-payment.md) · [Feature: Messenger](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-messenger-channel.md) · [Impl Plan VietQR+Email](file:///Users/maingocanh/Projects/MyMoneyWent/docs/implementation-plans/implementation-plan-payment-vietqr-email.md) · [Feature: Admin Tools](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-admin-tools.md) · [DR Runbook](file:///Users/maingocanh/Projects/MyMoneyWent/docs/runbooks/disaster-recovery.md) · [Observability](file:///Users/maingocanh/Projects/MyMoneyWent/docs/operations/observability-plan.md) · [Zalo Channel Plan](file:///Users/maingocanh/Projects/MyMoneyWent/docs/implementation-plan-zalo-channel-core.md)
 >
 > **🌐 SCOPE NOTE:** TDD này cover **shared technical foundation** (DB schema, FastAPI architecture, messenger interface, auth) + **VN-specific implementations** (SePay webhook, VN bank email parsers, VietQR payment). **Global market** có TDD riêng — [tdd-en.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/tdd-en.md) — với capture stack riêng (Plaid/TrueLayer/Tink + e-com OAuth + Stripe Checkout payment). Shared foundation sections (§1-2 architecture, §2 DB schema core tables, §5 deployment) apply cho cả 2 markets. Per [ADR-0001](file:///Users/maingocanh/Projects/MyMoneyWent/docs/adr/0001-monorepo-not-split-repos.md), VN code lives at `markets/vn/`, shared foundation at `core/`.
 >
-> **Change v1.8.1 vs v1.8.0:** Renamed `tdd.md` → `tdd-vi.md`. Thêm SCOPE NOTE. Title "MyMoneyWent" → "Tiền Về Nơi Đâu" (VN branding). Header refs updated to sibling docs.
+> **Change v1.9.0 vs v1.8.1:** Added `channel_chat_id TEXT NULL` column to `users` table (migration `0004_add_zalo_channel`). Expanded `chk_channel_type` to include `'zalo'`. Added `POST /zalo/webhook` endpoint. Added Zalo OA env vars section. Updated channel comments. See [implementation-plan-zalo-channel-core.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/implementation-plan-zalo-channel-core.md).
 
 ---
 
@@ -150,14 +150,15 @@ This is a Phase 1 foundation decision because retrofitting queue/bot-pool/multi-
 CREATE TABLE users (
     id              SERIAL PRIMARY KEY,
 
-    -- Channel identity (multi-channel: Telegram + Messenger + Discord)
-    channel_type    VARCHAR(16) NOT NULL,          -- 'telegram' | 'messenger' | 'discord'
-    channel_user_id VARCHAR(64) NOT NULL,          -- Telegram telegram_id (str-cast) hoặc Messenger PSID hoặc Discord User ID (snowflake)
-    chat_id         BIGINT,                         -- Telegram chat.id (NULL cho Messenger — PSID là chat identifier)
+    -- Channel identity (multi-channel: Telegram + Zalo + Messenger + Discord)
+    channel_type    VARCHAR(16) NOT NULL,          -- 'telegram' | 'zalo' | 'messenger' | 'discord'
+    channel_user_id VARCHAR(64) NOT NULL,          -- Telegram telegram_id (str-cast) hoặc Messenger PSID hoặc Discord User ID (snowflake) hoặc Zalo sender.id
+    chat_id         BIGINT,                         -- Telegram chat.id (NULL cho Messenger/Zalo/Discord)
+    channel_chat_id TEXT,                            -- Non-numeric / overflow-BIGINT platform routing IDs (Zalo IDs can be 19+ digit strings that overflow BIGINT max 9.2×10¹⁸). Added migration 0004.
     last_user_message_at TIMESTAMPTZ,              -- last inbound message — needed cho Messenger 24h window check
 
     -- Legacy column — keep cho historic data + analytics, nullable sau multi-channel migration
-    telegram_id     BIGINT,                         -- nullable; cho Messenger user = NULL
+    telegram_id     BIGINT,                         -- nullable; cho Messenger/Zalo user = NULL
 
     username        VARCHAR(64),
     display_name    VARCHAR(128),
@@ -187,7 +188,7 @@ CREATE TABLE users (
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     CONSTRAINT chk_plan CHECK (plan IN ('free', 'pro', 'family_owner', 'business')),
-    CONSTRAINT chk_channel_type CHECK (channel_type IN ('telegram', 'messenger', 'discord')),
+    CONSTRAINT chk_channel_type CHECK (channel_type IN ('telegram', 'zalo', 'messenger', 'discord')),
     CONSTRAINT chk_locale CHECK (locale IN ('vi', 'en')),
     CONSTRAINT uniq_channel_user UNIQUE (channel_type, channel_user_id)
 );
@@ -195,6 +196,7 @@ CREATE TABLE users (
 CREATE INDEX idx_users_webhook_token ON users(webhook_token);
 CREATE INDEX idx_users_channel ON users(channel_type, channel_user_id);
 CREATE INDEX idx_users_telegram_legacy ON users(telegram_id) WHERE telegram_id IS NOT NULL;
+CREATE INDEX idx_users_channel_chat_id ON users(channel_chat_id) WHERE channel_chat_id IS NOT NULL;
 
 -- ═══════════════════════════════════════════════════════
 -- Bank Connections (SePay + Email sources)
@@ -584,6 +586,7 @@ WHERE sj.enabled = TRUE AND sj.next_run_utc <= NOW();
 | GET | `/webhook/messenger` | Meta verification | Trả `hub.challenge` khi `hub.verify_token` match `FB_VERIFY_TOKEN` env. |
 | POST | `/webhook/messenger` | Meta Page webhook | Messages + postbacks. Verify `X-Hub-Signature-256` header với `FB_APP_SECRET`. |
 | POST | `/webhook/discord` | Discord Interaction endpoint | Slash commands + button clicks. Verify `X-Signature-Ed25519` header với `DISCORD_PUBLIC_KEY`. |
+| POST | `/zalo/webhook` | Zalo OA webhook | User text messages. Verify `X-ZEvent-Signature` header. Guarded by `ZALO_ENABLED` + `ZALO_INTERACTIVE`. See [Zalo channel plan](file:///Users/maingocanh/Projects/MyMoneyWent/docs/implementation-plan-zalo-channel-core.md). |
 | POST | `/hook/{token}` | SePay | **Per-user** bank transaction webhooks (token = `users.webhook_token`) |
 | POST | `/hook/{PLATFORM_TOKEN}` | SePay | **Platform** payment webhooks — routed to `payment_matcher` thay vì user pipeline |
 | POST | `/inbound/{token}` | Postmark | Per-user email forwarding inbound |
@@ -767,6 +770,16 @@ DISCORD_BOT_TOKEN=<discord bot token>               # Bot token from Discord Dev
 DISCORD_APPLICATION_ID=<application id>             # Application ID for slash command registration
 DISCORD_PUBLIC_KEY=<ed25519 public key>             # Ed25519 public key for interaction signature verify
 ENABLE_DISCORD_CHANNEL=true                         # feature flag to soft-disable Discord entry
+
+# === Zalo OA Channel ===
+ZALO_ENABLED=true                                    # feature flag to enable POST /zalo/webhook route
+ZALO_INTERACTIVE=true                                # feature flag to enable interactive command dispatch (category picker, /start)
+ZALO_APP_ID=<zalo app id>                            # From Zalo Developer Console
+ZALO_OA_SECRET_KEY=<oa secret key>                   # For webhook signature verification (X-ZEvent-Signature)
+ZALO_OA_ACCESS_TOKEN=<oauth access token>            # OAuth access token for send API (expires ~25h)
+ZALO_OA_REFRESH_TOKEN=<oauth refresh token>          # Single-use refresh token (3-month validity)
+ZALO_TEXT_LIMIT=2000                                 # Outbound text chunk limit (lower to 600 if 640 confirmed)
+ZALO_AUTO_REFRESH=false                              # Auto-refresh on 401; V1 = false (manual Railway update)
 
 # === Email (Phase 5) ===
 POSTMARK_INBOUND_DOMAIN=in.tienvenoidau.com

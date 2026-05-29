@@ -4,7 +4,7 @@
 > **Created:** 2026-05-10
 > **Last updated:** 2026-05-10
 > **Status:** Draft
-> **References:** [brd-en.md v4.0.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/brd-en.md) · [tdd-en.md v1.0.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/tdd-en.md) · [market-strategy-overview.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/market-strategy-overview.md)
+> **References:** [brd-en.md v4.0.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/brd-en.md) · [tdd-en.md v1.1.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/tdd-en.md) · [market-strategy-overview.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/market-strategy-overview.md)
 >
 > **🌐 SCOPE NOTE:** This PRD is the **canonical product spec for the 🌍 Global market** (My Money Went — mymoneywent.com). Capture stack (Plaid + e-com OAuth + payout email parsing), single ICP (e-commerce solopreneur), pricing ($6 Pro / $12 Solopreneur), channels (Telegram + Discord + Messenger + read-only web dashboard), and payment (Stripe Checkout) are all **global-specific**. The **Vietnam market** has its own PRD — [prd-vi.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/prd-vi.md) (Tiền Về Nơi Đâu — tienvenoidau.com). Per [ADR-0001](file:///Users/maingocanh/Projects/MyMoneyWent/docs/adr/0001-monorepo-not-split-repos.md), shared foundation specs (DB schema, messenger interface, auth) apply to both markets.
 >
@@ -512,7 +512,7 @@ users (1) ──── (N) transactions
 
 ### 7.2. References
 - [BRD-en v4.0.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/brd-en.md)
-- [TDD-en v1.0.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/tdd-en.md)
+- [TDD-en v1.1.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/tdd-en.md)
 - [Market Strategy Overview](file:///Users/maingocanh/Projects/MyMoneyWent/docs/market-strategy-overview.md)
 - [ADR-0001: Monorepo](file:///Users/maingocanh/Projects/MyMoneyWent/docs/adr/0001-monorepo-not-split-repos.md)
 - [PRD-vi (VN market)](file:///Users/maingocanh/Projects/MyMoneyWent/docs/prd-vi.md)

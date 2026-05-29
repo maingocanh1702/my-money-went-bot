@@ -2,11 +2,11 @@
 
 | Field | Value |
 |-------|-------|
-| Version | v0.4.0 |
+| Version | v0.6.0 |
 | Tạo ngày | 2026-05-28 |
 | Cập nhật | 2026-05-28 |
 | Tác giả | Antigravity (review & rewrite) |
-| Trạng thái | 📝 Draft — chờ approve trước khi implement |
+| Trạng thái | ✅ Core implemented locally — pending live Zalo OA fixture/manual verification |
 | Liên quan | [feature-messenger-channel.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-messenger-channel.md), [0001_initial_schema.py](file:///Users/maingocanh/Projects/MyMoneyWent/migrations/versions/0001_initial_schema.py) |
 
 ### Changelog
@@ -17,6 +17,8 @@
 | v0.2.0 | 2026-05-28 | Rewrite sau review 13 issues: fix webhook auth (X-ZEvent-Signature), thêm OAuth token lifecycle, fix schema (channel_chat_id TEXT), fix migration DROP+ADD, thêm categorize.py handler, queue-based concurrent categorization, env vars spec, tech debt section |
 | v0.3.0 | 2026-05-28 | Incorporate review findings: mark Zalo webhook signature/payload as live-fixture-gated, clarify OAuth v4 facts verified from Zalo docs, soften `/today`/`/report` acceptance until core builders exist, require API Explorer/manual probe before hardcoding send limits and signature parser |
 | v0.4.0 | 2026-05-28 | Cowork review round: (1) move category picker trigger from `_persist()` to `handle_sepay_webhook()` orchestration layer, (2) `_persist()` must return `int | None` so caller knows if row was inserted (avoid duplicate pickers on webhook retries), (3) explicitly document `User` dataclass + `_row_to_user()` + INSERT query updates for `channel_chat_id`, (4) reword `bot_state` PK tech debt — current PK works fine when Telegram migrates; only needs change if user model moves to multi-channel-per-user |
+| v0.5.0 | 2026-05-28 | Implementation pass: added Zalo sender, `/zalo/webhook` route, Zalo text parser/signature candidate, DB-backed category queue, SePay inserted-id orchestration, and unit/route/contract tests. Remaining gate is live Zalo OA webhook fixture + manual send verification. |
+| v0.6.0 | 2026-05-28 | Post-review fixes: (1) migrate all hardcoded ASCII Vietnamese in `categorize.py` + `zalo_webhook.py` to i18n keys (`categorize.*` — 11 keys in vi.py + en.py, parity-tested), (2) fix plan TTL from 30min to 6h matching `_QUEUE_TTL`, (3) document HMAC-SHA256 vs plain SHA256 discrepancy in signature code block, (4) `_env_bool` dedup deferred — only 2 Zalo-specific occurrences |
 
 ---
 
@@ -32,6 +34,14 @@ Build Zalo as a first-class core channel beside Telegram, using the existing `co
 - Zalo OAuth v4 docs confirm `https://oauth.zaloapp.com/v4/oa/access_token`, `grant_type=refresh_token`, `app_id`, `refresh_token`, `secret_key` header, JSON response with `access_token`, `refresh_token`, and `expires_in`.
 - Zalo OAuth docs state access tokens expire after 25 hours.
 - Zalo consultation-message endpoint is expected to be `POST https://openapi.zalo.me/v3.0/oa/message/cs`, but must still be tested with API Explorer / real OA credentials.
+
+**Implemented in repo**:
+
+- `core.messenger.zalo.ZaloSender` registered under `channel_type='zalo'`.
+- `POST /zalo/webhook` route behind `ZALO_ENABLED` / `ZALO_INTERACTIVE`.
+- `core.handlers.categorize` with DB `bot_state` queue for numbered parent-category selection.
+- SePay handler now distinguishes new inserts from duplicate webhook retries and only triggers category picker on new rows.
+- Tests added for sender, parser/signature candidate, FastAPI route wiring, category rendering, and messenger contract.
 
 **Must verify before implementation hardcodes behavior**:
 
@@ -125,7 +135,9 @@ Add in `main.py`, guarded by `ZALO_ENABLED=true` and `ZALO_INTERACTIVE=true`.
 ```python
 # Candidate Zalo signature formula — MUST be confirmed against a real webhook fixture
 # before merging implementation.
-# sha256(app_id + raw_body + timestamp + oa_secret_key)
+# Plan originally specified: sha256(app_id + raw_body + timestamp + oa_secret_key)
+# Implementation uses: HMAC-SHA256(secret_key, raw_body) which is more secure.
+# The correct formula will be determined by the first real webhook fixture.
 import hashlib
 
 def _verify_zalo_signature(
@@ -250,7 +262,7 @@ This sends the user a channel-abstract category picker using active parent categ
 - First item in `queue` is the "active" one shown to the user.
 - When user replies `1`/`2`/etc: validate against active item, update `transactions.category_id`, set `confirmed=true`, shift queue, send next picker or confirmation if queue empty.
 - New transactions arriving while queue is active: append to `queue`, send "Bạn có thêm giao dịch cần phân loại — hoàn tất cái hiện tại trước nhé" info message.
-- `expires_at` is TTL for the entire queue (30 minutes from first item). Renewed on each new item appended.
+- `expires_at` is TTL for the entire queue (6 hours from first item, matching `_QUEUE_TTL` in implementation). Renewed on each new item appended.
 
 **bot_state conflict avoidance**: V1 assumption — Telegram legacy continues using Google Sheets state (`sh.get_state(CHAT_ID)`), only Zalo uses DB `bot_state` table. No conflict because:
 

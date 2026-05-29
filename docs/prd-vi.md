@@ -1,21 +1,21 @@
 # Tiền Về Nơi Đâu — Product Requirements Document (PRD)
 
-> **Version:** v1.7.1
+> **Version:** v1.8.0
 > **Ngày tạo:** 2026-05-05
-> **Cập nhật lần cuối:** 2026-05-10
+> **Cập nhật lần cuối:** 2026-05-30
 > **Trạng thái:** Draft
-> **Tham chiếu:** [brd-vi.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/brd-vi.md) v3.1.0 · [tdd-vi.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/tdd-vi.md) v1.8.1 · [feature-spec-messenger-channel](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-messenger-channel.md) v1.1.1 · [impl plan VietQR+email](file:///Users/maingocanh/Projects/MyMoneyWent/docs/implementation-plans/implementation-plan-payment-vietqr-email.md) v1.0.0
+> **Tham chiếu:** [brd-vi.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/brd-vi.md) v3.1.0 · [tdd-vi.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/tdd-vi.md) v1.9.0 · [feature-spec-messenger-channel](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-messenger-channel.md) v1.1.1 · [impl plan VietQR+email](file:///Users/maingocanh/Projects/MyMoneyWent/docs/implementation-plans/implementation-plan-payment-vietqr-email.md) v1.0.0 · [impl plan Zalo channel](file:///Users/maingocanh/Projects/MyMoneyWent/docs/implementation-plan-zalo-channel-core.md) v0.6.0
 >
 > **🌐 SCOPE NOTE:** PRD này là **canonical product spec cho 🇻🇳 thị trường Việt Nam** (Tiền Về Nơi Đâu — tienvenoidau.com). Transaction capture (SePay + VN bank email parsing), 3 personas (Minh/Linh/Hùng+), pricing (79k/199k VND) đều VN-specific. **Global market** có PRD riêng — [prd-en.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/prd-en.md) (My Money Went — mymoneywent.com). Per [ADR-0001](file:///Users/maingocanh/Projects/MyMoneyWent/docs/adr/0001-monorepo-not-split-repos.md), shared foundation specs (DB schema, messenger interface, auth) apply cho cả 2 markets.
 >
-> **Change v1.7.1 vs v1.7.0:** Renamed `prd.md` → `prd-vi.md`. Thêm SCOPE NOTE. Update header refs (BRD v2.9.0 → brd-vi.md v3.1.0, tdd.md → tdd-vi.md v1.8.1). Title "MyMoneyWent" → "Tiền Về Nơi Đâu" (VN branding).
+> **Change v1.8.0 vs v1.7.1:** Thêm Zalo OA là channel thứ 4 (§1.1, §1.4, §2, AC). TDD ref v1.8.1→v1.9.0. Link impl plan Zalo v0.6.0. Note: `channel_chat_id TEXT` cho Zalo numeric-overflow IDs. Zalo interactive features guarded by `ZALO_ENABLED` + `ZALO_INTERACTIVE` env vars.
 
 ---
 
 ## 1. Tổng quan sản phẩm
 
 ### 1.1. Mô tả
-MyMoneyWent (Tiền Về Nơi Đâu) là **multi-channel SaaS bot** (Telegram + Discord + Messenger) tự động theo dõi tài chính cá nhân và shop nhỏ. **Telegram** (`@FinTrackBot`) là channel primary launch tại MVP. **Facebook Messenger** (Facebook Page) — code + foundation ship cùng MVP nhưng public access **gated bởi feature flag `ENABLE_MESSENGER_CHANNEL`**, chỉ flip ON sau khi Meta App Review approve (3-14 ngày, parallel với dev). User chọn 1 trong 2 channel lúc onboarding khi cả 2 đã live (single-channel per user). Bot kết nối ngân hàng qua **3 entry path** (SePay quick connect, SePay wizard, Email forwarding), nhận giao dịch real-time, hỏi user phân loại qua inline buttons (Telegram) hoặc quick replies (Messenger), và tổng hợp báo cáo tự động. Cấu trúc 3-tier pricing (Free / Pro $4 / Business $9).
+MyMoneyWent (Tiền Về Nơi Đâu) là **multi-channel SaaS bot** (Telegram + Zalo + Discord + Messenger) tự động theo dõi tài chính cá nhân và shop nhỏ. **Telegram** (`@FinTrackBot`) là channel primary launch tại MVP. **Zalo OA** — code + foundation shipping Phase 1 (migration 0004 + webhook route + sender), interactive features guarded by `ZALO_ENABLED` + `ZALO_INTERACTIVE` env vars. **Facebook Messenger** (Facebook Page) — code + foundation ship cùng MVP nhưng public access **gated bởi feature flag `ENABLE_MESSENGER_CHANNEL`**, chỉ flip ON sau khi Meta App Review approve (3-14 ngày, parallel với dev). User chọn 1 channel lúc onboarding khi tất cả đã live (single-channel per user). Bot kết nối ngân hàng qua **3 entry path** (SePay quick connect, SePay wizard, Email forwarding), nhận giao dịch real-time, hỏi user phân loại qua inline buttons (Telegram) hoặc quick replies (Messenger) hoặc numbered text (Zalo), và tổng hợp báo cáo tự động. Cấu trúc 3-tier pricing (Free / Pro $4 / Business $9).
 
 ### 1.2. Nguyên tắc thiết kế
 
@@ -44,12 +44,13 @@ MyMoneyWent (Tiền Về Nơi Đâu) là **multi-channel SaaS bot** (Telegram + 
 | Observability | Sentry + Railway metrics + UptimeRobot. Founder daily dashboard `/admin_stats`, cost dashboard `/admin_cost`, per-user troubleshooter `/admin_user`. Error budget 0.1% policy. Detail: [observability-plan v1.1.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/operations/observability-plan.md) |
 | Disaster recovery | 8 scenarios documented + quarterly drill. RTO 2-4h, RPO 24h. `BOT_TOKEN_BACKUP` ready, `@FinTrackUpdates` channel for out-of-band notification. Detail: [DR runbook v1.1.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/runbooks/disaster-recovery.md) |
 
-### 1.4. Bot ownership model — Multi-channel (Telegram + Discord + Messenger)
+### 1.4. Bot ownership model — Multi-channel (Telegram + Zalo + Discord + Messenger)
 
-**3 channel implemented in MVP (Telegram + Discord co-primary, Messenger feature-flagged); Telegram public launch primary; Messenger public access feature-flagged after Meta App Review.** Single-channel per user (khi cả 2 đã live, user chọn 1 lúc onboarding):
+**4 channel implemented (Telegram + Zalo co-primary VN, Discord co-primary, Messenger feature-flagged); Telegram public launch primary; Zalo interactive features guarded by env vars; Messenger public access feature-flagged after Meta App Review.** Single-channel per user (user chọn 1 lúc onboarding):
 
 1. **Telegram channel:** 1 shared bot duy nhất do platform sở hữu (`@FinTrackBot`). `BOT_TOKEN` là 1 env var Railway. **Public launch theo BRD timeline 16 tuần — không phụ thuộc bất kỳ external approval nào.**
-2. **Messenger channel:** 1 Facebook Page do platform sở hữu (`m.me/FinTrackPage`). `FB_PAGE_ACCESS_TOKEN` + `FB_APP_SECRET` là 2 env var Railway. **Code + foundation ship Phase 6, public access gated bởi `ENABLE_MESSENGER_CHANNEL` flag — flip ON sau khi Meta App Review approve `pages_messaging` + `pages_messaging_subscriptions`.** Nếu review pending/reject tại MVP launch → Telegram-only operation, Messenger flip ON post-launch.
+2. **Zalo OA channel:** 1 Zalo Official Account do platform sở hữu. `ZALO_OA_ACCESS_TOKEN` + `ZALO_OA_SECRET_KEY` là env vars Railway. **Code ship Phase 1 (migration 0004 `channel_chat_id` + `POST /zalo/webhook` route + `ZaloSender`). Interactive features guarded by `ZALO_ENABLED` + `ZALO_INTERACTIVE`.** Zalo IDs có thể là 19+ digit strings (overflow BIGINT) → lưu trong `channel_chat_id TEXT`. Category picker render thành numbered text ("1. Daily Spending\n2. Saving") thay vì buttons. Xem [implementation-plan-zalo-channel-core.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/implementation-plan-zalo-channel-core.md).
+3. **Messenger channel:** 1 Facebook Page do platform sở hữu (`m.me/FinTrackPage`). `FB_PAGE_ACCESS_TOKEN` + `FB_APP_SECRET` là 2 env var Railway. **Code + foundation ship Phase 6, public access gated bởi `ENABLE_MESSENGER_CHANNEL` flag — flip ON sau khi Meta App Review approve `pages_messaging` + `pages_messaging_subscriptions`.** Nếu review pending/reject tại MVP launch → Telegram-only operation, Messenger flip ON post-launch.
 
 User KHÔNG cần tạo bot/Page riêng, không cần biết tokens, không cần lookup channel ID của mình.
 
@@ -67,6 +68,13 @@ User KHÔNG cần tạo bot/Page riêng, không cần biết tokens, không cầ
 3. Backend: `INSERT INTO users (channel_type='messenger', channel_user_id=<psid>, ...) ON CONFLICT DO NOTHING`
 4. Bot reply qua Send API với `recipient.id=<psid>`, lưu `last_user_message_at` cho 24h window check
 
+**Flow đăng ký Zalo:**
+
+1. User follow Zalo OA của platform + gửi bất kỳ message
+2. Zalo OA webhook gửi event `user_send_text` với `sender.id` (Zalo user ID string, có thể 19+ digits)
+3. Backend: `INSERT INTO users (channel_type='zalo', channel_user_id=<sender_id>, channel_chat_id=<sender_id>, ...) ON CONFLICT DO NOTHING`
+4. Bot reply qua Zalo Send API. Category picker render thành numbered text options (Zalo không hỗ trợ callback buttons cho OA thường)
+
 **Rationale:** Multi-tenant SaaS UX phải chuẩn "thêm bạn → dùng ngay". Bắt user tự tạo bot qua @BotFather = mất 30-60 phút setup, defeat 2-15 phút onboarding promise của 3-path flow. Multi-channel giảm risk Telegram block ở VN (BRD §risk #2) + tăng TAM (user prefer Messenger thay vì Telegram).
 
 **Channel-specific UX:** Telegram dùng slash commands (`/start`, `/status`) + inline keyboard 2D grid. Messenger dùng persistent menu (5 item) + quick replies flat list (max 13/message). Feature parity 100%, UX divergent intentional theo native pattern. Detail: [feature-spec-messenger-channel §7.5 UX parity matrix](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-messenger-channel.md).
@@ -74,7 +82,7 @@ User KHÔNG cần tạo bot/Page riêng, không cần biết tokens, không cầ
 **Operational implications:**
 - `BOT_TOKEN` + `FB_PAGE_ACCESS_TOKEN` + `FB_APP_SECRET` chỉ tồn tại trong Railway env vars, do platform owner quản lý + rotate khi cần.
 - `chat_id` (Telegram) hoặc `channel_user_id=<psid>` (Messenger) luôn lookup từ DB qua `users` table, **KHÔNG hardcode** trong code/env.
-- Outbound message MUST go through `services/messenger.py` → `services/channels/{telegram,messenger}.py` adapter. Handlers KHÔNG call channel API trực tiếp.
+- Outbound message MUST go through `services/messenger.py` → `services/channels/{telegram,zalo,messenger}.py` adapter. Handlers KHÔNG call channel API trực tiếp.
 - Single point of failure mỗi channel: Telegram suspend → toàn Telegram user offline; FB Page suspend → toàn Messenger user offline. Mitigation: `BOT_TOKEN_BACKUP` cho Telegram emergency switchover < 5 phút; FB Page recovery via Meta admin process. Cross-channel migration scripted nếu 1 channel die hoàn toàn (move toàn user sang channel kia).
 
 **Acceptance Criteria liên quan (cross-ref F01, F08):**
@@ -83,13 +91,13 @@ User KHÔNG cần tạo bot/Page riêng, không cần biết tokens, không cầ
 - [ ] `UNIQUE (channel_type, channel_user_id)` constraint — 1 channel account = 1 user row
 - [ ] `users.last_user_message_at` cập nhật mỗi inbound message (Messenger 24h window check)
 - [ ] Bot suspended scenario có runbook cho cả Telegram (rotate `BOT_TOKEN`) + Messenger (Meta admin process)
-- [ ] Channel adapter pattern grep AC: handler/service files có 0 hit `await tg.send_*` hoặc `httpx.*graph.facebook.com` ngoài `services/channels/`
+- [ ] Channel adapter pattern grep AC: handler/service files có 0 hit `await tg.send_*` hoặc `httpx.*graph.facebook.com` hoặc `httpx.*openapi.zalo.me` ngoài `services/channels/`
 
 ---
 
 ## 2. User Flows
 
-> **Multi-channel note:** Tất cả flow dưới đây mô tả Telegram (channel "default" trong examples). Messenger flow **identical** về mặt logic — chỉ khác UX rendering: persistent menu thay slash commands, quick replies thay inline keyboard, image attachment thay sendPhoto. Detail diff: [feature-spec-messenger-channel §7.5 UX parity matrix](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-messenger-channel.md). Entry point Messenger: user truy cập `m.me/FinTrackPage` → tap "Get Started" thay vì gõ `/start`.
+> **Multi-channel note:** Tất cả flow dưới đây mô tả Telegram (channel "default" trong examples). Messenger flow **identical** về mặt logic — chỉ khác UX rendering: persistent menu thay slash commands, quick replies thay inline keyboard, image attachment thay sendPhoto. Zalo flow **identical** về logic — khác UX: numbered text options thay inline keyboard (Zalo OA không hỗ trợ callback buttons). Detail diff: [feature-spec-messenger-channel §7.5 UX parity matrix](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-messenger-channel.md). Entry point: Telegram `/start`, Messenger `m.me/FinTrackPage` "Get Started", Zalo follow OA + send message.
 
 > **UI strategy decision:** Onboarding chat-only — KHÔNG có web form/wizard cho user nhập setup info. Lý do + trade-off + triggers revisit: [decision-onboarding-ui-strategy.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/adr/0002-onboarding-ui-strategy.md). Pre-launch web chỉ là landing page tĩnh + privacy/terms (~3 ngày dev), KHÔNG thay thế chat onboarding.
 
@@ -716,7 +724,7 @@ Vì PRD section 1.4 dùng **1 shared bot** cho mọi user, có Telegram-imposed 
 
 ### 7.2. References
 - [BRD-vi v3.1.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/brd-vi.md)
-- [TDD-vi v1.8.1](file:///Users/maingocanh/Projects/MyMoneyWent/docs/tdd-vi.md)
+- [TDD-vi v1.9.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/tdd-vi.md)
 - [Feature spec: Personal vs Business toggle](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-personal-business-toggle.md)
 - [Feature spec: Refactor personal → SaaS multi-tenant](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-saas-refactor.md)
 - [Feature spec: Payment via bank transfer v1.3.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-payment.md)
@@ -736,6 +744,8 @@ Vì PRD section 1.4 dùng **1 shared bot** cho mọi user, có Telegram-imposed 
 - [SePay API docs](https://sepay.vn)
 - [Postmark Inbound docs](https://postmarkapp.com/developer/webhooks/inbound-webhook)
 - [VietQR.io API docs](https://www.vietqr.io/danh-sach-api/)
+- [Zalo OA API docs](https://developers.zalo.me/docs/official-account)
+- [Implementation plan: Zalo channel core v0.6.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/implementation-plan-zalo-channel-core.md)
 
 ---
 

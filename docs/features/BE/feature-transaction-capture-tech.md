@@ -1,9 +1,9 @@
 # BE Tech Doc: Transaction Capture — SePay + Email (F02)
 
-> **Version:** v1.1.0
+> **Version:** v1.2.0
 > **Ngày tạo:** 2026-05-08
 > **Feature doc:** [feature-transaction-capture.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-transaction-capture.md)
-> **TDD ref:** [TDD-vi v1.8.1 §2.1 transactions, §3.2 pipeline](file:///Users/maingocanh/Projects/MyMoneyWent/docs/tdd-vi.md)
+> **TDD ref:** [TDD-vi v1.9.0 §2.1 transactions, §3.2 pipeline](file:///Users/maingocanh/Projects/MyMoneyWent/docs/tdd-vi.md)
 
 ---
 
@@ -225,3 +225,4 @@ def detect_bank(from_email: str) -> str | None:
 |---------|------|----------|
 | v1.0.0 | 2026-05-08 | Initial BE tech doc |
 | v1.1.0 | 2026-05-11 | **F08 integration:** `process_transaction()` rewrite — resolve funding_source trước INSERT, populate FK, try/except fallback NULL. Discovery header prepend vào picker (1 message). Resurrect notification delayed 1.5s sau picker. §2.1 INSERT query thêm `funding_source_id` column ($9). Test plan thêm cases 25-27. Xem [F08 BE](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/BE/feature-funding-sources-tech.md). |
+| v1.2.0 | 2026-05-30 | **Docs sync:** TDD ref v1.8.1→v1.9.0. Note: `_persist()` in `sepay_webhook.py` now returns `int | None` (tx_id or None for dupes) — enables SePay handler to distinguish new inserts vs duplicate retries, driving conditional category picker dispatch. `insert_transaction()` in §2.1 already used `RETURNING *` — no query change needed, behavioral clarification only. Zalo categorize handler uses this to gate numbered-text picker on new rows only. |

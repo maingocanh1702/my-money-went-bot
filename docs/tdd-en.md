@@ -1,10 +1,10 @@
 # My Money Went — Technical Design Document (TDD)
 
-> **Version:** v1.0.0
+> **Version:** v1.1.0
 > **Created:** 2026-05-10
-> **Last updated:** 2026-05-10
+> **Last updated:** 2026-05-30
 > **Status:** Draft
-> **References:** [BRD-en v4.0.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/brd-en.md) · [PRD-en v2.0.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/prd-en.md) · [TDD-vi v1.8.1](file:///Users/maingocanh/Projects/MyMoneyWent/docs/tdd-vi.md) (shared foundation) · [ADR-0001](file:///Users/maingocanh/Projects/MyMoneyWent/docs/adr/0001-monorepo-not-split-repos.md)
+> **References:** [BRD-en v4.0.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/brd-en.md) · [PRD-en v2.0.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/prd-en.md) · [TDD-vi v1.9.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/tdd-vi.md) (shared foundation) · [ADR-0001](file:///Users/maingocanh/Projects/MyMoneyWent/docs/adr/0001-monorepo-not-split-repos.md)
 >
 > **🌐 SCOPE NOTE:** This TDD specifies the **🌍 Global market technical architecture**. It shares foundation sections with [tdd-vi.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/tdd-vi.md) (messenger interface, auth framework, admin tools, deployment). Global-specific sections: Plaid/TrueLayer/Tink bank integration, Stripe/PayPal/Shopify/Etsy OAuth, payout email parsers, web dashboard (Next.js), Stripe Checkout payment, `integrations` + `auto_cat_rules` tables. Per [ADR-0001](file:///Users/maingocanh/Projects/MyMoneyWent/docs/adr/0001-monorepo-not-split-repos.md), Global code lives at `markets/global/`, shared foundation at `core/`.
 
@@ -109,7 +109,7 @@
 
 ## 2. Database Schema (Global-specific tables)
 
-> **Note:** Core tables (`users`, `categories`, `sub_categories`, `transactions`, `bot_state`, `scheduled_jobs`, `admin_audit_log`, `analytics_events`) are defined in [tdd-vi.md §2.1](file:///Users/maingocanh/Projects/MyMoneyWent/docs/tdd-vi.md) and shared across both markets. Below are **Global-specific additions.**
+> **Note:** Core tables (`users`, `categories`, `sub_categories`, `transactions`, `bot_state`, `scheduled_jobs`, `admin_audit_log`, `analytics_events`) are defined in [tdd-vi.md §2.1](file:///Users/maingocanh/Projects/MyMoneyWent/docs/tdd-vi.md) and shared across both markets. The `users` table now includes `channel_chat_id TEXT NULL` (migration 0004) and `chk_channel_type` expanded to include `'zalo'`. Below are **Global-specific additions.**
 
 ### 2.1. Global-specific DDL
 
@@ -498,6 +498,7 @@ Supabase session cookie → authenticated API requests to FastAPI backend
 | Version | Date | Change |
 |---------|------|--------|
 | v1.0.0 | 2026-05-10 | **Initial Global TDD:** Architecture for Plaid + e-com OAuth + payout email capture stack. Global-specific tables (integrations, auto_cat_rules). Module structure with `core/` + `markets/global/` separation. Web dashboard (Next.js + Supabase). Stripe Checkout payment. Plaid cost profile. Env vars. Integration specs. Testing strategy. |
+| v1.1.0 | 2026-05-30 | **Sync with tdd-vi v1.9.0.** Updated shared foundation reference (v1.8.1→v1.9.0). Note `channel_chat_id TEXT NULL` (Zalo support) + `chk_channel_type` expansion in shared `users` table. |
 
 ---
 

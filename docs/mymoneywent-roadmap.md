@@ -1,25 +1,25 @@
 # Tiền Về Nơi Đâu / My Money Went — Roadmap
 
-> **Version:** v1.1.0
+> **Version:** v2.0.0
 > **Ngày tạo:** 2026-05-11
-> **Cập nhật lần cuối:** 2026-05-12
+> **Cập nhật lần cuối:** 2026-05-30
 > **Trạng thái:** Active
 > **Tham chiếu:** [BRD-vi v3.1.0](file:///Users/maingocanh/Projects/MyMoneyWent/docs/brd-vi.md) · [PRD-vi v1.7.1](file:///Users/maingocanh/Projects/MyMoneyWent/docs/prd-vi.md) · [TDD-vi v1.8.1](file:///Users/maingocanh/Projects/MyMoneyWent/docs/tdd-vi.md)
 > **Execution tracking:** [START HERE](START_HERE.md) → [Implementation Tracker](implementation-tracker.md) (PR-level status board) · [Phase 1](implementation-plans/phase-1-foundation-remaining.md) · [Phase 2](implementation-plans/phase-2-handlers.md) · [Phase 3](implementation-plans/phase-3-pricing.md) · [Phase 4](implementation-plans/phase-4-sepay-onboarding.md) · [Phase 5](implementation-plans/phase-5-email-parsing.md) · [Phase 6](implementation-plans/phase-6-polish-deploy.md)
 
-> **Note:** Project dùng Telegram / Discord / Messenger làm frontend (chat-based UI). Không có web/mobile UI → không cần file `.pen` hay screen design.
+> **Note:** Project dùng Telegram / Zalo / Discord / Messenger làm frontend (chat-based UI). Không có web/mobile UI → không cần file `.pen` hay screen design.
 
 ---
 
 ## 1. Overall Progress
 
-**Tổng tiến độ: 30%** `██████░░░░░░░░░░░░░░` (Foundation shipping)
+**Tổng tiến độ: 40%** `████████░░░░░░░░░░░░` (Foundation near-complete, Zalo channel WIP)
 
 | Phase | Status | Progress | Tasks |
 |-------|--------|----------|-------|
 | Phase 0: Docs & Specs | ✅ Complete | 100% | — |
-| Phase 1: Foundation | 🟡 In Progress | ~75% | [plan](implementation-plans/phase-1-foundation-remaining.md) |
-| Phase 2: Handlers Refactor | ⬜ Not Started | 0% | [9 PRs](implementation-plans/phase-2-handlers.md) |
+| Phase 1: Foundation | 🟡 In Progress | ~95% | [plan](implementation-plans/phase-1-foundation-remaining.md) |
+| Phase 2: Handlers Refactor | 🟡 Early | ~20% | [10 PRs](implementation-plans/phase-2-handlers.md) |
 | Phase 3: Pricing Logic | ⬜ Not Started | 0% | [1 PR](implementation-plans/phase-3-pricing.md) |
 | Phase 4: SePay Onboarding | ⬜ Not Started | 0% | [2 PRs](implementation-plans/phase-4-sepay-onboarding.md) |
 | Phase 5: Email Parsing | ⬜ Not Started | 0% | [plan](implementation-plans/phase-5-email-parsing.md) |
@@ -34,47 +34,51 @@
 
 ## 2. Feature Modules
 
-**Feature implementation: 10%** `██░░░░░░░░░░░░░░░░░░` (Foundation infra shipped, no business logic yet)
+**Feature implementation: 15%** `███░░░░░░░░░░░░░░░░░` (Foundation infra shipped, onboarding + settings + Zalo core landed)
 
 | Module | Feature | Spec | BE Tech | BE Code | Bot Code | Phase |
 |--------|---------|:----:|:-------:|:-------:|:--------:|:-----:|
-| onboarding-start | 3-Path Onboarding | ✅ | ✅ | 🟡 W0 infra | ⬜ | 1,4 |
-| transaction-capture | Transaction Capture (SePay + Email) | ✅ | ✅ | 🟡 webhook_tokens + parsers shell | ⬜ | 1,5 |
-| categorization | Transaction Categorization | ✅ | ✅ | ⬜ | ⬜ | 2 |
+| onboarding-start | 3-Path Onboarding | ✅ | ✅ | ✅ `/start` shipped | ✅ TG+Zalo | 1,4 |
+| transaction-capture | Transaction Capture (SePay + Email) | ✅ | ✅ | 🟡 webhook_tokens + parsers shell + `_persist()` returns `int\|None` | ⬜ | 1,5 |
+| categorization | Transaction Categorization | ✅ | ✅ | 🟡 `categorize.py` DB queue (Zalo) | ⬜ | 2 |
 | category-management | Category Management (/manage) | ✅ | ✅ | ⬜ | ⬜ | 2 |
 | reports | Reports (/status, /today, /weekly) | ✅ | ✅ | ⬜ | ⬜ | 2 |
 | pricing-tiers | Pricing, Tier Limits & Trial | ✅ | ✅ | ⬜ | ⬜ | 3 |
-| settings | Settings (/settings) | ✅ | ✅ | ⬜ | ⬜ | 2 |
+| settings | Settings (/settings) | ✅ | ✅ | ✅ shipped | ✅ TG | 2 |
 | funding-sources | Funding Sources | ✅ | ✅ | 🟡 DDL landed W0.2 | ⬜ | 2 |
 | scheduled-jobs | Scheduled Jobs | ✅ | ✅ | ⬜ | ⬜ | 6 |
 | F10 | Payment (Bank Transfer Auto-Detect) | ✅ | ✅ | ⬜ | ⬜ | 6 |
 | F11 | Admin Tools & Audit | ✅ | ✅ | 🟡 audit_log table W0.2 | ⬜ | 6 |
 | F12 | Multi-User Data Isolation | ✅ (PRD) | — | ✅ tenant_context W0.3 | — | 1 |
 | messenger-channel | Messenger Channel | ✅ | ✅ | ⬜ | ⬜ | 6 |
+| zalo-channel | Zalo Channel | 🟡 impl plan | — | 🟡 sender + webhook + migration 0004 (local) | 🟡 `/start` + category picker | 1 |
 | F14 | Discord Channel | ✅ | ✅ | ⬜ | ⬜ | 1 |
 | F15 | Personal vs Business Toggle | ✅ | ✅ | ⬜ | ⬜ | 9 |
 | F16 | P&L View | ⬜ | ⬜ | ⬜ | ⬜ | 9 |
 | F17 | Income Source Attribution | ⬜ | ⬜ | ⬜ | ⬜ | 9 |
-| i18n-locale-switcher | Internationalization | ✅ | ✅ | 🟡 stub W0.4 | — | 1 |
-| F-saas | SaaS Refactor | ✅ | ✅ | 🟡 foundation W0.1-W0.6 | — | 1 |
+| i18n-locale-switcher | Internationalization | ✅ | ✅ | 🟡 `i18n/` package landed + 11 categorize keys | — | 1 |
+| F-saas | SaaS Refactor | ✅ | ✅ | 🟡 foundation W0.1-W0.6 + SePay multi-tenant (C1 P1-P3) | — | 1 |
 | FAM | Family Plan | ✅ v1.2.0 | ✅ v1.1.0 | ⬜ | ⬜ | 11 |
 
-> **Numbering note:** funding-sources = Funding Sources (entity model, DDL landed W0.2). F12 = Multi-User Data Isolation (tenant_context, not a standalone service). Aligned with PRD convention post W0.2.
+> **Numbering note:** funding-sources = Funding Sources (entity model, DDL landed W0.2). F12 = Multi-User Data Isolation (tenant_context, not a standalone service). zalo-channel added v2.0.0 (implementation plan v0.6.0, core code WIP locally). Aligned with PRD convention post W0.2.
 
 ---
 
 ## 3. Timeline
 
 **Target launch:** Tháng 9/2026 (tuần 15-16 from dev start)
-**Wave 0 complete:** 2026-05-11 (6 PRs: W0.1-W0.6 merged, 112 tests passing) + 2026-05-12 W0.7 cleanup (public `request_id` API + transaction-capture contract pin)
-**Phase 1 remaining:** ~1 tuần (Docker Compose + Discord adapter + remaining integration)
+**Wave 0 complete:** 2026-05-11 (6 PRs: W0.1-W0.6 merged, 112 tests passing) + 2026-05-12 W0.7-W0.8 + 2026-05-13 W0.9-W0.10 + settings + onboarding-start
+**Work-State Engine:** 2026-05-20~21 (8 PRs merged: MYM-1/3/4/5/6/7/8/10, 340+ tests in engine suite)
+**Security batch B:** 2026-05-22 (9 fixes merged: H5, H7, M1-M7, SSRF)
+**Zalo channel:** 2026-05-28 (migration 0004 committed, core code WIP locally)
+**Phase 1 remaining:** Docker Compose + Discord adapter + Zalo commit/cleanup
 
 ```
 2026
- May               Jun          Jul          Aug          Sep
-  |──W0 DONE──|P1 rem|──P2─|──P3|──P4|────P5────|────P6─────|P7─|P8─|
-  Wave 0       Found  Hand  Price SePay  Email    Polish+    Beta Launch
-  (6 PRs)      ation  lers        Onbd   Parse    Deploy
+ May                          Jun          Jul          Aug          Sep
+  |──W0─|─W0 followups──|Zalo|──P2─|──P3|──P4|────P5────|────P6─────|P7─|P8─|
+  Wave 0  WSE+DashLive   Chan  Hand  Price SePay  Email    Polish+    Beta Launch
+  (6 PRs) Security        nel   lers        Onbd   Parse    Deploy
                                                               |──P9-10──|──P11──|
                                                               Growth     Family
                                                               Business   Plan
@@ -98,21 +102,24 @@
 | TDD-en | ✅ | [tdd-en.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/tdd-en.md) |
 | ADR-0001 (Monorepo) | ✅ | [0001-monorepo.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/adr/0001-monorepo-not-split-repos.md) |
 | ADR-0002 (Onboarding UI) | ✅ | [0002-onboarding-ui.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/adr/0002-onboarding-ui-strategy.md) |
+| ADR-0003 (Identity Model) | 🟡 Local | [0003-identity-model.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/adr/0003-identity-model-accounts-channels.md) |
 | Market Strategy Overview | ✅ | [market-strategy-overview.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/market-strategy-overview.md) |
 | Development Workflow | ✅ | [development-workflow.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/operations/development-workflow.md) |
 | Feature Specs (onboarding-start-F14, FAM) | ✅ | [docs/features/](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features) |
 | BE Tech Docs (17 files) | ✅ | [docs/features/BE/](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/BE) |
 | Feature: Family Plan — Product | ✅ v1.2.0 | [feature-family-plan.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/feature-family-plan.md) |
 | Feature: Family Plan — BE Tech | ✅ v1.1.0 | [feature-family-plan-tech.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/features/BE/feature-family-plan-tech.md) |
+| Zalo Channel Core Plan | 🟡 v0.6.0 | [implementation-plan-zalo-channel-core.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/implementation-plan-zalo-channel-core.md) |
+| Zalo Multi-User Research | 🟡 Local | [research-zalo-multi-user-bot.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/research-zalo-multi-user-bot.md) |
 | Observability Plan | ✅ | [observability-plan.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/operations/observability-plan.md) |
 | DR Runbook | ✅ | [disaster-recovery.md](file:///Users/maingocanh/Projects/MyMoneyWent/docs/runbooks/disaster-recovery.md) |
 | Competitive Research | ✅ | [research/](file:///Users/maingocanh/Projects/MyMoneyWent/docs/research) |
 
 ---
 
-### Phase 1: Foundation 🟡 (~75% complete)
+### Phase 1: Foundation 🟡 (~95% complete)
 
-> Wave 0 PRs (W0.1→W0.6) shipped 2026-05-11 — most infra done. Remaining: Docker Compose, Discord adapter, final integration wiring.
+> Wave 0 PRs (W0.1→W0.6) shipped 2026-05-11. W0.7-W0.10 follow-ups shipped 2026-05-12~13. Work-State Engine (8 PRs) + Dashboard Live View A/B shipped 2026-05-20~21. Security batch B shipped 2026-05-22. Zalo channel migration 0004 committed 2026-05-28. Remaining: Docker Compose, Discord adapter, Zalo channel commit.
 
 **Wave 0 PRs (shipped):**
 
@@ -124,19 +131,45 @@
 | W0.4 | `core/messenger/` (BaseSender ABC + SendPayload + TelegramSender + i18n stub) | 25 | ✅ Merged |
 | W0.5 | `core/logging.py` structlog + `core/observability.py` Sentry + `/health` endpoints | 14 | ✅ Merged |
 | W0.6 | Plugin email parsers (6 bank shells) + SePay webhook handler + founder seed scaffold + `parsers-are-pure` contract | 34 | ✅ Merged |
-| W0.7 | Public `request_id` helpers in `core/tenant_context` + transaction-capture funding-source `xfail(strict=True)` contract pin | +3 (1 round-trip, 1 empty-reject, 1 xfail) | 🟢 Code done 2026-05-12 |
-| **Total** | | **109 explicit + 3 cross-cutting + 3 W0.7 = 118 passed, 1 skipped, 1 xfail** | **5 import-linter contracts** |
+| W0.7 | Public `request_id` helpers + transaction-capture contract pin | +3 | ✅ Merged 2026-05-12 |
+| W0.8 | Webhook `display_suffix VARCHAR(8)` migration | +3 | ✅ Merged 2026-05-12 |
+| W0.9 | Dashboard realtime auto-rebuild + git-state detect + reconcile | +21 | ✅ Merged 2026-05-13 |
+| W0.10 | Dashboard v3 rich UI + Chart.js burndown + filter + search | +311 LOC | ✅ Merged 2026-05-13 |
+| **Total W0** | | **~130 tests** | **5 import-linter contracts** |
 
-> **Test count note:** Per-PR numbers (4+20+12+25+14+34=109) are PR-scoped counts. Final aggregate `112 passed, 1 skipped` (per CHANGELOG) reflects 3 extra cases from parametrize expansions / cross-PR fixtures collected at full-suite run.
+**Wave 0 follow-ups (shipped 2026-05-20~21):**
+
+| PR | Scope | Tests | Status |
+|----|-------|:-----:|:------:|
+| MYM-1 (1a) | Work-State Engine skeleton + filesystem + git collectors | 127+6 e2e | ✅ Merged 2026-05-20 |
+| MYM-3 (1b) | GitHub + CI + Railway collectors | 63 new (190 total) | ✅ Merged 2026-05-20 |
+| MYM-4 (1b') | Dashboard projection | 23 new (213 total) | ✅ Merged 2026-05-21 |
+| MYM-5 (1c) | Engine driver + aggregation + persistence + workflow | 32 new (245 total) | ✅ Merged 2026-05-21 |
+| MYM-6 | Dashboard Live View Phase A (engine→build wire) | +369 LOC tests | ✅ Merged 2026-05-21 |
+| MYM-7 | Dashboard Live View Phase B (doc-change awareness) | +5 signal fields, +4 overlays | ✅ Merged 2026-05-21 |
+| MYM-8 | Doc-change hash-aware dedup + emission wire | 12 new (340 total) | ✅ Merged 2026-05-21 |
+| MYM-10 (1d) | Urgency derivation + MAX agg + foundation_change + projection | +28 tests | ✅ Merged 2026-05-21 |
+| MYM-11 | Spec §8.2 reconcile — CANONICAL_OVERLAYS +3 code extras | test fix | ✅ Merged 2026-05-21 |
+| Security B | 9 fixes (H5, H7, M1-M7, SSRF) | — | ✅ Merged 2026-05-22 |
+| SePay multi-tenant | C1 P1-P3 (DB pool+Sentry wire, multi-tenant webhook route, parallel-run telemetry) | — | ✅ Merged 2026-05-15 |
+
+**Zalo channel (WIP 2026-05-28):**
+
+| PR | Scope | Tests | Status |
+|----|-------|:-----:|:------:|
+| Zalo core | Migration 0004 (`channel_chat_id`, `chk_channel_type` +zalo) + start handler routing | migration+start tests | ✅ Committed to main |
+| Zalo sender | `core/messenger/zalo.py` ZaloSender + OAuth token refresh | unit+contract | 🟡 Local (untracked) |
+| Zalo webhook | `POST /zalo/webhook` route + `core/handlers/categorize.py` DB queue | unit+integration | 🟡 Local (untracked) |
 
 **Task breakdown:**
 
 | Task | Status | Notes |
 |------|:------:|-------|
 | Repo structure (monorepo per ADR-0001) | ✅ | `core/`, `markets/vn/`, `markets/global_/` — W0.1 |
-| DB schema migration (PostgreSQL) | ✅ | `0001_initial_schema.py` — 11 tables — W0.2 |
+| DB schema migration (PostgreSQL) | ✅ | `0001_initial_schema.py` (11 tables) + `0004_add_zalo_channel` |
 | Multi-user routing | ✅ | `core/messenger/send.py` — W0.4 |
 | Telegram adapter | ✅ | `core/messenger/telegram.py` — W0.4 |
+| Zalo adapter | 🟡 | `core/messenger/zalo.py` — local, pending commit |
 | Discord adapter | ⬜ | `core/messenger/discord.py` — pending |
 | Docker Compose setup | ⬜ | Dev + prod configs — pending |
 | Tenant isolation middleware | ✅ | `core/tenant_context.py` — W0.3 (ContextVar, 7 tests) |
@@ -144,11 +177,14 @@
 | Structured logging | ✅ | `core/logging.py` structlog + tenant binding — W0.5 |
 | Sentry + health endpoints | ✅ | `core/observability.py` + `/health` + `/health/detailed` — W0.5 |
 | Import boundary contracts | ✅ | `.importlinter` — 5 contracts — W0.1 + W0.6 (incl. `i18n-is-pure`) |
-| SePay webhook handler | ✅ | `markets/vn/capture/sepay_webhook.py` — W0.6 |
+| SePay webhook handler | ✅ | `markets/vn/capture/sepay_webhook.py` — W0.6 + multi-tenant C1 |
 | Webhook token system | ✅ | `markets/vn/capture/webhook_tokens.py` — W0.6 (SHA-256 hash, never stores raw) |
 | Email parser plugin framework | ✅ | `markets/vn/email_parsers/` — 6 bank shells + `@register_parser` decorator — W0.6 |
 | Canonical transaction schema | ✅ | `core/canonical_tx.py` — W0.6 |
-| Founder seed scaffold | ✅ | `scripts/migrate_sheets.py` — W0.6 (dry-run only, `_step_*` NotImplementedError) |
+| Founder seed scaffold | ✅ | `scripts/migrate_sheets.py` — W0.6 (dry-run only) |
+| Work-State Engine | ✅ | `scripts/work_state/` — 8 PRs, 340+ tests (being moved to `tools/dashboard-engine/`) |
+| Dashboard Live View | ✅ | Engine→build wire + doc-change awareness — MYM-6/7 |
+| Security hardening | ✅ | Batch B: 9 fixes (H5, H7, M1-M7, SSRF) + review quick wins |
 
 ### Phase 2: Handlers Refactor (Tuần 3-4)
 
@@ -275,10 +311,10 @@
 | Phase | Tuần | Backend | Bot/Frontend | Docs |
 |-------|:----:|:-------:|:------------:|:----:|
 | 0: Docs & Specs | Done | — | — | ✅ 100% |
-| 1: Foundation | ~1 rem | 🟡 75% (W0 infra shipped) | 🟡 Telegram ✅ / Discord pending | ✅ |
-| 2: Handlers | 3-4 | ⬜ Services | ⬜ Commands | ✅ |
+| 1: Foundation | ~done | 🟡 95% (W0+WSE+security+Zalo shipped) | 🟡 Telegram ✅ / Zalo 🟡 / Discord pending | ✅ |
+| 2: Handlers | 3-4 | 🟡 20% (settings+onboarding ✅) | 🟡 2/10 commands | ✅ |
 | 3: Pricing | 5 | ⬜ Tier logic | ⬜ Gating | ✅ |
-| 4: SePay | 6 | 🟡 Handler exists | ⬜ Onboarding | ✅ |
+| 4: SePay | 6 | 🟡 Handler exists + multi-tenant route | ⬜ Onboarding | ✅ |
 | 5: Email | 7-9 | 🟡 Parser shells exist | ⬜ Path C | ✅ |
 | 6: Polish | 10-12 | ⬜ Payment + Admin | ⬜ Messenger | ✅ |
 | 7: Beta | 13-14 | ⬜ Fixes | ⬜ Fixes | ✅ |
@@ -297,7 +333,9 @@
 | Hộ kinh doanh registration | Phase 6 (Payment) | 🔲 Pending | Lead time 1-2 tuần |
 | Hùng+ customer interviews (5-7) | Phase 9 (Business go/no-go) | 🔲 Pending | Validate hypothesis |
 | ~~Bot Finance → SaaS migration~~ | ~~Phase 1~~ | ✅ Resolved | Strangler fig pattern. W0.6 ships invariants. Legacy cutover deferred to transaction-capture handler refactor. |
-| Discord adapter | Phase 1 completion | 🔲 Pending | Last major Phase 1 item |
+| Discord adapter | Phase 1 completion | 🔲 Pending | Last remaining Phase 1 item besides cleanup |
+| Zalo OA live fixture | Zalo channel commit | 🔲 Pending | Need real webhook fixture to confirm signature formula + payload shape before prod |
+| Zalo OA credentials | Zalo channel production | 🔲 Pending | App ID + secret key + access token needed from Zalo Developer Console |
 
 ---
 
@@ -316,9 +354,9 @@
 
 ## 8. Key Metrics to Track
 
-| Metric | Current (W0) | Phase 7-8 Target | Phase 9-10 Target | Phase 11+ Target |
+| Metric | Current (2026-05-30) | Phase 7-8 Target | Phase 9-10 Target | Phase 11+ Target |
 |--------|:------------:|:----------------:|:-----------------:|:----------------:|
-| Tests passing | 112 | 300+ | 500+ | 700+ |
+| Tests collected | 293+ (13 collection errors from WIP) | 300+ | 500+ | 700+ |
 | Import contracts | 5 | 6+ | 7+ | 8+ |
 | Active users | 0 | 10-30 | 100-500 | 500+ |
 | Paying users (%) | — | ≥5% | ≥8-10% | ≥10% |
@@ -326,6 +364,7 @@
 | Retention 30d | — | ≥60% | ≥70% | ≥75% |
 | Parser accuracy | — | ≥85%/bank | ≥90%/bank | ≥95%/bank |
 | Infra cost/mo | $0 | ≤$25 | ≤$50 | ≤$100 |
+| Channels supported | 1 (TG) + 1 WIP (Zalo) | 2-3 | 3-4 | 4 |
 
 ---
 
@@ -336,3 +375,4 @@
 | v1.0.0 | 2026-05-11 | Initial roadmap. 11 phases. Phase 0 at 75%. Chat-based UI, no .pen needed. |
 | v1.1.0 | 2026-05-12 | **Major accuracy fix:** Phase 0 → COMPLETE (specs/ADRs/ops docs locked). Phase 1 → 75% (W0.1-W0.6 PRs shipped, 112 cases / 14 files, 4 contracts; Discord + Docker pending). funding-sources = Funding Sources (corrected from "Data Isolation"). BE Tech Docs → ✅ (17 files exist). Added i18n-locale-switcher, F-saas to module table. F15 spec status → ✅. Blocker "Bot Finance migration" → ✅ resolved (strangler fig W0.6). Family blocker reworded: decisions locked, doc merge pending. Timeline baseline updated (W0 done = potential compression). Wave 0 PR detail table moved from Phase 0 → Phase 1 (Phase 0 = specs only, code is Phase 1). Family Plan canonical link → `docs/features/feature-family-plan.md` (drafts/ stale v1.0.0 superseded). Email parser slip risk impact: High → Medium (shells exist). |
 | v1.2.0 | 2026-05-13 | **Structure cleanup:** Import-linter contracts 4→5 (added `i18n-is-pure`, missed in v1.1.0). Task links → `implementation-plans/` (source of truth). `docs/tasks/` archived → `docs/archive/tasks/`. Added START_HERE.md entry point link. Autopilot files → `docs/autopilot/`. |
+| v2.0.0 | 2026-05-30 | **Major sync (17 days of shipped work).** Phase 1 progress 75%→95%. Added: (1) Work-State Engine 8 PRs (MYM-1/3/4/5/6/7/8/10, 340+ tests) shipped 2026-05-20~21 — dashboard engine pipeline fully operational. (2) Dashboard Live View A/B merged. (3) Security batch B: 9 fixes (H5, H7, M1-M7, SSRF) merged 2026-05-22. (4) SePay multi-tenant C1 P1-P3 merged 2026-05-15. (5) Zalo channel core: migration 0004 committed, sender+webhook+categorize WIP locally (implementation plan v0.6.0). (6) ADR-0003 Identity Model (local). (7) Zalo multi-user research doc (local). Feature modules: +zalo-channel row, onboarding-start/settings→✅ shipped, i18n→package landed, transaction-capture→`_persist()` return type change, categorization→DB queue WIP. Phase 2 early: 20% (settings+onboarding ✅). Tests: 112→293+ collected. Blockers: +2 Zalo OA items. Metrics: +channels row. Timeline ASCII updated. Dashboard engine files being relocated `scripts/work_state/` → `tools/dashboard-engine/`. |
