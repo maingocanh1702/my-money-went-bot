@@ -84,8 +84,8 @@ repos:
     hooks:
       - id: build-dashboard
         name: Rebuild dashboard from tracker + git state
-        entry: bash -c 'python scripts/build-dashboard.py && git add docs/dashboard.html docs/dashboard.md docs/dashboard.json'
+        entry: bash -c 'python tools/dashboard-engine/build_dashboard.py && git add docs/dashboard.html docs/dashboard.md docs/dashboard.json'
         language: system
-        files: ^(docs/implementation-tracker\.md|docs/mymoneywent-roadmap\.md|docs/(brd|prd|tdd)-vi\.md|scripts/build-dashboard\.py|scripts/dashboard/.+\.py)$
+        files: ^(docs/implementation-tracker\.md|docs/mymoneywent-roadmap\.md|docs/(brd|prd|tdd)-vi\.md|tools/dashboard-engine/(build_dashboard\.py|work_state/.+\.py))$
         pass_filenames: false
         require_serial: true
