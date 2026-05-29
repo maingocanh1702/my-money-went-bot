@@ -1,4 +1,4 @@
-"""Tests for scripts/build-dashboard.py — parser + git-state + reconcile."""
+"""Tests for tools/dashboard-engine/build_dashboard.py — parser + git-state + reconcile."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 def bd() -> Any:
     """Load build-dashboard.py as a module (script has hyphen, so importlib)."""
     spec = importlib.util.spec_from_file_location(
-        "build_dashboard", ROOT / "scripts" / "build-dashboard.py"
+        "build_dashboard", ROOT / "tools" / "dashboard-engine" / "build_dashboard.py"
     )
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
@@ -531,7 +531,7 @@ def test_dashboard_json_features_have_state_block_per_ac4(bd: Any) -> None:
             }
         ]
     }
-    from scripts.work_state.projections.dashboard import enrich_dashboard
+    from work_state.projections.dashboard import enrich_dashboard
 
     enriched = enrich_dashboard(dashboard_json, state_data)
     features = enriched.get("features", [])
@@ -558,7 +558,7 @@ def test_no_network_flag_propagates_to_engine(bd: Any) -> None:
 
 def test_engine_failure_soft_fails_in_shadow_mode(bd: Any) -> None:
     """Engine exception should NOT crash build in shadow mode (default)."""
-    with patch("scripts.work_state.engine.run_engine", side_effect=RuntimeError("boom")):
+    with patch("work_state.engine.run_engine", side_effect=RuntimeError("boom")):
         result = bd._try_engine(
             tracker_path="/nonexistent/tracker.md",
             dashboard_dir=pathlib.Path("/nonexistent/.dashboard"),
@@ -571,7 +571,7 @@ def test_engine_failure_soft_fails_in_shadow_mode(bd: Any) -> None:
 def test_engine_failure_hard_fails_with_strict_engine_flag(bd: Any) -> None:
     """Engine exception should propagate when strict=True."""
     with (
-        patch("scripts.work_state.engine.run_engine", side_effect=RuntimeError("boom")),
+        patch("work_state.engine.run_engine", side_effect=RuntimeError("boom")),
         pytest.raises(RuntimeError, match="boom"),
     ):
         bd._try_engine(

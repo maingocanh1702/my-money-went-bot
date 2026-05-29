@@ -19,7 +19,7 @@ dist/
 build/
 
 # OS
-.DS_Store
+**/.DS_Store
 Thumbs.db
 
 # Office lock/temp files (Word/Excel save in same dir)
@@ -56,3 +56,4 @@ scripts/.dryrun-ok
 
 # Work-state engine runtime state (per dashboard-plan-state-split.md §7.3)
 .dashboard/
+tools/dashboard-engine/.state/

@@ -85,14 +85,14 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"scripts/build-dashboard.py" = ["N999", "S603", "S607"]
+"tools/dashboard-engine/build_dashboard.py" = ["N999", "S603", "S607"]
 "scripts/sync-tracker-from-gh.py" = ["N999", "S603", "S607"]
 "tests/**/*.py" = ["S101", "S603", "S607", "S106"]  # asserts + subprocess + fake tokens ok in tests
 "tools/autopilot/*.py" = ["S603", "S607"]  # orchestrator wraps trusted CLIs (git/codex/claude)
-"scripts/work_state/signal_collectors/git.py" = ["S603", "S607"]  # git CLI calls with controlled args
-"scripts/work_state/signal_collectors/github.py" = ["S603", "S607"]  # gh CLI calls with controlled args
-"scripts/work_state/signal_collectors/ci.py" = ["S603", "S607"]  # gh CLI calls with controlled args
-"scripts/work_state/signal_collectors/railway.py" = ["S310"]  # Railway API URL is hardcoded constant
+"tools/dashboard-engine/work_state/signal_collectors/git.py" = ["S603", "S607"]  # git CLI calls with controlled args
+"tools/dashboard-engine/work_state/signal_collectors/github.py" = ["S603", "S607"]  # gh CLI calls with controlled args
+"tools/dashboard-engine/work_state/signal_collectors/ci.py" = ["S603", "S607"]  # gh CLI calls with controlled args
+"tools/dashboard-engine/work_state/signal_collectors/railway.py" = ["S310"]  # Railway API URL is hardcoded constant
 # scripts/autopilot_*.py mirrors tools/autopilot/* — orchestrator scripts
 # wrapping trusted CLIs (git, codex, claude, gh). S110 in manual_automators
 # is intentional best-effort fallthrough on notifier failures.
