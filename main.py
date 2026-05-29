@@ -22,6 +22,13 @@ from config import CHAT_ID, EMAIL_SECRET
 import sheets as sh
 import telegram_api as tg
 from core import db
+from core.handlers.zalo_webhook import (
+    handle_zalo_text_event,
+    is_zalo_enabled,
+    loads_body,
+    parse_zalo_text_event,
+    verify_zalo_signature,
+)
 from core.logging import configure_logging, get_logger
 from core.observability import init_sentry, request_id_middleware
 from handlers.sepay        import handle_sepay_webhook
@@ -118,6 +125,27 @@ async def webhook_sepay_v2(token: str, request: Request):
         # Match handler's silent-200 contract — SePay never retries on 400.
         return JSONResponse({"ok": True})
     return JSONResponse(await handle_sepay_v2(token, body))
+
+
+@app.post("/zalo/webhook")
+async def webhook_zalo(request: Request, bg: BackgroundTasks):
+    if not is_zalo_enabled():
+        return JSONResponse({"ok": True})
+
+    raw_body = await request.body()
+    headers = {k.lower(): v for k, v in request.headers.items()}
+    if not verify_zalo_signature(raw_body, headers):
+        _dispatch_log.warning("zalo.dispatch.signature_invalid")
+        return JSONResponse({"ok": False}, status_code=401)
+
+    body = loads_body(raw_body)
+    if body is None:
+        return JSONResponse({"ok": True})
+
+    event = parse_zalo_text_event(body)
+    if event is not None:
+        bg.add_task(handle_zalo_text_event, event)
+    return JSONResponse({"ok": True})
 
 
 # ─── Email webhook (Google Apps Script → bot) ────────────────

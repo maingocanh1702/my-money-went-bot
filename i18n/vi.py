@@ -48,6 +48,17 @@ VI: dict[str, str] = {
     "cat.default.daily_spending": "🛒 Chi tiêu hàng ngày",
     "cat.default.saving": "🏦 Tiết kiệm",
     "cat.default.subscription": "📱 Đăng ký dịch vụ",
+    # ── categorize flow (Zalo numbered picker) ───────────────────
+    "categorize.no_categories": "Đã ghi nhận giao dịch mới. Bạn chưa có danh mục nào active cho tháng này.",
+    "categorize.pick_prefix": "Chọn danh mục cho giao dịch:",
+    "categorize.pick_invalid": "Số không hợp lệ. Chọn lại:",
+    "categorize.confirmed": "Đã phân loại giao dịch vào {name}.",
+    "categorize.queue_added": "Đã thêm giao dịch mới vào hàng đợi phân loại ({count} giao dịch).",
+    "categorize.expired": "Phiên phân loại đã hết hạn. Mình sẽ hỏi lại ở giao dịch mới.",
+    "categorize.direction_in": "thu",
+    "categorize.direction_out": "chi",
+    "categorize.no_description": "(không có mô tả)",
+    "categorize.help_fallback": "Mình đã nhận tin nhắn. Hiện tại Zalo hỗ trợ /start và chọn danh mục bằng số.",
     # ── manage ───────────────────────────────────────────────────
     "manage.list_header": "Danh mục của bạn:",
     "manage.deleted": "🗑️ Đã xoá nhóm “{name}”.",
