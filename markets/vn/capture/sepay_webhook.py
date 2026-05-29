@@ -36,6 +36,7 @@ from typing import Any, Literal
 
 from core import db, tenant_context
 from core.canonical_tx import CanonicalTx
+from core.handlers.categorize import send_category_picker
 from core.logging import get_logger
 
 from .webhook_tokens import resolve_token
@@ -94,7 +95,7 @@ def _content_hash_ref_code(user_id: int, tx: CanonicalTx) -> str:
     return "hash-" + hashlib.sha256(key.encode()).hexdigest()[:24]
 
 
-async def _persist(user_id: int, tx: CanonicalTx, month_key: str) -> None:
+async def _persist(user_id: int, tx: CanonicalTx, month_key: str) -> int | None:
     # Idempotency requires a non-null ref_code: Postgres treats NULL != NULL
     # inside UNIQUE constraints, so storing an empty ref_code as NULL would
     # let every retry insert a duplicate row.
@@ -122,13 +123,14 @@ async def _persist(user_id: int, tx: CanonicalTx, month_key: str) -> None:
 
     pool = db.get_pool()
     async with pool.acquire() as conn:
-        await conn.execute(
+        inserted_id = await conn.fetchval(
             """
             INSERT INTO transactions
                 (user_id, tx_date, description, direction, amount,
                  ref_code, source, month_key)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            ON CONFLICT (user_id, ref_code) DO NOTHING;
+            ON CONFLICT (user_id, ref_code) DO NOTHING
+            RETURNING id;
             """,
             user_id,
             tx.tx_date,
@@ -139,6 +141,7 @@ async def _persist(user_id: int, tx: CanonicalTx, month_key: str) -> None:
             tx.source,
             month_key,
         )
+    return int(inserted_id) if inserted_id is not None else None
 
 
 async def handle_sepay_webhook(token: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -162,7 +165,17 @@ async def handle_sepay_webhook(token: str, payload: dict[str, Any]) -> dict[str,
         return {"ok": True}
 
     month_key = tx.tx_date.strftime("%Y-%m")
-    await _persist(user_id, tx, month_key)
+    tx_id = await _persist(user_id, tx, month_key)
+    if tx_id is None:
+        log.info(
+            "sepay.webhook.duplicate",
+            bank=tx.bank,
+            direction=tx.direction,
+            amount=tx.amount,
+            ref_code=tx.ref_code or None,
+        )
+        return {"ok": True}
+
     log.info(
         "sepay.webhook.persisted",
         bank=tx.bank,
@@ -170,4 +183,5 @@ async def handle_sepay_webhook(token: str, payload: dict[str, Any]) -> dict[str,
         amount=tx.amount,
         ref_code=tx.ref_code or None,
     )
+    await send_category_picker(user_id, tx_id)
     return {"ok": True}
