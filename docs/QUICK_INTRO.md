@@ -34,6 +34,10 @@ My Money Went Bot nối 3 thứ bạn đã dùng:
 SePay webhook -> Telegram bot -> Google Sheet của bạn
 ```
 
+Điểm quan trọng: **My Money Went Bot không truy cập tài khoản ngân hàng của bạn.** Bot không đăng nhập ngân hàng, không đọc biến động số dư trực tiếp, không truy vấn lịch sử giao dịch, và không giữ username/password/OTP/số thẻ. Bot chỉ nhận dữ liệu giao dịch mà **SePay gửi qua webhook** sau khi bạn tự cấu hình SePay.
+
+**SePay** là công ty hạ tầng Open Banking tại Việt Nam, cung cấp API ngân hàng và giải pháp tự động hóa dòng tiền. SePay là bên thực hiện kết nối với ngân hàng của bạn; My Money Went Bot chỉ nhận thông báo giao dịch đã được SePay truyền sang rồi ghi vào Google Sheet của bạn. Xem thêm: [giới thiệu SePay](https://sepay.vn/gioi-thieu.html) và [quy định sử dụng dịch vụ](https://sepay.vn/terms-of-service.html).
+
 Khi có giao dịch mới:
 
 1. SePay gửi webhook về bot.
@@ -48,7 +52,7 @@ Khi có giao dịch mới:
 
 **Setup cho một người dùng.** Bot chỉ nói chuyện với `CHAT_ID` của bạn, phù hợp dùng cá nhân.
 
-**Không cần đưa mật khẩu ngân hàng cho bot.** Bot nhận thông báo giao dịch qua SePay webhook, không cần username, password, OTP hay số thẻ.
+**Không cần đưa mật khẩu ngân hàng cho bot.** Bot chỉ nhận thông báo giao dịch qua SePay webhook; phần kết nối ngân hàng nằm ở SePay, không nằm trong My Money Went Bot.
 
 **Báo cáo đúng cách bạn tiêu tiền.** Xem theo account, category, period; không chỉ là chart category theo tháng.
 
