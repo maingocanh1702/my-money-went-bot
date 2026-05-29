@@ -14,6 +14,88 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added — Zalo Channel Core (2026-05-28)
+
+- `core/messenger/zalo.py`: `ZaloSender(BaseSender)` registered under
+  `channel_type='zalo'`. OAuth v4 token refresh on 401. Plain text
+  rendering with configurable `ZALO_TEXT_LIMIT` (default 2000 chars).
+  Markup callback buttons → numbered text options.
+- `core/handlers/zalo_webhook.py`: `POST /zalo/webhook` route guarded
+  by `ZALO_ENABLED` and `ZALO_INTERACTIVE` env vars. Candidate
+  signature verification (HMAC-SHA256, pending live fixture confirm).
+  Dispatches `/start`, numeric replies (→ categorize), help text.
+- `core/handlers/categorize.py`: DB-backed category queue for
+  post-transaction numbered parent-category selection. Queue in
+  `bot_state.payload`, 6-hour TTL, concurrent-transaction-safe append.
+- `core/services/bot_state.py`: Bot state persistence service for
+  category queue.
+- Migration `0004_add_zalo_channel`: `channel_chat_id TEXT NULL` column
+  + `chk_channel_type` CHECK expanded to include `'zalo'`.
+- i18n keys: 11 new `categorize.*` keys (vi + en parity-tested).
+- ADR-0003: Identity model decisions for accounts + channels.
+- `docs/implementation-plan-zalo-channel-core.md` v0.6.0.
+- `docs/research-zalo-multi-user-bot.md`: Zalo multi-user research.
+
+### Added — Work-State Engine (8 PRs, 2026-05-20~21)
+
+- **MYM-1 Phase 1a:** Engine skeleton + filesystem + git collectors
+  (23 files, +2646 LOC, 127 unit + 6 e2e tests).
+- **MYM-3 Phase 1b:** GitHub + CI + Railway collectors (63 new tests,
+  190 total). PR identity 5-step fallback. Cache TTL tiering.
+- **MYM-4 Phase 1b':** Dashboard projection module (17 unit + 6
+  integration tests, atomic write pattern).
+- **MYM-5 Phase 1c:** Engine driver + aggregation + persistence +
+  workflow (32 new tests, 245 total). `actions/cache@v4.2.0`
+  SHA-pinned. Dashboard.yml 6 triggers + anti-loop guard.
+- **MYM-6 Dashboard Live View A:** Engine→build wire (+202 LOC build
+  script, +369 LOC tests). Single-read pattern, warning banner,
+  `--strict-engine` flag.
+- **MYM-7 Dashboard Live View B:** Doc-change awareness. Filesystem
+  collector +spec/tech/tracker hash tracking. Signals +5 fields, 3
+  new events, 4 new overlays (14→18).
+- **MYM-8 Doc-change hash dedup:** Hash-aware dedup for doc-change
+  events. `_dedup_key` + `is_duplicate`. Bootstrap noise prevention.
+  12 new tests (340 total).
+- **MYM-10 Phase 1d:** Urgency derivation (4-tier first-match-wins),
+  MAX aggregation, foundation_change signals, projection emoji
+  rendering (+28 tests).
+- **MYM-11:** Spec §8.2 reconcile — CANONICAL_OVERLAYS +3 code extras.
+
+### Added — SePay Multi-Tenant C1 (2026-05-15)
+
+- **C1 P1 (PR #23):** DB pool + Sentry + structlog + request_id at
+  startup in FastAPI.
+- **C1 P2 (PR #24):** `POST /webhooks/sepay/{token}` multi-tenant
+  webhook route.
+- **C1 P3 (PR #25):** Parallel-run telemetry on legacy + v2 SePay
+  dispatch.
+
+### Security — Batch B (2026-05-22)
+
+- 9 fixes merged (`30e6a4e`): H5, H7, M1-M7, SSRF.
+- Capture path hardening (M1+M2), observability cleanup (M3+M5+M6+M7),
+  hygiene + config + supply chain, SSRF mitigation.
+- Security review quick wins (PR #16, 2026-05-15).
+
+### Changed — Transaction Capture (`_persist()` return type, 2026-05-28)
+
+- `_persist()` now returns `int | None` (inserted tx_id or None for
+  duplicate). Enables SePay webhook handler to distinguish new inserts
+  from duplicate retries and only trigger category picker on new rows.
+
+### Removed — Dashboard Engine cleanup (2026-05-28~29)
+
+- `scripts/work_state/` directory deleted (moved to
+  `tools/dashboard-engine/`).
+- `scripts/build-dashboard.py` deleted (moved to
+  `tools/dashboard-engine/`).
+- `docs/autopilot/ops-tracker-dashboard/` (15 files) — superseded by
+  `tools/dashboard-engine/` self-contained package.
+- `docs/autopilot/prompts/` (11 work-state/dashboard prompts) — PRs
+  shipped, prompts archived in git history.
+- `docs/operations/dashboard-engine/` (5 files) — superseded by
+  consolidated approach.
+
 ### Changed — F07 Settings (architecture cleanup, 2026-05-13)
 
 - `core/settings_svc.get_overview()` is now PURE READ — no DB
