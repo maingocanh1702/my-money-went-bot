@@ -310,6 +310,8 @@ These were decided during scaffold; each is documented at the relevant module / 
 | State file corruption mid-run | Low | Medium | **Blocker #4** (promoted from NTH-4) — atomic temp+rename write |
 | Codex flags hallucinated arch issue → false halt | Low | Low | Founder reviews halt-report; resume after dismiss |
 | Cost runaway (Codex $$$) | Very Low for first pilot (single feature, ~3 rounds = ~$2-5); Medium when parallel multi-feature runs | Low | NTH-3 cost cap (defer until parallel) |
+| Auto-fix loop gold-plates a fragile path (many rounds, growing surface) | Medium | Low-Medium | `REGION_THRASH` breaker (HALT when same region flagged ≥3 consecutive rounds with distinct findings) + revert-to-lean over hardening; root prevention = pass precomputed/normalized values through state, not raw cells each consumer re-parses. Incident: `/recat` 2026-06-01 (13 commits / 11 rounds for a tiny feature; the finding needed only a `month_key` override but `tx_date: row[1]` opened a date-parse minefield). |
+| Cross-model review silently degraded to same-model review | Low | High | Resolve review-capable Codex binary explicitly (`AUTOPILOT_CODEX_BIN`) + smoke-test it emits output; `CODEX_UNAVAILABLE` breaker → HALT, never substitute manual self-review. Incident: `/recat` 2026-06-01 (`which codex` → interactive @openai/codex → 0-byte review). |
 
 ## 6.5. Risk class policy (which features can use what)
 

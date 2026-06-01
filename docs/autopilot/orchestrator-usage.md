@@ -129,7 +129,7 @@ Pass `--auto-merge` to enable Phase E auto squash-merge. The CLI:
 
 See `docs/operations/spec-template.md` for the canonical template.
 
-## Circuit breakers (10 conditions that halt autopilot)
+## Circuit breakers (12 conditions that halt autopilot)
 
 | # | Code | Trigger |
 |---|------|---------|
@@ -143,6 +143,8 @@ See `docs/operations/spec-template.md` for the canonical template.
 | 8 | `SECRETS_FINDING` | detect-secrets keyword in Codex output |
 | 9 | `CODEGEN_FAILED` | claude CLI returned non-zero or zero new commits |
 | 10 | `MERGE_GATE_FAIL` | Pre-merge gate failed (verify/CHANGELOG/conflict) |
+| 11 | `REGION_THRASH` | Same file/function flagged across ≥3 consecutive rounds with DISTINCT findings each time (RECURRING doesn't fire). PR keeps expanding one fragile area (classic: date/time/parsing). HALT → founder decides patch-vs-revert-to-lean. Incident: `/recat` 2026-06-01 (13 commits / 11 rounds). |
+| 12 | `CODEX_UNAVAILABLE` | `codex review` missing/errors/yields 0 bytes (e.g. interactive-only binary on PATH). Resolve via `AUTOPILOT_CODEX_BIN`; never substitute manual self-review. Incident: `/recat` 2026-06-01. |
 
 When a breaker fires:
 - State JSON saved at `.autopilot/state/<feature>/state.json` with phase = `HALTED`.

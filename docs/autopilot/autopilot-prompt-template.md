@@ -1,5 +1,10 @@
 # Autopilot Prompt Template
 
+> ℹ️ **This is the rationale / decision-rules companion — NOT the send-file.** To write or send an
+> autopilot prompt, use `autopilot-prompt-GENERIC.md` (the canonical self-contained fill-in). GENERIC
+> is the superset: it adds the toolchain map + WRONG_BRANCH_HEAD / STALE_REVIEW / MERGE_GATE_FAIL
+> breakers + the one-session-per-repo precondition. Keep this file in sync when GENERIC changes.
+
 Template + decision rules cho viết prompt autopilot mới (v0.2.x trở đi).
 
 Distilled từ v0.2.1 (Codex parser fix) prompt — được engineer như một spec với
@@ -136,6 +141,11 @@ git log --oneline -3                    # <expected HEAD> at HEAD or later
 
 source .venv/bin/activate
 which <required-tools>                  # MUST resolve
+# Codex review binary — resolve the REVIEW-capable build explicitly; NEVER a bare `which codex`.
+# (A bare `which` resolved the interactive @openai/codex on PATH → 0-byte review in the /recat pilot.)
+CODEX="${AUTOPILOT_CODEX_BIN:-$HOME/Library/Application Support/crawbot/nodejs/bin/codex}"
+[ -x "$CODEX" ] && [ "$("$CODEX" review --base main 2>/dev/null | head -c1 | wc -c)" -gt 0 ] \
+  || echo "CODEX_UNAVAILABLE → HALT (P1+): codex review yields 0 bytes / wrong binary"
 
 ruff check ...
 black --check ...
@@ -241,7 +251,9 @@ Rule: nếu reviewer cần bisect, commit phải atomic. Mega-commit "fix everyt
 Step N — Inline Codex review with ≤3 fix rounds
 
 Round N (1, 2, 3):
-  codex review --base main 2>&1 | tee .autopilot/state/<task>/codex/round-NN.txt
+  "$CODEX" review --base main 2>&1 | tee .autopilot/state/<task>/codex/round-NN.txt
+  (0 bytes / error from "$CODEX" → CODEX_UNAVAILABLE breaker → HALT. NEVER substitute manual
+   self-review and continue to READY — manual review by the codegen model is not cross-model.)
 
 Parse Codex output:
 * Clean phrases → clean
@@ -256,6 +268,9 @@ Fix round:
 * Apply minimum-viable fix.
 * Re-run local verify. MUST be green before next Codex round.
 * Commit atomically: fix(<scope>): address codex round NN — <summary>
+* REGION_THRASH guard: if this finding is the Nth (N≥3) DISTINCT edge of code THIS PR just
+  introduced (esp. date/time/encoding/parsing), STOP and consider reverting that sub-change to a
+  leaner design instead of hardening the next edge → REGION_THRASH breaker.
 
 Clean signal (theo risk header §3.2):
 * P1 → 2 consecutive clean rounds required.
@@ -334,6 +349,12 @@ Universal set (paste mọi prompt):
 11. Context budget >70% — pause + report, founder resumes fresh session
 12. POLICY_MISMATCH — prompt header tries to auto-merge a tier that requires
     manual_only (e.g., P1 with `--auto-merge`). Halt before any merge attempt.
+13. REGION_THRASH — same file/function flagged across ≥3 consecutive rounds with DISTINCT
+    findings each time (so RECURRING_FINDING doesn't fire); the PR keeps expanding one fragile
+    area (classic: date/time/parsing). HALT; ask founder: patch the next edge vs revert this
+    sub-change to a leaner design. The loop optimizes for "clean", not "worth the complexity".
+14. CODEX_UNAVAILABLE — `"$CODEX" review` missing/errors/yields 0 bytes (e.g. interactive-only
+    binary on PATH). HALT; never substitute manual self-review and proceed to READY.
 
 Task-specific: thêm theo nature of task (e.g., FIXTURE_MISSING, MIGRATION_DRIFT).
 
@@ -496,6 +517,15 @@ ambiguous → default to lower authority (STOP_AT_READY, ask founder).
 
 Nếu skip 3 check này, hậu quả: round 2 phải fix structural drift, round 3 phải fix downstream wording leftover. Tốn thời gian gấp 3 lần check upfront.
 
+**5.10 Real cross-model review is non-negotiable; the loop can gold-plate.** (a) Resolve the
+review-capable Codex binary explicitly (`$CODEX` / `AUTOPILOT_CODEX_BIN`) and smoke-test it emits
+output — a bare `which codex` passed on an interactive 0-byte binary in the `/recat` pilot and the
+agent silently substituted manual self-review. Add CODEX_UNAVAILABLE → HALT. (b) When findings
+cascade in the SAME newly-added region round after round (each distinct, so RECURRING never fires),
+that's gold-plating — STOP and revert-to-lean rather than patch the next edge. Root prevention: pass
+a precomputed/normalized value through state, never a raw cell each consumer must re-parse. Add
+REGION_THRASH breaker. (Incident: `/recat` = 13 commits / 11 rounds for a tiny feature.)
+
 ---
 
 ## 6. Quick checklist trước khi gửi prompt cho autopilot
@@ -512,8 +542,10 @@ Nếu skip 3 check này, hậu quả: round 2 phải fix structural drift, round
 - [ ] TDD section (nếu verifiable) có "tests MUST fail" oracle
 - [ ] Commit plan pre-written, atomic
 - [ ] Inline review section (nếu P1+); clean target khớp với merge_policy
+- [ ] Codex binary resolve qua $CODEX/AUTOPILOT_CODEX_BIN + smoke-test >0 byte — KHÔNG `which codex` trống
+- [ ] Fix-round có REGION_THRASH guard (cùng vùng ≥3 round, findings khác nhau → revert-to-lean)
 - [ ] Merge gate (§3.12) default STOP_AT_READY; squash block chỉ khi authorized
-- [ ] 12+ circuit breakers named (gồm POLICY_MISMATCH)
+- [ ] 14+ circuit breakers named (gồm POLICY_MISMATCH, REGION_THRASH, CODEX_UNAVAILABLE)
 - [ ] Halt report template
 - [ ] Final report có **đúng variant** (READY vs COMPLETE) match merge policy
 - [ ] Đóng bằng "Begin with Pre-flight, then Step 1."
@@ -526,5 +558,6 @@ Nếu skip 3 check này, hậu quả: round 2 phải fix structural drift, round
 | Version | Task | Risk tier | Merge | Date | Outcome |
 |---|---|---|---|---|---|
 | v0.2.1 | Codex parser fix + halt-writer + resume-from-HALTED | P1 | auto-merged (predates policy enforcement) | 2026-05-13 | Template baseline. Note: prompt v0.2.1 ran auto-squash-merge for a P1 change — this violates the locked manual_only policy and should not be repeated. v0.2.2+ must STOP_AT_READY for P1. |
+| recat | `/recat <row>` command + button-path month fix (my-money-went-bot, public) | P1 | STOP_AT_READY (manual) | 2026-06-01 | Two lessons encoded into the template: (1) pre-flight `which codex` resolved the interactive @openai/codex (0-byte `review`) → agent substituted manual self-review and reached READY → §5.10(a) + CODEX_UNAVAILABLE breaker (#14). (2) 13 commits / 11 rounds for a tiny feature: threading a raw date (`row[1]`) into a parse path gold-plated while the finding needed only a `month_key` state override → §5.10(b) + REGION_THRASH breaker (#13). |
 
 (Add new entries here khi ship prompts mới.)
