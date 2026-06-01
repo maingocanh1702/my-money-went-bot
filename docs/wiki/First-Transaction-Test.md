@@ -28,6 +28,8 @@ Expected result: the bot replies.
 
 If it does not reply, check Telegram webhook setup and `TELEGRAM_WEBHOOK_SECRET`.
 
+On **Zalo**: send `/today` to your Zalo bot instead. If it doesn't reply, check `ZALO_ENABLED` / `ZALO_INTERACTIVE`, the `/zalo/webhook` registration, and `ZALO_WEBHOOK_SECRET` — see [Zalo Setup](Zalo-Setup).
+
 ## 3. Trigger one small transaction
 
 Make or wait for a small bank transaction that SePay can see.
@@ -36,7 +38,7 @@ Expected result:
 
 1. SePay sends the webhook.
 2. The bot receives it.
-3. The bot messages you in Telegram.
+3. The bot messages you in Telegram (or Zalo, depending on your channel; on Zalo an uncategorized expense shows a numbered menu — reply a number).
 4. If the account is new, the bot asks you to set it up.
 5. The bot asks for a category.
 6. The transaction appears in Google Sheets.

@@ -72,6 +72,6 @@ Expected tabs include:
 | `Budget Config` | Monthly budget settings |
 | `Sub-category Config` | Optional subcategory labels |
 | `Keyword Rules` | Auto-categorization rules |
-| `Bot State` | Telegram wizard state |
+| `Bot State` | Telegram/Zalo wizard + picker state |
 | `Monthly Reports` | Archived monthly reports |
 

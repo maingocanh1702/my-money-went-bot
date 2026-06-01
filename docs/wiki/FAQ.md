@@ -8,7 +8,7 @@ Not necessarily. Use the Railway setup path. You still need to copy tokens and s
 
 They fall into three groups:
 
-- Identity: which Telegram bot, Telegram user, and Google Sheet to use.
+- Identity: which chat channel (Telegram and/or Zalo), which user, and which Google Sheet to use.
 - Google access: permission to write to your Sheet.
 - Security: random secrets that block fake webhooks and unauthorized triggers.
 

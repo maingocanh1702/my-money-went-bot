@@ -14,17 +14,35 @@ Railway should detect the app and deploy it using the repo configuration.
 
 ## 2. Add variables
 
-Open Railway project settings and add these variables:
+Open Railway project settings and add these variables. **Always required:** the Google Sheet, the security secrets, and **at least one chat channel (Telegram and/or Zalo)** — the app refuses to start unless one channel is fully configured.
 
-| Variable | Required | Notes |
-|---|---|---|
-| `BOT_TOKEN` | Yes | From Telegram BotFather. |
-| `CHAT_ID` | Yes | From Telegram userinfobot. |
-| `SHEET_ID` | Yes | From the Google Sheet URL. |
-| `GOOGLE_CREDS_JSON` | Yes on Railway | Paste service-account JSON as one line. |
-| `SEPAY_SECRET` | Yes | Same value as SePay Webhook API Key. |
-| `TELEGRAM_WEBHOOK_SECRET` | Yes | Same value used in Telegram `setWebhook`. |
-| `CRON_SECRET` | Yes | Random string for `/trigger/*` endpoints. |
+Always required:
+
+| Variable | Notes |
+|---|---|
+| `SHEET_ID` | From the Google Sheet URL. |
+| `GOOGLE_CREDS_JSON` | Paste service-account JSON as one line (Railway). |
+| `SEPAY_SECRET` | Same value as SePay Webhook API Key. |
+| `CRON_SECRET` | Random string for `/trigger/*` endpoints. |
+
+Telegram channel (set these to use Telegram):
+
+| Variable | Notes |
+|---|---|
+| `BOT_TOKEN` | From Telegram BotFather. |
+| `CHAT_ID` | From Telegram userinfobot. |
+| `TELEGRAM_WEBHOOK_SECRET` | Same value used in Telegram `setWebhook`. |
+
+Zalo channel (set these to use Zalo — see [Zalo Setup](Zalo-Setup)):
+
+| Variable | Notes |
+|---|---|
+| `ZALO_ENABLED` | `true` to enable Zalo. |
+| `ZALO_BOT_TOKEN` | Zalo Bot Platform token. |
+| `ZALO_CHAT_ID` | Your Zalo chat id (discover with `scripts/zalo_get_updates.py`). |
+| `ZALO_INTERACTIVE` | `true` to accept Zalo commands/replies. |
+| `ZALO_WEBHOOK_SECRET` | Matches the `X-Bot-Api-Secret-Token` header Zalo sends. |
+| `ZALO_USER_ID` | Authorized Zalo sender id. |
 
 ## 3. Convert Google credentials to one line
 
@@ -64,6 +82,7 @@ Use these URLs:
 |---|---|
 | SePay | `https://your-app.up.railway.app/webhook` |
 | Telegram | same `/webhook` URL, registered through `setWebhook` |
+| Zalo (if used) | `https://your-app.up.railway.app/zalo/webhook` — see [Zalo Setup](Zalo-Setup) |
 
 Telegram webhook command:
 

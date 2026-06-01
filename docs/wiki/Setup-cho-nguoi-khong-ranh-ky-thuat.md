@@ -1,98 +1,102 @@
-# Setup cho nguoi khong ranh ky thuat
+# Setup cho người không rành kỹ thuật
 
-Trang nay la ban tieng Viet cua flow setup khuyen nghi. Neu ban khong quen server Linux, hay dung Railway de khong phai tu cai nginx, systemd, hay SSL.
+Trang này là bản tiếng Việt của flow setup khuyến nghị. Nếu bạn không quen server Linux, hãy dùng Railway để khỏi phải tự cài nginx, systemd, hay SSL.
 
-## Ban can chuan bi
+> **Telegram hay Zalo?** Hai kênh độc lập — dùng kênh nào cũng được, hoặc cả hai. Trang này hướng dẫn **Telegram**. Nếu dùng **Zalo** (thay cho hoặc bên cạnh Telegram), xem [Zalo Setup](Zalo-Setup) để lấy các biến Zalo; Google Sheet, SePay, và các secret bảo mật thì giống nhau.
 
-- Tai khoan Telegram
-- Tai khoan Google
-- Tai khoan SePay da ket noi ngan hang Viet Nam
-- Tai khoan Railway
-- Khoang 30 den 45 phut
+## Bạn cần chuẩn bị
 
-## Hieu nhanh cac tu ky thuat
+- Tài khoản Telegram **hoặc** Zalo (trang này hướng dẫn Telegram; Zalo xem [Zalo Setup](Zalo-Setup))
+- Tài khoản Google
+- Tài khoản SePay đã kết nối ngân hàng Việt Nam
+- Tài khoản Railway
+- Khoảng 30 đến 45 phút
 
-| Tu | Hieu don gian la |
+## Hiểu nhanh các từ kỹ thuật
+
+| Từ | Hiểu đơn giản là |
 |---|---|
-| Env vars | Cac o cau hinh trong Railway. Ban copy gia tri vao do, khong can sua code. |
-| Webhook | Mot duong link de Telegram hoac SePay gui thong bao vao bot. |
-| Service account | Mot email robot cua Google de bot ghi vao Sheet cua ban. |
-| Secret | Chuoi random giong mat khau, dung de chan request la. |
+| Env vars | Các ô cấu hình trong Railway. Bạn dán giá trị vào đó, không cần sửa code. |
+| Webhook | Một đường link để Telegram hoặc SePay gửi thông báo vào bot. |
+| Service account | Một email robot của Google để bot ghi vào Sheet của bạn. |
+| Secret | Chuỗi ngẫu nhiên giống mật khẩu, dùng để chặn request lạ. |
 
 ## Flow setup
 
-1. Tao bot Telegram bang BotFather va luu `BOT_TOKEN`.
-2. Lay `CHAT_ID` cua ban bang userinfobot.
-3. Tao Google Sheet moi va copy `SHEET_ID`.
-4. Tao Google service account, tai `credentials.json`, roi share Sheet cho email robot trong file do voi quyen Editor.
-5. Deploy repo len Railway.
-6. Them du cac bien Railway.
-7. Set SePay webhook URL thanh Railway URL ket thuc bang `/webhook`.
-8. Set Telegram webhook bang `TELEGRAM_WEBHOOK_SECRET`.
-9. Gui `/today` cho bot.
-10. Thu mot giao dich nho va phan loai giao dich dau tien.
+1. Tạo bot Telegram bằng BotFather và lưu `BOT_TOKEN`.
+2. Lấy `CHAT_ID` của bạn bằng userinfobot.
+3. Tạo Google Sheet mới và copy `SHEET_ID`.
+4. Tạo Google service account, tải `credentials.json`, rồi share Sheet cho email robot trong file đó với quyền Editor.
+5. Deploy repo lên Railway.
+6. Thêm đủ các biến Railway.
+7. Đặt SePay webhook URL thành Railway URL kết thúc bằng `/webhook`.
+8. Đặt Telegram webhook bằng `TELEGRAM_WEBHOOK_SECRET`.
+9. Gửi `/today` cho bot.
+10. Thử một giao dịch nhỏ và phân loại giao dịch đầu tiên.
 
-## Copy gi, dan vao dau
+## Copy gì, dán vào đâu
 
-| Gia tri | Lay o dau | Dan vao dau |
+| Giá trị | Lấy ở đâu | Dán vào đâu |
 |---|---|---|
 | `BOT_TOKEN` | Telegram BotFather | Railway variable `BOT_TOKEN` |
 | `CHAT_ID` | Telegram userinfobot | Railway variable `CHAT_ID` |
 | `SHEET_ID` | URL Google Sheet | Railway variable `SHEET_ID` |
-| `GOOGLE_CREDS_JSON` | Noi dung file `credentials.json` | Railway variable `GOOGLE_CREDS_JSON` |
-| `SEPAY_SECRET` | Mot chuoi random dai | Railway variable `SEPAY_SECRET` va SePay API Key |
-| `TELEGRAM_WEBHOOK_SECRET` | Mot chuoi random dai khac | Railway variable `TELEGRAM_WEBHOOK_SECRET` va Telegram `setWebhook` |
-| `CRON_SECRET` | Mot chuoi random dai khac | Railway variable `CRON_SECRET` |
+| `GOOGLE_CREDS_JSON` | Nội dung file `credentials.json` | Railway variable `GOOGLE_CREDS_JSON` |
+| `SEPAY_SECRET` | Một chuỗi ngẫu nhiên dài | Railway variable `SEPAY_SECRET` và SePay API Key |
+| `TELEGRAM_WEBHOOK_SECRET` | Một chuỗi ngẫu nhiên dài khác | Railway variable `TELEGRAM_WEBHOOK_SECRET` và Telegram `setWebhook` |
+| `CRON_SECRET` | Một chuỗi ngẫu nhiên dài khác | Railway variable `CRON_SECRET` |
 
-## Vi sao can nhieu bien
+## Vì sao cần nhiều biến
 
-Bot co 3 nhom cau hinh:
+Bot có 3 nhóm cấu hình:
 
-| Nhom | Bien | Ly do |
+| Nhóm | Biến | Lý do |
 |---|---|---|
-| Dinh danh | `BOT_TOKEN`, `CHAT_ID`, `SHEET_ID` | Cho app biet dung bot nao, noi chuyen voi ai, ghi vao Sheet nao. |
-| Quyen Google | `GOOGLE_CREDS_JSON` | Cho app quyen ghi vao Google Sheet tren Railway. |
-| Bao mat | `SEPAY_SECRET`, `TELEGRAM_WEBHOOK_SECRET`, `CRON_SECRET` | Chan webhook ngan hang gia, Telegram update gia, va trigger cron trai phep. |
+| Định danh | `BOT_TOKEN`, `CHAT_ID`, `SHEET_ID` | Cho app biết dùng bot nào, nói chuyện với ai, ghi vào Sheet nào. |
+| Quyền Google | `GOOGLE_CREDS_JSON` | Cho app quyền ghi vào Google Sheet trên Railway. |
+| Bảo mật | `SEPAY_SECRET`, `TELEGRAM_WEBHOOK_SECRET`, `CRON_SECRET` | Chặn webhook ngân hàng giả, Telegram update giả, và trigger cron trái phép. |
 
-## Set Telegram webhook khong can terminal
+`BOT_TOKEN` / `CHAT_ID` / `TELEGRAM_WEBHOOK_SECRET` là **kênh Telegram**. Nếu dùng **Zalo** (hoặc Zalo-only), dùng các biến `ZALO_*` thay thế — xem [Zalo Setup](Zalo-Setup). `SHEET_ID`, Google credentials, `SEPAY_SECRET`, `CRON_SECRET` cần cho bất kỳ kênh nào.
 
-Sau khi Railway co domain dang:
+## Đặt Telegram webhook không cần terminal
+
+Sau khi Railway có domain dạng:
 
 ```text
 https://your-app.up.railway.app
 ```
 
-Ban co the mo URL nay trong browser, sau khi thay placeholder:
+Bạn có thể mở URL này trong browser, sau khi thay placeholder:
 
 ```text
 https://api.telegram.org/bot<BOT_TOKEN>/setWebhook?url=https://your-app.up.railway.app/webhook&secret_token=<TELEGRAM_WEBHOOK_SECRET>&drop_pending_updates=true
 ```
 
-Neu thanh cong, Telegram se tra ve JSON co `"ok": true`.
+Nếu thành công, Telegram sẽ trả về JSON có `"ok": true`.
 
-## Checklist truoc khi deploy
+## Checklist trước khi deploy
 
-- [ ] Da tao Telegram bot.
-- [ ] Da luu `BOT_TOKEN`.
-- [ ] Da lay `CHAT_ID`.
-- [ ] Da tao Google Sheet.
-- [ ] Da copy `SHEET_ID`.
-- [ ] Da bat Google Sheets API.
-- [ ] Da bat Google Drive API.
-- [ ] Da tao service account.
-- [ ] Da tai `credentials.json`.
-- [ ] Da share Google Sheet cho `client_email` trong `credentials.json` voi quyen Editor.
-- [ ] Da tao Railway project.
-- [ ] Da them du 7 bien Railway.
-- [ ] Da tat SePay native Google Sheets integration.
+- [ ] Đã tạo Telegram bot.
+- [ ] Đã lưu `BOT_TOKEN`.
+- [ ] Đã lấy `CHAT_ID`.
+- [ ] Đã tạo Google Sheet.
+- [ ] Đã copy `SHEET_ID`.
+- [ ] Đã bật Google Sheets API.
+- [ ] Đã bật Google Drive API.
+- [ ] Đã tạo service account.
+- [ ] Đã tải `credentials.json`.
+- [ ] Đã share Google Sheet cho `client_email` trong `credentials.json` với quyền Editor.
+- [ ] Đã tạo Railway project.
+- [ ] Đã thêm đủ các biến Railway (Google Sheet + secret bảo mật + biến của kênh bạn chọn).
+- [ ] Đã tắt SePay native Google Sheets integration.
 
-## Checklist thanh cong
+## Checklist thành công
 
-- [ ] Railway domain mo duoc va hien `{"status":"ok","bot":"Financial Tracking Bot"}`.
-- [ ] Bot Telegram tra loi `/today`.
-- [ ] SePay webhook URL ket thuc bang `/webhook`.
-- [ ] Giao dich nho dau tien hien trong Telegram.
-- [ ] Google Sheet tu tao cac tab.
-- [ ] Giao dich xuat hien trong Sheet.
+- [ ] Railway domain mở được và hiện `{"status":"ok","bot":"Financial Tracking Bot"}`.
+- [ ] Bot Telegram trả lời `/today`.
+- [ ] SePay webhook URL kết thúc bằng `/webhook`.
+- [ ] Giao dịch nhỏ đầu tiên hiện trong Telegram.
+- [ ] Google Sheet tự tạo các tab.
+- [ ] Giao dịch xuất hiện trong Sheet.
 
-Neu bi ket, xem [Troubleshooting](Troubleshooting).
+Nếu bị kẹt, xem [Troubleshooting](Troubleshooting).

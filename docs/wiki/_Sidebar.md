@@ -4,6 +4,7 @@
 - [Setup for Non-Technical Users](Setup-for-Non-Technical-Users)
 - [Setup cho nguoi khong ranh ky thuat](Setup-cho-nguoi-khong-ranh-ky-thuat)
 - [Railway Deployment](Railway-Deployment)
+- [Zalo Setup](Zalo-Setup)
 - [Google Sheets Setup](Google-Sheets-Setup)
 - [SePay Setup](SePay-Setup)
 - [First Transaction Test](First-Transaction-Test)

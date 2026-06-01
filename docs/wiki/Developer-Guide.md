@@ -37,6 +37,9 @@ There are 120 unit tests. They use an in-memory fake spreadsheet and should not 
 | `config.py` | Environment variables and sheet tab names |
 | `sheets.py` | Google Sheets read/write logic |
 | `telegram_api.py` | Telegram Bot API wrapper |
+| `zalo_api.py` | Zalo Bot Platform API wrapper |
+| `notifier.py` | Dual-channel notification fan-out (Telegram + Zalo) |
+| `handlers/zalo_render.py` | Plain-text Zalo logged-summary renderer |
 | `handlers/sepay.py` | SePay webhook handling |
 | `handlers/transaction.py` | Transaction categorization flow |
 | `handlers/accounts.py` | Account onboarding and assignment |
@@ -45,13 +48,12 @@ There are 120 unit tests. They use an in-memory fake spreadsheet and should not 
 
 ## Production notes
 
-Production requires these security variables:
+Production always requires `SEPAY_SECRET` and `CRON_SECRET`, plus the variables for **at least one chat channel**:
 
-- `SEPAY_SECRET`
-- `TELEGRAM_WEBHOOK_SECRET`
-- `CRON_SECRET`
+- Telegram channel: `BOT_TOKEN`, `CHAT_ID`, `TELEGRAM_WEBHOOK_SECRET`
+- Zalo channel: `ZALO_ENABLED`, `ZALO_BOT_TOKEN`, `ZALO_CHAT_ID` (+ `ZALO_WEBHOOK_SECRET`, `ZALO_USER_ID` when `ZALO_INTERACTIVE`)
 
-The app refuses to start without them unless `BOT_TOKEN` starts with `test:`.
+The app refuses to start unless at least one channel is fully configured (validation is skipped in test mode, i.e. when `BOT_TOKEN` starts with `test:`). `BOT_TOKEN`/`CHAT_ID` are optional — a Zalo-only deployment runs without them.
 
 ## Contributing
 

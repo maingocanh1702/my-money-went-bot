@@ -12,10 +12,10 @@ Likely causes:
 
 What to check:
 
-- All 7 Railway variables exist.
+- All required Railway variables exist (Google Sheet + security secrets + at least one channel's variables).
 - `GOOGLE_CREDS_JSON` is the full service-account JSON.
 - The JSON is one line.
-- `BOT_TOKEN` is not empty.
+- Your channel's variables are set: Telegram (`BOT_TOKEN`, `CHAT_ID`, `TELEGRAM_WEBHOOK_SECRET`) and/or Zalo (`ZALO_*` — see [Zalo Setup](Zalo-Setup)).
 
 ## Railway URL does not show `status: ok`
 
@@ -39,6 +39,7 @@ Likely causes:
 - Wrong Railway URL was used.
 - `TELEGRAM_WEBHOOK_SECRET` in Railway does not match the `setWebhook` secret.
 - Wrong `CHAT_ID`.
+- (Zalo) `ZALO_ENABLED` / `ZALO_INTERACTIVE` not set, the `/zalo/webhook` URL not registered, or `ZALO_WEBHOOK_SECRET` / `ZALO_USER_ID` mismatch — see [Zalo Setup](Zalo-Setup).
 
 What to do:
 

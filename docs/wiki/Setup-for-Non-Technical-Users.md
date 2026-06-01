@@ -2,11 +2,13 @@
 
 Use this path if you do not usually deploy servers. It uses Railway so you do not need to manage Linux, nginx, systemd, or SSL certificates.
 
+> **Telegram or Zalo?** They are two independent channels — set up either, or both. This guide walks through **Telegram**. To use **Zalo** instead of (or alongside) Telegram, follow [Zalo Setup](Zalo-Setup) for the Zalo variables; the Google Sheet, SePay, and security secrets are the same.
+
 ## Before you start
 
 You need:
 
-- A Telegram account
+- A Telegram **or** Zalo account (this guide shows Telegram; for Zalo see [Zalo Setup](Zalo-Setup))
 - A Google account
 - A SePay account connected to your Vietnamese bank
 - A Railway account
@@ -56,6 +58,8 @@ The bot has three groups of settings:
 | Google access | `GOOGLE_CREDS_JSON` | Lets the app write to your Google Sheet on Railway. |
 | Security | `SEPAY_SECRET`, `TELEGRAM_WEBHOOK_SECRET`, `CRON_SECRET` | Blocks fake bank webhooks, fake Telegram updates, and unauthorized cron triggers. |
 
+`BOT_TOKEN` / `CHAT_ID` / `TELEGRAM_WEBHOOK_SECRET` are the **Telegram channel**. For a **Zalo** (or Zalo-only) setup, use the `ZALO_*` variables instead — see [Zalo Setup](Zalo-Setup). `SHEET_ID`, Google credentials, `SEPAY_SECRET`, and `CRON_SECRET` are needed for any channel.
+
 ## Pre-deploy checklist
 
 - [ ] Telegram bot created.
@@ -69,7 +73,7 @@ The bot has three groups of settings:
 - [ ] `credentials.json` downloaded.
 - [ ] Google Sheet shared with the service-account `client_email` as Editor.
 - [ ] Railway project created.
-- [ ] All 7 Railway variables added.
+- [ ] All required Railway variables added (Google Sheet + security secrets + your chosen channel's variables).
 - [ ] SePay native Google Sheets integration disabled.
 
 ## Success checklist
