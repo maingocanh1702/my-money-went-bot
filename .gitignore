@@ -54,3 +54,5 @@ docs/*
 !docs/screenshots/**
 !docs/media/
 !docs/media/**
+!docs/wiki/
+!docs/wiki/**
