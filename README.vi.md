@@ -16,7 +16,7 @@
 
 ![Cách hoạt động — 5 bước: giao dịch ngân hàng, SePay webhook, bot xử lý, ghi Google Sheet, báo cáo Telegram](docs/screenshots/how-it-works.png)
 
-**My Money Went Bot là 1 bot Telegram theo dõi chi tiêu cá nhân.** Khi tài khoản ngân hàng của bạn phát sinh giao dịch và SePay nhận được biến động đó, SePay gửi webhook sang bot. Bot ghi giao dịch vào Google Sheet *của bạn* và hỏi bạn tap phân loại — hoặc skip luôn nếu bạn đã dạy nó 1 keyword rule. Gõ `/report` bất cứ lúc nào để xem tiền đã đi đâu, slice theo account, category, và khoảng thời gian.
+**My Money Went Bot là bot theo dõi chi tiêu cá nhân, chạy trên Telegram hoặc Zalo.** Telegram và Zalo là hai kênh độc lập — dùng kênh nào cũng được, hoặc cả hai. Khi tài khoản ngân hàng của bạn phát sinh giao dịch và SePay nhận được biến động đó, SePay gửi webhook sang bot. Bot ghi giao dịch vào Google Sheet *của bạn* và hỏi bạn tap phân loại — hoặc skip luôn nếu bạn đã dạy nó 1 keyword rule. Gõ `/report` bất cứ lúc nào để xem tiền đã đi đâu, slice theo account, category, và khoảng thời gian.
 
 ### An toàn tài khoản ngân hàng
 
@@ -125,7 +125,7 @@ Chi tiết từng tính năng:
 
 🇻🇳 **Ngân hàng VN** — hoạt động với bất kỳ bank nào SePay support. VND-only ở v1.
 
-💬 **Kênh Zalo (optional)** — chạy các lệnh tương tự ngay trên Zalo qua menu đánh số (Zalo không có inline button). Bật bằng `ZALO_ENABLED` / `ZALO_INTERACTIVE`; prompt phân loại giao dịch mới vẫn ở Telegram.
+💬 **Kênh độc lập — Telegram và/hoặc Zalo** — dùng kênh nào cũng được, hoặc cả hai; không kênh nào là chính. Hai kênh chỉ khác ở cơ chế UI: Telegram dùng nút inline (tap chọn category, toggle period/lens của `/report` tại chỗ), Zalo dùng menu đánh số (reply số). Cả hai **tự chạy đủ luồng chính**: thông báo giao dịch, picker phân loại cho khoản chưa phân loại, và `/today /report /accounts /keywords /manage /allocate`. Vài luồng nâng cao (tạo category mới khi đang phân loại, onboarding account lần đầu) hiện chỉ có trên Telegram. Tầng kênh thiết kế dạng pluggable nên có thể thêm kênh khác sau.
 
 ↩️ **Phân loại lại bất cứ lúc nào** — `/recat <row>` đổi category của một giao dịch cũ bất kỳ theo số dòng (dùng đúng tháng của giao dịch đó), bên cạnh nút inline "Sai mục?" trên mỗi confirmation.
 
@@ -147,6 +147,10 @@ Chi tiết từng tính năng:
     <td>Tổng spending vs budget, budget bar từng bucket với emoji trạng thái, có thêm section Tracking cho bucket bạn theo dõi mà không đặt cap.</td>
   </tr>
 </table>
+
+**💬 Trên Zalo** — cùng luồng đó qua menu đánh số (reply số để chọn category):
+
+![My Money Went Bot trên Zalo — picker phân loại đánh số](docs/screenshots/zalo-bot.PNG)
 
 ---
 
@@ -175,7 +179,7 @@ Một số bank (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) dùng **API 
 
 | Yêu cầu | Lấy ở đâu |
 |---|---|
-| Tài khoản Telegram | Chắc bạn có rồi |
+| Tài khoản Telegram và/hoặc Zalo | Ít nhất một kênh chat — dùng một hoặc cả hai |
 | Tài khoản [SePay](https://sepay.vn) | Kết nối bank VN của bạn |
 | Tài khoản Google | Cho Google Sheets + Google Cloud |
 | Server có HTTPS public | [Railway](https://railway.app) đơn giản nhất (free tier OK). Hoặc Ubuntu VPS + [ngrok](https://ngrok.com) cho test. |
@@ -211,11 +215,13 @@ Một vài từ kỹ thuật trong guide này:
 
 ### 2. Copy gì, dán vào đâu
 
-Bot cần **7 biến** trong Railway, chia thành 2 nhóm:
+Bot cần các biến trong Railway. Luôn bắt buộc: Google Sheet, các security secret, **và ít nhất một kênh chat (Telegram và/hoặc Zalo)**.
 
-**Nhóm Core — bot không chạy được nếu thiếu:**
+> **Chọn kênh:** Telegram và Zalo là hai lựa chọn ngang hàng, độc lập — dùng kênh nào hoặc cả hai. Hướng dẫn dưới đây minh hoạ bằng Telegram; nếu chạy **Zalo-only**, bỏ qua `BOT_TOKEN` / `CHAT_ID` / `TELEGRAM_WEBHOOK_SECRET` và set các biến **Kênh Zalo** (xem bảng Zalo ở Bước 4). `SHEET_ID`, Google credentials, `SEPAY_SECRET`, `CRON_SECRET` đều bắt buộc dù dùng kênh nào. App từ chối start nếu không có kênh nào được cấu hình đầy đủ.
 
-Đây là 4 biến kết nối bot với Telegram, Google Sheet, và ngân hàng. `spend-less-bot` cũng cần đúng 4 biến này — bất kỳ bot nào dùng Telegram + SePay + Sheets đều cần.
+**Nhóm Core — luôn bắt buộc (Sheet + Google credentials):**
+
+Kết nối bot với Google Sheet của bạn. Cộng thêm biến của kênh chat bạn dùng (bảng dưới).
 
 | Giá trị | Lấy ở đâu | Dán vào đâu |
 |---|---|---|
@@ -348,7 +354,7 @@ cd my-money-went-bot
 cp .env.example .env
 ```
 
-Env vars bắt buộc — **Core** (bot không start được nếu thiếu):
+Env vars bắt buộc — **Core** (luôn cần) + **ít nhất một kênh** (Telegram và/hoặc Zalo):
 
 | Env var | Điền gì |
 |---|---|
@@ -366,7 +372,7 @@ Env vars bắt buộc — **Security** (xác thực mọi request từ bên ngo�
 | `TELEGRAM_WEBHOOK_SECRET` | Random token truyền vào Telegram `setWebhook` | Chặn Telegram update giả |
 | `CRON_SECRET` | Random token dùng cho URL `/trigger/*` của cron | Chặn trigger cron giả |
 
-Env vars optional — **Kênh Zalo** (chỉ cần nếu muốn thêm front-end thứ 2 trên Zalo; để trống thì bỏ qua):
+Env vars kênh — **Zalo** (bắt buộc nếu chạy Zalo hoặc Zalo-only; để trống nếu chỉ dùng Telegram):
 
 | Env var | Điền gì |
 |---|---|
@@ -512,7 +518,7 @@ Tx sau từ cùng account auto-route. Setup `/keywords` rules để auto-categor
 | `/allocate` | Sửa budget. Lần đầu = wizard, sau đó = edit-mode per bucket. |
 | `/recat <row>` | Phân loại lại một giao dịch cũ theo số dòng trên sheet. |
 
-Trên **Zalo** (khi `ZALO_ENABLED=true`), các lệnh tương tự chạy qua menu đánh số: `/today`, `/report`, `/accounts`, `/keywords`, `/manage`, `/allocate`, `/cancel`.
+Trên **Zalo** (khi `ZALO_ENABLED=true`), các lệnh tương tự chạy qua menu đánh số, và khoản chi tiêu chưa phân loại được phân loại bằng cách reply số bucket: `/today`, `/report`, `/accounts`, `/keywords`, `/manage`, `/allocate`, `/cancel`.
 
 ---
 

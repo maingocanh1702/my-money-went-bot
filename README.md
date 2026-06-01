@@ -16,7 +16,7 @@
 
 ![How it works — 5-step flow: bank transaction, SePay webhook, bot processes, write to Google Sheet, Telegram report](docs/screenshots/how-it-works.png)
 
-**My Money Went Bot is a personal expense tracker that lives in your Telegram chat.** When your bank account has a transaction and SePay receives that balance-change event, SePay sends a webhook to the bot. The bot logs the transaction to a Google Sheet *you own* and asks you to tap a category — or skips that step entirely if you've taught it a keyword rule. Type `/report` anytime to see where your money went, sliced by account, category, and time period.
+**My Money Went Bot is a personal expense tracker that lives in your Telegram or Zalo chat.** Telegram and Zalo are two independent channels — set up whichever you use, or both. When your bank account has a transaction and SePay receives that balance-change event, SePay sends a webhook to the bot. The bot logs the transaction to a Google Sheet *you own* and asks you to tap a category — or skips that step entirely if you've taught it a keyword rule. Type `/report` anytime to see where your money went, sliced by account, category, and time period.
 
 ### Bank Account Safety
 
@@ -126,7 +126,7 @@ The full feature breakdown:
 
 🇻🇳 **Vietnamese banks** — works with anything SePay supports. VND-only in v1.
 
-💬 **Zalo channel (optional)** — run the same commands from Zalo via numbered-text menus (Zalo has no inline buttons). Gated behind `ZALO_ENABLED` / `ZALO_INTERACTIVE`; the live new-transaction category prompt stays on Telegram.
+💬 **Independent channels — Telegram and/or Zalo** — set up whichever you use, or both; neither is primary. They differ only in UI mechanics: Telegram uses inline buttons (tap a category, toggle `/report` periods/lenses in place), Zalo uses numbered-text menus (reply a number). Both fully support the core flow on their own — transaction notifications, a category picker for uncategorized expenses, and `/today /report /accounts /keywords /manage /allocate`. A couple of advanced flows (creating a brand-new category mid-categorize, first-time account onboarding) are Telegram-only for now. The channel layer is pluggable, so more channels can be added later.
 
 ↩️ **Re-categorize anytime** — `/recat <row>` re-classifies any past transaction by its sheet row number (using that transaction's own month), on top of the inline "Wrong category?" button shown on every confirmation.
 
@@ -148,6 +148,10 @@ The full feature breakdown:
     <td>Tổng spending vs budget, per-bucket budget bars with status emoji, plus a Tracking section for buckets you watch without capping.</td>
   </tr>
 </table>
+
+**💬 On Zalo** — the same flow through a numbered-text menu (reply a number to pick a category):
+
+![My Money Went Bot on Zalo — numbered category picker](docs/screenshots/zalo-bot.PNG)
 
 ---
 
@@ -176,7 +180,7 @@ A subset (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) use **direct API in
 
 | Requirement | Where to get it |
 |---|---|
-| Telegram account | You probably have one |
+| Telegram and/or Zalo account | At least one chat channel — set up either, or both |
 | [SePay](https://sepay.vn) account | Connects to your Vietnamese bank |
 | Google account | For Google Sheets + Google Cloud |
 | Server with public HTTPS | [Railway](https://railway.app) is simplest (free tier OK). Or Ubuntu VPS + [ngrok](https://ngrok.com) for testing. |
@@ -212,11 +216,13 @@ Plain-English terms used below:
 
 ### 2. What to copy and where to paste it
 
-The bot needs **7 settings** in Railway. They fall into two groups:
+The bot needs settings in Railway. Always required: your Google Sheet, the security secrets, **and at least one chat channel (Telegram and/or Zalo)**.
 
-**Core — the bot cannot start without these:**
+> **Channel choice:** Telegram and Zalo are equal, independent options — set up either or both. The walkthrough below happens to show Telegram; for **Zalo-only**, skip the `BOT_TOKEN` / `CHAT_ID` / `TELEGRAM_WEBHOOK_SECRET` rows and set the **Zalo channel** variables instead (see the Zalo table in Step 4). `SHEET_ID`, Google credentials, `SEPAY_SECRET`, and `CRON_SECRET` are required either way. The app refuses to start unless at least one channel is fully configured.
 
-These connect the bot to Telegram, your Google Sheet, and your bank. `spend-less-bot` has the same 4 settings — any Telegram + SePay + Sheets bot needs them.
+**Core — always required (Sheet + Google credentials):**
+
+These connect the bot to your Google Sheet. Plus the chat-channel variables below for whichever channel(s) you use.
 
 | Value | Where to get it | Where to paste it |
 |---|---|---|
@@ -349,7 +355,7 @@ cd my-money-went-bot
 cp .env.example .env
 ```
 
-Required env vars — **Core** (the bot cannot start without these):
+Required env vars — **Core** (always required) + **at least one channel** (Telegram and/or Zalo):
 
 | Env var | What to put there |
 |---|---|
@@ -367,7 +373,7 @@ Required env vars — **Security** (authenticates every inbound request — the 
 | `TELEGRAM_WEBHOOK_SECRET` | Random token passed to Telegram `setWebhook` | Rejects fake Telegram updates |
 | `CRON_SECRET` | Random token used by `/trigger/*` cron URLs | Rejects unauthorized cron triggers |
 
-Optional env vars — **Zalo channel** (only if you want a second front-end on Zalo; leave unset to skip):
+Channel env vars — **Zalo** (required for a Zalo or Zalo-only setup; leave unset if you only use Telegram):
 
 | Env var | What to put there |
 |---|---|
@@ -513,7 +519,7 @@ Future tx from the same account auto-route. Set up `/keywords` rules to auto-cat
 | `/allocate` | Edit budget. Wizard on first run, per-bucket edit-mode after. |
 | `/recat <row>` | Re-categorize a past transaction by its sheet row number. |
 
-On **Zalo** (when `ZALO_ENABLED=true`), the same commands work via numbered-text menus: `/today`, `/report`, `/accounts`, `/keywords`, `/manage`, `/allocate`, `/cancel`.
+On **Zalo** (when `ZALO_ENABLED=true`), the same commands work via numbered-text menus, and an uncategorized expense is categorized by replying with the bucket number: `/today`, `/report`, `/accounts`, `/keywords`, `/manage`, `/allocate`, `/cancel`.
 
 ---
 
