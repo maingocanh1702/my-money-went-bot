@@ -413,6 +413,21 @@ async def _process_zalo(event: dict):
             return
 
         if text.startswith("/"):
+            # Guard: while picker is active only /cancel may run.
+            # Any other command would clobber picker state and lose the pending row.
+            state = sh.get_state(chat_id) or {}
+            if state.get("step") == "zalo_tx_pick":
+                if text.strip().lower().split()[0] == "/cancel":
+                    sh.set_state(chat_id, {})
+                    await zalo.send_text("Đã hủy.", chat_id)
+                else:
+                    buckets = state.get("buckets") or []
+                    await zalo.send_text(
+                        f"Đang chờ phân loại giao dịch này — reply số, hoặc /cancel.\n\n"
+                        f"{_format_zalo_bucket_options(buckets)}",
+                        chat_id,
+                    )
+                return
             await _handle_zalo_command(text, chat_id)
         else:
             # Check for active Zalo state machine (keywords interactive)
@@ -478,6 +493,8 @@ async def _handle_zalo_text(text: str, chat_id: str):
         await _zalo_al_handle_list_reply(text, chat_id, state)
     elif step == "zalo_al_await_amount":
         await _zalo_al_handle_amount(text, chat_id, state)
+    elif step == "zalo_tx_pick":
+        await _zalo_handle_tx_pick(text, chat_id, state)
     else:
         # No active state — show help
         await zalo.send_text(
@@ -1586,4 +1603,94 @@ async def _zalo_al_handle_amount(text: str, chat_id: str, state: dict):
         chat_id,
     )
     await _zalo_al_show_list(chat_id)
+
+
+# ─── Zalo Tx Picker: categorize uncategorized outgoing expense ─
+
+def _format_zalo_bucket_options(buckets: list[dict]) -> str:
+    return "\n".join(f"{i + 1}. {b['name']}" for i, b in enumerate(buckets))
+
+
+async def _zalo_handle_tx_pick(text: str, chat_id: str, state: dict):
+    """Handle numbered reply to the category picker menu.
+
+    Valid pick → _zalo_finalize_tx. Invalid / out-of-range → reprompt.
+    """
+    buckets = state.get("buckets") or []
+
+    if not text.strip().isdigit():
+        await zalo.send_text(
+            f"⚠️ Reply số thứ tự (1–{len(buckets)}).\n\n{_format_zalo_bucket_options(buckets)}",
+            chat_id,
+        )
+        return
+
+    idx = int(text.strip())
+    if not (1 <= idx <= len(buckets)):
+        await zalo.send_text(
+            f"⚠️ Số {idx} không hợp lệ. Có {len(buckets)} mục.\n\n{_format_zalo_bucket_options(buckets)}",
+            chat_id,
+        )
+        return
+
+    bucket_id = buckets[idx - 1]["id"]
+    await _zalo_finalize_tx(chat_id, state, bucket_id)
+
+
+async def _zalo_finalize_tx(chat_id: str, state: dict, bucket_id: str):
+    """Finalize the pending tx, apply ledger, send summary, promote queue if any."""
+    from handlers.transaction import _apply_ledger_for_row
+    from handlers.zalo_render import render_zalo_logged_summary
+
+    row_num = state["row_num"]
+    amount = state.get("amount", 0)
+    currency = state.get("currency", "VND")
+    tx_direction = state.get("tx_direction", "out")
+    queue = state.get("queue") if isinstance(state.get("queue"), list) else []
+
+    sh.finalize_transaction(row_num, bucket_id, "")
+    try:
+        _apply_ledger_for_row(row_num)
+    except Exception as e:
+        print(f"[zalo-picker] ledger write error row={row_num}: {e}")
+
+    # Build summary using the actual tx date (not now(), not first-of-month).
+    # Daily-bucket summaries call get_daily_status(tx_date) — wrong day = wrong stats.
+    from datetime import datetime as _dt
+    import pytz as _pytz
+    tx_date_str = state.get("tx_date", "")
+    try:
+        tx_date = _dt.fromisoformat(tx_date_str) if tx_date_str else _dt.now(_pytz.timezone(TIMEZONE))
+    except (ValueError, TypeError):
+        tx_date = _dt.now(_pytz.timezone(TIMEZONE))
+
+    summary = render_zalo_logged_summary(
+        row_num=row_num,
+        bucket_id=bucket_id,
+        sub_label="",
+        amount=amount,
+        tx_date=tx_date,
+        tx_direction=tx_direction,
+        currency=currency,
+    )
+
+    if queue:
+        # Promote next queued item
+        next_item = queue[0]
+        remaining_queue = queue[1:]
+        sh.set_state(chat_id, {
+            "step": "zalo_tx_pick",
+            **next_item,
+            "queue": remaining_queue,
+        })
+        next_buckets = next_item.get("buckets") or []
+        next_menu = (
+            f"-{sh.fmt_amount(next_item.get('amount', 0), next_item.get('currency', 'VND'))}\n"
+            f"{next_item.get('description', '')}\n\n"
+            f"Khoản này thuộc mục nào?\n\n{_format_zalo_bucket_options(next_buckets)}"
+        )
+        await zalo.send_text(summary + "\n\n" + next_menu, chat_id)
+    else:
+        sh.clear_state(chat_id)
+        await zalo.send_text(summary, chat_id)
 

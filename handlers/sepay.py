@@ -7,12 +7,17 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 import pytz
 
-from config import CHAT_ID, TIMEZONE, SEPAY_SECRET, TELEGRAM_ENABLED
+from config import CHAT_ID, TIMEZONE, SEPAY_SECRET, TELEGRAM_ENABLED, ZALO_ENABLED, ZALO_CHAT_ID, ZALO_INTERACTIVE
 import sheets as sh
 import telegram_api as tg
+import zalo_api as zalo
 import notifier
 from handlers.account_resolver import resolve_account
 from handlers.accounts import prompt_new_account
+
+
+def _format_zalo_bucket_options(buckets: list[dict]) -> str:
+    return "\n".join(f"{i + 1}. {b['name']}" for i, b in enumerate(buckets))
 
 
 def _append_transaction_and_commit(ref_code: str, tx_date, description, amount, month_key, **kwargs) -> int:
@@ -254,10 +259,58 @@ async def handle_sepay_webhook(payload: dict):
             f"Khoản này thuộc mục nào? 🤔",
             buttons,
         )
+    elif ZALO_ENABLED and ZALO_INTERACTIVE:
+        # Telegram disabled, Zalo interactive — send numbered picker.
+        # State key is ZALO_CHAT_ID; replies arrive via _process_zalo with the
+        # same chat_id (Zalo private chats use user_id as chat_id, and the
+        # ZALO_USER_ID gate in _process_zalo ensures only the authorized user
+        # can reach _handle_zalo_text, so key collision is impossible).
+        state_key = ZALO_CHAT_ID
+        item = {
+            "row_num": row_num,
+            "amount": amount,
+            "currency": currency,
+            "description": description,
+            "tx_direction": "out",
+            "month_key": month_key,
+            "tx_date": tx_date.isoformat() if hasattr(tx_date, "isoformat") else str(tx_date),
+            "buckets": [{"id": b["id"], "name": b["name"]} for b in buckets],
+        }
+        existing = sh.get_state(state_key) or {}
+        existing_step = existing.get("step", "")
+        if existing_step == "zalo_tx_pick" and existing.get("row_num"):
+            # Already prompting — queue if not already pending
+            queue = existing.get("queue") if isinstance(existing.get("queue"), list) else []
+            pending = {existing["row_num"]} | {q["row_num"] for q in queue if isinstance(q, dict)}
+            if row_num not in pending:
+                queue.append(item)
+                sh.set_state(state_key, {**existing, "queue": queue})
+            await zalo.send_text(
+                f"Thêm giao dịch cần phân loại (-{sh.fmt_amount(amount, currency)} {description}). Đã xếp hàng.",
+                state_key,
+            )
+        elif existing_step:
+            # Another Zalo flow is active — interrupt it and start the picker.
+            # The user's previous operation is lost; they can restart it after
+            # categorizing (/cancel skips the picker, returning to empty state).
+            sh.set_state(state_key, {"step": "zalo_tx_pick", **item, "queue": []})
+            await zalo.send_text(
+                f"[Gián đoạn thao tác hiện tại]\n\n"
+                f"-{sh.fmt_amount(amount, currency)}\n{description}\n\n"
+                f"Khoản này thuộc mục nào?\n\n{_format_zalo_bucket_options(item['buckets'])}\n\n"
+                f"/cancel để bỏ qua phân loại và quay lại lệnh trước.",
+                state_key,
+            )
+        else:
+            sh.set_state(state_key, {"step": "zalo_tx_pick", **item, "queue": []})
+            await zalo.send_text(
+                f"-{sh.fmt_amount(amount, currency)}\n{description}\n\n"
+                f"Khoản này thuộc mục nào?\n\n{_format_zalo_bucket_options(item['buckets'])}",
+                state_key,
+            )
     else:
-        # Telegram disabled — no interactive picker available.
-        # Transaction is recorded; user can set up keyword rules via /keywords
-        # so future matching transactions are auto-categorized.
+        # Non-interactive Zalo or neither channel — transaction recorded;
+        # notifier sends to whichever channels are enabled.
         await notifier.send_text(
             f"💸 *-{sh.fmt_amount(amount, currency)}*\n"
             f"`{description}`\n\n"
