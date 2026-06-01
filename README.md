@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
-[![Tests: 120 passing](https://img.shields.io/badge/tests-120%20passing-brightgreen.svg)](tests/)
+[![Tests: 148 passing](https://img.shields.io/badge/tests-148%20passing-brightgreen.svg)](tests/)
 
 [🇻🇳 Tiếng Việt](README.vi.md)
 
@@ -125,6 +125,10 @@ The full feature breakdown:
 🔁 **Historical backfill** — `/accounts assign <slug>` retroactively links unmapped past txs to a newly-onboarded account. No tx lost between "first webhook" and "wizard complete".
 
 🇻🇳 **Vietnamese banks** — works with anything SePay supports. VND-only in v1.
+
+💬 **Zalo channel (optional)** — run the same commands from Zalo via numbered-text menus (Zalo has no inline buttons). Gated behind `ZALO_ENABLED` / `ZALO_INTERACTIVE`; the live new-transaction category prompt stays on Telegram.
+
+↩️ **Re-categorize anytime** — `/recat <row>` re-classifies any past transaction by its sheet row number (using that transaction's own month), on top of the inline "Wrong category?" button shown on every confirmation.
 
 ---
 
@@ -363,6 +367,19 @@ Required env vars — **Security** (authenticates every inbound request — the 
 | `TELEGRAM_WEBHOOK_SECRET` | Random token passed to Telegram `setWebhook` | Rejects fake Telegram updates |
 | `CRON_SECRET` | Random token used by `/trigger/*` cron URLs | Rejects unauthorized cron triggers |
 
+Optional env vars — **Zalo channel** (only if you want a second front-end on Zalo; leave unset to skip):
+
+| Env var | What to put there |
+|---|---|
+| `ZALO_ENABLED` | `true` to enable the Zalo channel (default `false`) |
+| `ZALO_BOT_TOKEN` | Token from the Zalo Bot Platform |
+| `ZALO_CHAT_ID` | Your Zalo chat ID (discover it with `scripts/zalo_get_updates.py`) |
+| `ZALO_INTERACTIVE` | `true` to accept incoming Zalo webhook commands |
+| `ZALO_WEBHOOK_SECRET` | Random token validating the Zalo webhook (`X-Bot-Api-Secret-Token`) |
+| `ZALO_USER_ID` | Authorized Zalo sender id (rejects everyone else) |
+
+When enabled, the Zalo webhook endpoint is `POST /zalo/webhook`. The bot still requires the Telegram + SePay core/security vars above.
+
 Why more variables than `spend-less-bot`? The original repo keeps setup minimal: Telegram token, chat ID, sheet ID, and a Google credentials file on the server. `my-money-went-bot` adds security variables because it is designed to run publicly on Railway/VPS and receive bank-transaction data through webhooks. Without these secrets, anyone who knows the `/webhook` or `/trigger/*` URL could send fake data to the bot or trigger jobs unexpectedly.
 
 Grouped mentally, the list is smaller than it looks: **3 identity values** (`BOT_TOKEN`, `CHAT_ID`, `SHEET_ID`), **1 Google access method** (`GOOGLE_CREDS_JSON` or `GOOGLE_CREDS`), and **3 random production security secrets** (`SEPAY_SECRET`, `TELEGRAM_WEBHOOK_SECRET`, `CRON_SECRET`).
@@ -494,6 +511,9 @@ Future tx from the same account auto-route. Set up `/keywords` rules to auto-cat
 | `/manage` | Add / rename / delete categories. Per-bucket edit-amount. |
 | `/keywords` | Manage auto-categorize rules. |
 | `/allocate` | Edit budget. Wizard on first run, per-bucket edit-mode after. |
+| `/recat <row>` | Re-categorize a past transaction by its sheet row number. |
+
+On **Zalo** (when `ZALO_ENABLED=true`), the same commands work via numbered-text menus: `/today`, `/report`, `/accounts`, `/keywords`, `/manage`, `/allocate`, `/cancel`.
 
 ---
 
@@ -530,10 +550,12 @@ Future tx from the same account auto-route. Set up `/keywords` rules to auto-cat
 
 ```
 .
-├── main.py                       # FastAPI entry — routes all webhooks
+├── main.py                       # FastAPI entry — routes all webhooks (Telegram + SePay + Zalo)
 ├── config.py                     # Reads env vars, sheet tab names
 ├── sheets.py                     # All Google Sheets read/write logic
 ├── telegram_api.py               # Telegram Bot API wrapper
+├── zalo_api.py                   # Zalo Bot Platform API wrapper (optional channel)
+├── notifier.py                   # Outbound notification helper
 ├── handlers/
 │   ├── sepay.py                  # Incoming SePay webhook handler
 │   ├── account_resolver.py       # Maps payload → account_id
@@ -544,7 +566,7 @@ Future tx from the same account auto-route. Set up `/keywords` rules to auto-cat
 │   ├── keywords.py               # /keywords auto-categorize rules
 │   ├── report.py                 # Unified /report (account + category lenses)
 │   └── reports.py                # /today snapshot + daily recap
-├── tests/unit/                   # 120 unit tests, in-memory FakeSpreadsheet
+├── tests/unit/                   # 148 unit tests, in-memory FakeSpreadsheet
 ├── .env.example                  # Template — copy to .env and fill in
 ├── crontab.txt                   # Example cron jobs (daily recap, monthly)
 ├── setup.sh                      # VPS bootstrap script
@@ -647,7 +669,7 @@ pip install -r requirements.txt
 pytest tests/unit/ -v
 ```
 
-120 unit tests use an in-memory `FakeSpreadsheet` — zero Google API calls during tests. Tests with `@freeze_time` need `freezegun` for deterministic period assertions.
+148 unit tests use an in-memory `FakeSpreadsheet` — zero Google API calls during tests. Tests with `@freeze_time` need `freezegun` for deterministic period assertions.
 
 ---
 

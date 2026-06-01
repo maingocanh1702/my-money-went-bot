@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
-[![Tests: 120 passing](https://img.shields.io/badge/tests-120%20passing-brightgreen.svg)](tests/)
+[![Tests: 148 passing](https://img.shields.io/badge/tests-148%20passing-brightgreen.svg)](tests/)
 
 [🇬🇧 English](README.md)
 
@@ -124,6 +124,10 @@ Chi tiết từng tính năng:
 🔁 **Backfill tx lịch sử** — `/accounts assign <slug>` gán retroactive tx cũ chưa map vào account vừa onboard. Không mất tx nào giữa "first webhook" và "wizard complete".
 
 🇻🇳 **Ngân hàng VN** — hoạt động với bất kỳ bank nào SePay support. VND-only ở v1.
+
+💬 **Kênh Zalo (optional)** — chạy các lệnh tương tự ngay trên Zalo qua menu đánh số (Zalo không có inline button). Bật bằng `ZALO_ENABLED` / `ZALO_INTERACTIVE`; prompt phân loại giao dịch mới vẫn ở Telegram.
+
+↩️ **Phân loại lại bất cứ lúc nào** — `/recat <row>` đổi category của một giao dịch cũ bất kỳ theo số dòng (dùng đúng tháng của giao dịch đó), bên cạnh nút inline "Sai mục?" trên mỗi confirmation.
 
 ---
 
@@ -362,6 +366,19 @@ Env vars bắt buộc — **Security** (xác thực mọi request từ bên ngo�
 | `TELEGRAM_WEBHOOK_SECRET` | Random token truyền vào Telegram `setWebhook` | Chặn Telegram update giả |
 | `CRON_SECRET` | Random token dùng cho URL `/trigger/*` của cron | Chặn trigger cron giả |
 
+Env vars optional — **Kênh Zalo** (chỉ cần nếu muốn thêm front-end thứ 2 trên Zalo; để trống thì bỏ qua):
+
+| Env var | Điền gì |
+|---|---|
+| `ZALO_ENABLED` | `true` để bật kênh Zalo (mặc định `false`) |
+| `ZALO_BOT_TOKEN` | Token từ Zalo Bot Platform |
+| `ZALO_CHAT_ID` | Zalo chat ID của bạn (dùng `scripts/zalo_get_updates.py` để lấy) |
+| `ZALO_INTERACTIVE` | `true` để nhận lệnh từ webhook Zalo |
+| `ZALO_WEBHOOK_SECRET` | Random token xác thực webhook Zalo (`X-Bot-Api-Secret-Token`) |
+| `ZALO_USER_ID` | Zalo sender id được phép (chặn mọi người khác) |
+
+Khi bật, endpoint webhook Zalo là `POST /zalo/webhook`. Bot vẫn cần đủ các biến Core + Security của Telegram + SePay ở trên.
+
 Vì sao nhiều biến hơn `spend-less-bot`? Repo gốc giữ setup tối giản: token Telegram, chat ID, sheet ID, và file Google credentials trên server. `my-money-went-bot` thêm các biến security vì app được thiết kế để deploy public trên Railway/VPS và nhận dữ liệu giao dịch ngân hàng qua webhook. Nếu không có các secret này, người lạ biết URL `/webhook` hoặc `/trigger/*` có thể gửi dữ liệu giả vào bot hoặc kích hoạt job không mong muốn.
 
 Nhìn theo nhóm thì không quá nhiều: **3 biến định danh** (`BOT_TOKEN`, `CHAT_ID`, `SHEET_ID`), **1 cách cấp quyền Google** (`GOOGLE_CREDS_JSON` hoặc `GOOGLE_CREDS`), và **3 chuỗi random để bảo mật production** (`SEPAY_SECRET`, `TELEGRAM_WEBHOOK_SECRET`, `CRON_SECRET`).
@@ -493,6 +510,9 @@ Tx sau từ cùng account auto-route. Setup `/keywords` rules để auto-categor
 | `/manage` | Thêm / rename / xóa categories. Edit-amount per bucket. |
 | `/keywords` | Quản lý rules auto-categorize. |
 | `/allocate` | Sửa budget. Lần đầu = wizard, sau đó = edit-mode per bucket. |
+| `/recat <row>` | Phân loại lại một giao dịch cũ theo số dòng trên sheet. |
+
+Trên **Zalo** (khi `ZALO_ENABLED=true`), các lệnh tương tự chạy qua menu đánh số: `/today`, `/report`, `/accounts`, `/keywords`, `/manage`, `/allocate`, `/cancel`.
 
 ---
 
@@ -529,10 +549,12 @@ Tx sau từ cùng account auto-route. Setup `/keywords` rules để auto-categor
 
 ```
 .
-├── main.py                       # FastAPI entry — route tất cả webhook
+├── main.py                       # FastAPI entry — route tất cả webhook (Telegram + SePay + Zalo)
 ├── config.py                     # Đọc env vars, sheet tab names
 ├── sheets.py                     # Toàn bộ logic read/write Google Sheets
 ├── telegram_api.py               # Wrapper Telegram Bot API
+├── zalo_api.py                   # Wrapper Zalo Bot Platform API (kênh optional)
+├── notifier.py                   # Helper gửi notification
 ├── handlers/
 │   ├── sepay.py                  # Handler SePay webhook
 │   ├── account_resolver.py       # Map payload → account_id
@@ -543,7 +565,7 @@ Tx sau từ cùng account auto-route. Setup `/keywords` rules để auto-categor
 │   ├── keywords.py               # /keywords auto-categorize rules
 │   ├── report.py                 # /report thống nhất (account + category lenses)
 │   └── reports.py                # /today snapshot + daily recap
-├── tests/unit/                   # 120 unit tests, in-memory FakeSpreadsheet
+├── tests/unit/                   # 148 unit tests, in-memory FakeSpreadsheet
 ├── .env.example                  # Template — copy thành .env và điền
 ├── crontab.txt                   # Cron jobs mẫu (daily recap, monthly)
 ├── setup.sh                      # VPS bootstrap script
@@ -646,7 +668,7 @@ pip install -r requirements.txt
 pytest tests/unit/ -v
 ```
 
-120 unit tests dùng `FakeSpreadsheet` in-memory — zero gọi Google API trong test. Tests có `@freeze_time` cần `freezegun` để period assertion deterministic.
+148 unit tests dùng `FakeSpreadsheet` in-memory — zero gọi Google API trong test. Tests có `@freeze_time` cần `freezegun` để period assertion deterministic.
 
 ---
 
