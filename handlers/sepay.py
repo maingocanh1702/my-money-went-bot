@@ -10,6 +10,7 @@ import pytz
 from config import CHAT_ID, TIMEZONE, SEPAY_SECRET
 import sheets as sh
 import telegram_api as tg
+import notifier
 from handlers.account_resolver import resolve_account
 from handlers.accounts import prompt_new_account
 
@@ -170,7 +171,7 @@ async def handle_sepay_webhook(payload: dict):
         buckets, created = await _ensure_buckets(month_key)
 
         if created > 0:
-            await tg.send_text(
+            await notifier.send_text(
                 f"👋 *Welcome to Financial Tracking Bot!*\n\n"
                 f"Đã tạo sẵn {created} categories để bạn track. "
                 f"Dùng /manage để sửa hoặc thêm category mới. "
@@ -186,7 +187,7 @@ async def handle_sepay_webhook(payload: dict):
         # line. Forcing the user to tap 'Bỏ qua' on every salary/refund tx
         # was noise; income categorization (Salary/Refund/Gift breakdown)
         # is out of scope for the tracking goal.
-        await tg.send_text(
+        await notifier.send_text(
             f"💚 *+{sh.fmt_amount(amount, currency)} vừa vào tài khoản!*\n"
             f"`{description}`"
         )
@@ -210,7 +211,7 @@ async def handle_sepay_webhook(payload: dict):
     buckets, created = await _ensure_buckets(month_key)
 
     if created > 0:
-        await tg.send_text(
+        await notifier.send_text(
             f"👋 *Welcome to Financial Tracking Bot!*\n\n"
             f"Đã tạo sẵn {created} categories để bạn track. "
             f"Dùng /manage để sửa hoặc thêm category mới. "
@@ -291,7 +292,7 @@ async def _auto_categorize(
         f"`{description}`\n"
         f"(matched keyword: `{matched_keyword}`)"
     )
-    await tg.send_text(notice)
+    await notifier.send_text(notice)
 
     # _finalize reads amount/tx_direction/tx_date from state, so populate it.
     sh.set_state(CHAT_ID, {

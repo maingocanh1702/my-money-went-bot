@@ -57,6 +57,37 @@ def _sepay_payload(with_secret: bool = True, ref: str = "AUTH_TEST") -> dict:
     return payload
 
 
+def _zalo_event(
+    *,
+    sender_id: str = "zalo_user_1",
+    chat_id: str = "zalo_chat_1",
+    text: str = "/today",
+    event_name: str = "message.text.received",
+    is_bot: bool = False,
+    chat_type: str = "PRIVATE",
+) -> dict:
+    return {
+        "ok": True,
+        "result": {
+            "event_name": event_name,
+            "message": {
+                "message_id": "zmsg_1",
+                "from": {
+                    "id": sender_id,
+                    "display_name": "Zalo User",
+                    "is_bot": is_bot,
+                },
+                "chat": {
+                    "id": chat_id,
+                    "chat_type": chat_type,
+                },
+                "text": text,
+                "date": 1750316131602,
+            },
+        },
+    }
+
+
 # ── Fixtures ──────────────────────────────────────────────────
 
 
@@ -256,6 +287,173 @@ async def test_trigger_without_secret_returns_403():
 
         r = await client.post("/trigger/monthly-allocation")
         assert r.status_code == 403
+
+
+# ── Tests: Zalo webhook auth ─────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_zalo_webhook_interactive_off_rejects_before_processing(monkeypatch):
+    from httpx import ASGITransport, AsyncClient
+    import main
+    from main import app
+
+    monkeypatch.setattr(main, "ZALO_ENABLED", True)
+    monkeypatch.setattr(main, "ZALO_INTERACTIVE", False)
+
+    processed = []
+
+    async def capture_process(event):
+        processed.append(event)
+
+    monkeypatch.setattr(main, "_process_zalo", capture_process)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        r = await client.post("/zalo/webhook", json=_zalo_event())
+        assert r.status_code == 200
+
+    assert processed == []
+
+
+@pytest.mark.asyncio
+async def test_zalo_webhook_rejects_missing_or_wrong_secret(monkeypatch):
+    from httpx import ASGITransport, AsyncClient
+    import main
+    from main import app
+
+    monkeypatch.setattr(main, "ZALO_ENABLED", True)
+    monkeypatch.setattr(main, "ZALO_INTERACTIVE", True)
+    monkeypatch.setattr(main, "ZALO_WEBHOOK_SECRET", "zalo_secret")
+    monkeypatch.setattr(main, "ZALO_USER_ID", "zalo_user_1")
+
+    processed = []
+
+    async def capture_process(event):
+        processed.append(event)
+
+    monkeypatch.setattr(main, "_process_zalo", capture_process)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        r = await client.post("/zalo/webhook", json=_zalo_event())
+        assert r.status_code == 200
+
+        r = await client.post(
+            "/zalo/webhook",
+            json=_zalo_event(),
+            headers={"X-Bot-Api-Secret-Token": "wrong"},
+        )
+        assert r.status_code == 200
+
+        r = await client.post(
+            "/zalo/webhook",
+            json=_zalo_event(),
+            headers={"X-Bot-Api-Secret-Token": "zalo_secret"},
+        )
+        assert r.status_code == 200
+
+    assert len(processed) == 1
+
+
+@pytest.mark.asyncio
+async def test_zalo_webhook_requires_configured_secret_and_user(monkeypatch):
+    from httpx import ASGITransport, AsyncClient
+    import main
+    from main import app
+
+    monkeypatch.setattr(main, "ZALO_ENABLED", True)
+    monkeypatch.setattr(main, "ZALO_INTERACTIVE", True)
+    monkeypatch.setattr(main, "ZALO_WEBHOOK_SECRET", "")
+    monkeypatch.setattr(main, "ZALO_USER_ID", "")
+
+    processed = []
+
+    async def capture_process(event):
+        processed.append(event)
+
+    monkeypatch.setattr(main, "_process_zalo", capture_process)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        r = await client.post(
+            "/zalo/webhook",
+            json=_zalo_event(),
+            headers={"X-Bot-Api-Secret-Token": "anything"},
+        )
+        assert r.status_code == 200
+
+    assert processed == []
+
+
+@pytest.mark.asyncio
+async def test_zalo_webhook_ignores_non_text_events(monkeypatch):
+    from httpx import ASGITransport, AsyncClient
+    import main
+    from main import app
+
+    monkeypatch.setattr(main, "ZALO_ENABLED", True)
+    monkeypatch.setattr(main, "ZALO_INTERACTIVE", True)
+    monkeypatch.setattr(main, "ZALO_WEBHOOK_SECRET", "zalo_secret")
+    monkeypatch.setattr(main, "ZALO_USER_ID", "zalo_user_1")
+
+    processed = []
+
+    async def capture_process(event):
+        processed.append(event)
+
+    monkeypatch.setattr(main, "_process_zalo", capture_process)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        r = await client.post(
+            "/zalo/webhook",
+            json=_zalo_event(event_name="message.sticker.received"),
+            headers={"X-Bot-Api-Secret-Token": "zalo_secret"},
+        )
+        assert r.status_code == 200
+
+    assert processed == []
+
+
+@pytest.mark.asyncio
+async def test_process_zalo_rejects_wrong_user_bot_echo_and_group(monkeypatch):
+    import main
+
+    monkeypatch.setattr(main, "ZALO_USER_ID", "zalo_user_1")
+
+    sent = []
+
+    async def capture_send(text, chat_id=None):
+        sent.append((text, chat_id))
+
+    monkeypatch.setattr(main.zalo, "send_text", capture_send)
+
+    await main._process_zalo(_zalo_event(sender_id="wrong")["result"])
+    await main._process_zalo(_zalo_event(is_bot=True)["result"])
+    await main._process_zalo(_zalo_event(chat_type="GROUP")["result"])
+
+    assert sent == []
+
+
+@pytest.mark.asyncio
+async def test_zalo_today_command_sends_response(fake_world, monkeypatch):
+    import main
+
+    monkeypatch.setattr(main, "ZALO_USER_ID", "zalo_user_1")
+
+    sent = []
+
+    async def capture_send(text, chat_id=None):
+        sent.append((text, chat_id))
+
+    monkeypatch.setattr(main.zalo, "send_text", capture_send)
+
+    await main._process_zalo(_zalo_event(text="/today")["result"])
+
+    assert sent
+    assert sent[0][1] == "zalo_chat_1"
+    assert "Daily spending" in sent[0][0]
 
 
 @pytest.mark.asyncio

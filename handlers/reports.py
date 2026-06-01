@@ -11,6 +11,8 @@ import pytz
 from config import CHAT_ID, TIMEZONE, DAILY_BUCKET_ID
 import sheets as sh
 import telegram_api as tg
+import zalo_api as zalo
+import asyncio
 
 
 async def send_daily_recap():
@@ -31,30 +33,41 @@ async def send_daily_recap():
     day = sh.get_daily_status(now)
 
     if day["spent"] == 0:
-        await tg.send_text(
+        msg = (
             f"🌙 *End of day — {now.strftime('%b %d')}*\n\n"
             f"Hôm nay không tiêu đồng nào cho daily expenses. Sleep well. 💤"
         )
+        await tg.send_text(msg)
+        asyncio.create_task(_zalo_recap(msg))
         return
 
     pct = sh.calc_pct(day["spent"], day["cap"])
 
     if day["spent"] > day["cap"]:
         overspent = day["spent"] - day["cap"]
-        await tg.send_text(
+        msg = (
             f"🌙 *End of day — {now.strftime('%b %d')}*\n\n"
             f"Daily spending: *{sh.fmt_amount(day['spent'])}* ({pct}% of limit)\n"
             f"Vượt *{sh.fmt_amount(overspent)}* so với cap ngày.\n\n"
             f"Muốn note lại lý do? Reply để bot ghi nhận."
         )
+        await tg.send_text(msg)
+        # Zalo gets the recap but NOT the excuse prompt (Telegram-only state machine)
+        asyncio.create_task(_zalo_recap(
+            f"🌙 *End of day — {now.strftime('%b %d')}*\n\n"
+            f"Daily spending: *{sh.fmt_amount(day['spent'])}* ({pct}% of limit)\n"
+            f"Vượt *{sh.fmt_amount(overspent)}* so với cap ngày."
+        ))
         sh.set_state(CHAT_ID, {"step": "await_daily_excuse", "date": now.strftime("%Y-%m-%d"), "overspent": overspent})
     else:
         remaining = day["cap"] - day["spent"]
-        await tg.send_text(
+        msg = (
             f"🌙 *End of day — {now.strftime('%b %d')}*\n\n"
             f"Daily spending: *{sh.fmt_amount(day['spent'])}* ({pct}% of limit)\n"
             f"Còn dư *{sh.fmt_amount(remaining)}*. ✨"
         )
+        await tg.send_text(msg)
+        asyncio.create_task(_zalo_recap(msg))
 
 
 async def handle_daily_excuse(text: str, state: dict):
@@ -67,7 +80,10 @@ async def handle_daily_excuse(text: str, state: dict):
     )
 
 
-async def send_today_status():
+def _build_today_text() -> str:
+    """Build the /today status text (pure data, no channel-specific logic).
+    Returns Markdown-formatted text (Telegram-native). Callers strip for Zalo.
+    """
     tz  = pytz.timezone(TIMEZONE)
     now = datetime.now(tz)
     month_key = sh.fmt_month(now)
@@ -76,23 +92,18 @@ async def send_today_status():
     buckets = sh.get_active_buckets(month_key)
     daily_bkt = next((b for b in buckets if b["id"] == DAILY_BUCKET_ID), None)
 
-    # Clarifier: 'Daily Spending' is ONE bucket (café vặt, taxi vặt, ...),
-    # not the day's grand total. Common confusion — surface the distinction
-    # here so users don't think /today double-counts their other categories.
     scope_hint = (
         "_(Bucket 'Daily Spending' = chi tiêu lặt vặt (café vặt, taxi nhỏ)._\n"
         "_KHÔNG phải tổng chi tiêu ngày — xem /report để xem hết theo category.)_"
     )
 
     if not daily_bkt or not daily_bkt.get("daily_cap"):
-        # Tracking mode không có cap — show tổng tiêu hôm nay
         day = sh.get_daily_status(now)
         msg  = f"🍜 *Daily spending — {now.strftime('%b %d')}*\n\n"
         msg += f"Đã tiêu: *{sh.fmt_amount(day['spent'])}*\n\n"
         msg += "_Chưa set daily limit. Dùng /manage để bật cap nếu muốn._\n\n"
         msg += scope_hint
-        await tg.send_text(msg)
-        return
+        return msg
 
     day = sh.get_daily_status(now)
     pct = sh.calc_pct(day["spent"], day["cap"])
@@ -112,6 +123,18 @@ async def send_today_status():
         msg += f"💪 Còn *{sh.fmt_amount(day['remaining'])}* trong ngân sách hôm nay.\n\n"
 
     msg += scope_hint
+    return msg
 
+
+async def send_today_status():
+    msg = _build_today_text()
     await tg.send_text(msg)
+
+
+async def _zalo_recap(text: str):
+    """Best-effort Zalo fan-out for daily recap. Non-fatal."""
+    try:
+        await zalo.send_text(text)
+    except Exception as e:
+        print(f"[reports] Zalo recap fan-out failed (non-fatal): {e}")
 

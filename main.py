@@ -11,8 +11,10 @@ from datetime import datetime
 import pytz
 
 from config import CHAT_ID, TELEGRAM_WEBHOOK_SECRET, CRON_SECRET, TIMEZONE
+from config import ZALO_ENABLED, ZALO_INTERACTIVE, ZALO_WEBHOOK_SECRET, ZALO_USER_ID, ZALO_CHAT_ID
 import sheets as sh
 import telegram_api as tg
+import zalo_api as zalo
 from handlers.sepay        import handle_sepay_webhook
 from handlers.transaction import handle_parent_selected, handle_sub_selected, handle_freetext_sub, handle_recategorize, handle_inline_new_cat_name
 from handlers.allocation  import (
@@ -81,6 +83,44 @@ async def webhook(request: Request, bg: BackgroundTasks):
 
     bg.add_task(_process, body)
     return JSONResponse({"ok": True})          # ← 200 right away, no 302
+
+
+# ─── Zalo webhook endpoint ────────────────────────────────────
+@app.post("/zalo/webhook")
+async def zalo_webhook(request: Request, bg: BackgroundTasks):
+    """Receive Zalo Bot Platform webhook events.
+
+    Security:
+      - Validates X-Bot-Api-Secret-Token header against ZALO_WEBHOOK_SECRET
+      - Only processes events when ZALO_ENABLED and ZALO_INTERACTIVE are True
+      - Rejects messages from non-authorized users (ZALO_USER_ID)
+    """
+    if not (ZALO_ENABLED and ZALO_INTERACTIVE):
+        return JSONResponse({"ok": True})
+
+    if not ZALO_WEBHOOK_SECRET or not ZALO_USER_ID:
+        print("[zalo-webhook] rejected: interactive mode missing secret or user id")
+        return JSONResponse({"ok": True})
+
+    zalo_secret = request.headers.get("x-bot-api-secret-token", "")
+    if not hmac.compare_digest(zalo_secret, ZALO_WEBHOOK_SECRET):
+        print("[zalo-webhook] rejected: invalid webhook secret")
+        return JSONResponse({"ok": True})
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": True})
+
+    # Zalo webhook payload: { ok: true, result: { event_name, message } }
+    result = body.get("result", body)  # tolerate both wrapped and flat
+    event_name = result.get("event_name", "")
+
+    if event_name != "message.text.received":
+        return JSONResponse({"ok": True})  # ignore non-text events
+
+    bg.add_task(_process_zalo, result)
+    return JSONResponse({"ok": True})
 
 
 # ─── Scheduled triggers (call via cron on VPS) ───────────────
@@ -329,3 +369,1214 @@ async def _handle_command(text: str):
             "Unknown command. Try /today, /report, /accounts, /manage, "
             "/keywords, /allocate, or /recat."
         )
+
+
+# ─── Zalo dispatcher ──────────────────────────────────────────
+
+# State key prefix for Zalo — ensures no collision with Telegram state
+# (different chat_id values, but prefix makes intent explicit in logs)
+_ZALO_STATE_PREFIX = "zalo_kw_"
+
+
+async def _process_zalo(event: dict):
+    """Process a Zalo text message event.
+
+    Supports interactive commands (keywords) via text-based state machine
+    since Zalo has no inline buttons.
+    """
+    try:
+        message = event.get("message", {})
+        sender = message.get("from", {})
+        chat = message.get("chat", {})
+        text = (message.get("text") or "").strip()
+        chat_id = chat.get("id", "")
+
+        # Reject bot echoes
+        if sender.get("is_bot"):
+            return
+
+        # Validate sender identity
+        sender_id = str(sender.get("id", ""))
+        if ZALO_USER_ID and sender_id != ZALO_USER_ID:
+            print(f"[zalo] rejected: sender_id={sender_id} != ZALO_USER_ID={ZALO_USER_ID}")
+            return
+
+        # Only handle private chats
+        if chat.get("chat_type", "").upper() not in ("PRIVATE", ""):
+            return
+
+        if text.startswith("/"):
+            await _handle_zalo_command(text, chat_id)
+        else:
+            # Check for active Zalo state machine (keywords interactive)
+            await _handle_zalo_text(text, chat_id)
+    except Exception:
+        import traceback
+        err_id = uuid.uuid4().hex[:8]
+        print(f"ZALO ERROR [{err_id}]:", traceback.format_exc())
+        try:
+            await zalo.send_text(f"⚠️ Bot gặp lỗi (ref: {err_id}). Check server logs.", chat_id)
+        except Exception:
+            pass
+
+
+async def _handle_zalo_text(text: str, chat_id: str):
+    """Route non-command text through the Zalo state machine.
+
+    If no active state, show help menu.
+    """
+    state = sh.get_state(chat_id) or {}
+    step = state.get("step", "")
+
+    # Keywords state machine
+    if step == "zalo_kw_list":
+        await _zalo_kw_handle_list_reply(text, chat_id, state)
+    elif step == "zalo_kw_actions":
+        await _zalo_kw_handle_action_reply(text, chat_id, state)
+    elif step == "zalo_kw_confirm_del":
+        await _zalo_kw_handle_confirm_del(text, chat_id, state)
+    elif step == "zalo_kw_await_keyword":
+        await _zalo_kw_handle_keyword_input(text, chat_id, state)
+    elif step == "zalo_kw_pick_bucket":
+        await _zalo_kw_handle_bucket_pick(text, chat_id, state)
+    elif step == "zalo_kw_await_edit_keyword":
+        await _zalo_kw_handle_edit_keyword(text, chat_id, state)
+    elif step == "zalo_kw_pick_edit_bucket":
+        await _zalo_kw_handle_edit_bucket_pick(text, chat_id, state)
+    # Manage categories state machine
+    elif step == "zalo_mg_list":
+        await _zalo_mg_handle_list_reply(text, chat_id, state)
+    elif step == "zalo_mg_actions":
+        await _zalo_mg_handle_action_reply(text, chat_id, state)
+    elif step == "zalo_mg_confirm_del":
+        await _zalo_mg_handle_confirm_del(text, chat_id, state)
+    elif step == "zalo_mg_await_rename":
+        await _zalo_mg_handle_rename(text, chat_id, state)
+    elif step == "zalo_mg_await_amount":
+        await _zalo_mg_handle_amount(text, chat_id, state)
+    elif step == "zalo_mg_await_add_name":
+        await _zalo_mg_handle_add_name(text, chat_id, state)
+    elif step == "zalo_mg_await_add_amount":
+        await _zalo_mg_handle_add_amount(text, chat_id, state)
+    elif step == "zalo_mg_subs":
+        await _zalo_mg_handle_sub_reply(text, chat_id, state)
+    elif step == "zalo_mg_sub_actions":
+        await _zalo_mg_handle_sub_action(text, chat_id, state)
+    elif step == "zalo_mg_await_sub_rename":
+        await _zalo_mg_handle_sub_rename(text, chat_id, state)
+    elif step == "zalo_mg_confirm_sub_del":
+        await _zalo_mg_handle_confirm_sub_del(text, chat_id, state)
+    # Allocate budget state machine
+    elif step == "zalo_al_list":
+        await _zalo_al_handle_list_reply(text, chat_id, state)
+    elif step == "zalo_al_await_amount":
+        await _zalo_al_handle_amount(text, chat_id, state)
+    else:
+        # No active state — show help
+        await zalo.send_text(
+            "🤖 My Money Went Bot (Zalo)\n\n"
+            "Commands:\n"
+            "/today — hôm nay tiêu bao nhiêu?\n"
+            "/report — chi tiêu tháng này\n"
+            "/accounts — list accounts\n"
+            "/keywords — quản lý keyword rules\n"
+            "/manage — quản lý categories\n"
+            "/allocate — set ngân sách tháng\n\n"
+            "/cancel — Hủy thao tác",
+            chat_id,
+        )
+
+
+async def _handle_zalo_command(text: str, chat_id: str):
+    """Handle commands from Zalo."""
+    from handlers.reports import _build_today_text
+    from handlers.report import build_report_text, _PERIOD_ALIASES
+    from handlers.accounts import _account_list_lines
+
+    cmd_parts = text.strip().split()
+    cmd = cmd_parts[0].lower()
+
+    if cmd == "/cancel":
+        sh.set_state(chat_id, {})
+        await zalo.send_text("❌ Đã hủy.", chat_id)
+        return
+
+    if cmd == "/today":
+        msg = _build_today_text()
+        await zalo.send_text(msg, chat_id)
+
+    elif cmd == "/report":
+        # Parse optional period arg
+        period_code = "m"
+        if len(cmd_parts) >= 2:
+            period_code = _PERIOD_ALIASES.get(cmd_parts[1].lower(), "m")
+        msg = build_report_text(period_code)
+        await zalo.send_text(msg, chat_id)
+
+    elif cmd == "/accounts":
+        lines = _account_list_lines()
+        msg = "Accounts đã setup\n\n" + "\n\n".join(lines)
+        await zalo.send_text(msg, chat_id)
+
+    elif cmd == "/keywords":
+        await _zalo_kw_show_list(chat_id)
+
+    elif cmd == "/manage":
+        await _zalo_mg_show_list(chat_id)
+
+    elif cmd == "/allocate":
+        await _zalo_al_show_list(chat_id)
+
+    else:
+        await zalo.send_text(
+            "Commands hỗ trợ trên Zalo:\n"
+            "/today — hôm nay tiêu bao nhiêu?\n"
+            "/report — chi tiêu tháng này\n"
+            "/report tuần — chi tiêu tuần này\n"
+            "/accounts — list accounts\n"
+            "/keywords — quản lý keyword rules\n"
+            "/manage — quản lý categories\n"
+            "/allocate — set ngân sách tháng\n\n"
+            "/cancel — Hủy thao tác",
+            chat_id,
+        )
+
+
+# ─── Zalo Keywords: text-based interactive flow ───────────────
+# Since Zalo has no inline buttons, all interaction uses numbered menus
+# and text replies. State is stored per Zalo chat_id.
+
+async def _zalo_kw_show_list(chat_id: str):
+    """Show all keyword rules as a numbered list + instructions."""
+    from datetime import datetime as _dt
+    import pytz
+
+    tz = pytz.timezone(TIMEZONE)
+    month_key = sh.fmt_month(_dt.now(tz))
+
+    rules = sh.get_keyword_rules(force_refresh=True)
+
+    if not rules:
+        sh.set_state(chat_id, {"step": "zalo_kw_list", "month_key": month_key})
+        await zalo.send_text(
+            "🔑 Keyword Rules\n\n"
+            "Chưa có rule nào.\n\n"
+            "Khi giao dịch có description chứa keyword, bot sẽ tự động "
+            "phân loại vào category bạn cấu hình.\n\n"
+            "VD: highland → ☕ Coffee, winmart → 🍜 Food\n\n"
+            "Reply:\n"
+            '- "add" để thêm rule mới\n'
+            "- /cancel để thoát",
+            chat_id,
+        )
+        return
+
+    msg = "🔑 Keyword Rules\n\n"
+    for i, r in enumerate(rules, 1):
+        bucket_name = sh.bucket_label(r["bucket_id"])
+        sub = f" · {r['sub_label']}" if r["sub_label"] else ""
+        msg += f"{i}. {r['keyword']} → {bucket_name}{sub}\n"
+
+    msg += (
+        "\nReply:\n"
+        '- "add" để thêm rule mới\n'
+        '- Số (VD: "3") để sửa/xóa rule đó\n'
+        "- /cancel để thoát"
+    )
+
+    sh.set_state(chat_id, {"step": "zalo_kw_list", "month_key": month_key})
+    await zalo.send_text(msg, chat_id)
+
+
+async def _zalo_kw_handle_list_reply(text: str, chat_id: str, state: dict):
+    """Handle user reply when viewing the keyword list.
+
+    Expected: 'add' to add new, a number to select a rule.
+    """
+    text_lower = text.strip().lower()
+
+    if text_lower == "add":
+        await _zalo_kw_prompt_add(chat_id, state)
+        return
+
+    # Try to parse as a number (rule index)
+    if text.isdigit():
+        idx = int(text)
+        rules = sh.get_keyword_rules(force_refresh=True)
+        if 1 <= idx <= len(rules):
+            rule = rules[idx - 1]
+            await _zalo_kw_show_actions(chat_id, state, rule, idx)
+            return
+        else:
+            await zalo.send_text(
+                f"⚠️ Số {idx} không hợp lệ. Có {len(rules)} rules.",
+                chat_id,
+            )
+            return
+
+    await zalo.send_text(
+        '⚠️ Không hiểu. Reply "add" hoặc số thứ tự rule.',
+        chat_id,
+    )
+
+
+async def _zalo_kw_show_actions(chat_id: str, state: dict, rule: dict, idx: int):
+    """Show the action menu for a selected rule."""
+    bucket_name = sh.bucket_label(rule["bucket_id"])
+    sub = f" · {rule['sub_label']}" if rule["sub_label"] else ""
+
+    msg = (
+        f"🔑 Rule #{idx}: {rule['keyword']} → {bucket_name}{sub}\n\n"
+        "Bạn muốn làm gì?\n\n"
+        "Reply:\n"
+        '- "edit" — Đổi keyword\n'
+        '- "cat" — Đổi category\n'
+        '- "del" — Xóa rule\n'
+        '- "back" — Quay lại danh sách'
+    )
+
+    sh.set_state(chat_id, {
+        **state,
+        "step": "zalo_kw_actions",
+        "selected_row_num": rule["row_num"],
+        "selected_idx": idx,
+    })
+    await zalo.send_text(msg, chat_id)
+
+
+async def _zalo_kw_handle_action_reply(text: str, chat_id: str, state: dict):
+    """Handle action menu reply for a selected rule."""
+    text_lower = text.strip().lower()
+    row_num = state.get("selected_row_num")
+
+    rules = sh.get_keyword_rules(force_refresh=True)
+    rule = next((r for r in rules if r["row_num"] == row_num), None)
+
+    if not rule:
+        await zalo.send_text("⚠️ Rule không còn tồn tại.", chat_id)
+        await _zalo_kw_show_list(chat_id)
+        return
+
+    if text_lower == "del":
+        bucket_name = sh.bucket_label(rule["bucket_id"])
+        sh.set_state(chat_id, {
+            **state,
+            "step": "zalo_kw_confirm_del",
+        })
+        await zalo.send_text(
+            f"⚠️ Xóa rule này?\n\n"
+            f"{rule['keyword']} → {bucket_name}\n\n"
+            'Reply "yes" để xác nhận, "no" để hủy.',
+            chat_id,
+        )
+
+    elif text_lower == "edit":
+        sh.set_state(chat_id, {
+            **state,
+            "step": "zalo_kw_await_edit_keyword",
+        })
+        await zalo.send_text(
+            f"✏️ Keyword hiện tại: {rule['keyword']}\n\n"
+            "Nhập keyword mới (1 keyword duy nhất).\n"
+            "/cancel để hủy.",
+            chat_id,
+        )
+
+    elif text_lower == "cat":
+        await _zalo_kw_prompt_edit_bucket(chat_id, state, rule)
+
+    elif text_lower == "back":
+        await _zalo_kw_show_list(chat_id)
+
+    else:
+        await zalo.send_text(
+            '⚠️ Không hiểu. Reply "edit", "cat", "del" hoặc "back".',
+            chat_id,
+        )
+
+
+async def _zalo_kw_handle_confirm_del(text: str, chat_id: str, state: dict):
+    """Handle delete confirmation reply."""
+    text_lower = text.strip().lower()
+    row_num = state.get("selected_row_num")
+
+    if text_lower in ("yes", "y", "co", "có"):
+        rules = sh.get_keyword_rules(force_refresh=True)
+        rule = next((r for r in rules if r["row_num"] == row_num), None)
+
+        sh.soft_delete_keyword_rule(row_num)
+
+        if rule:
+            bucket_name = sh.bucket_label(rule["bucket_id"])
+            await zalo.send_text(
+                f"🗑️ Đã xóa: {rule['keyword']} → {bucket_name}",
+                chat_id,
+            )
+        else:
+            await zalo.send_text("🗑️ Đã xóa rule.", chat_id)
+
+        await _zalo_kw_show_list(chat_id)
+
+    elif text_lower in ("no", "n", "khong", "không"):
+        await zalo.send_text("← Đã hủy xóa.", chat_id)
+        await _zalo_kw_show_list(chat_id)
+
+    else:
+        await zalo.send_text(
+            '⚠️ Reply "yes" để xóa, "no" để hủy.',
+            chat_id,
+        )
+
+
+# ─── Zalo Keywords: Add flow ──────────────────────────────────
+
+async def _zalo_kw_prompt_add(chat_id: str, state: dict):
+    """Ask user to type keyword(s) for a new rule."""
+    sh.set_state(chat_id, {**state, "step": "zalo_kw_await_keyword"})
+    await zalo.send_text(
+        "✍️ Nhập keyword\n\n"
+        "- 1 keyword: highland\n"
+        "- Nhiều keyword cách nhau dấu phẩy → tất cả map cùng 1 category:\n"
+        "  highland, tch, the coffee house, revi\n\n"
+        "Bot match khi description giao dịch chứa keyword "
+        "(không phân biệt hoa/thường, dấu).\n\n"
+        "/cancel để hủy.",
+        chat_id,
+    )
+
+
+async def _zalo_kw_handle_keyword_input(text: str, chat_id: str, state: dict):
+    """User typed keyword(s). Validate, then show bucket picker."""
+    import re as _re
+    from datetime import datetime as _dt
+    import pytz
+
+    raw = text.strip()
+    if not raw:
+        await zalo.send_text("⚠️ Keyword rỗng. Thử lại hoặc /cancel để hủy.", chat_id)
+        return
+
+    tokens = [t.strip() for t in _re.split(r"[,;]+", raw)]
+    keywords = []
+    for t in tokens:
+        if not t:
+            continue
+        if len(t) > 60:
+            await zalo.send_text(
+                f"⚠️ Keyword quá dài (>60 ký tự): {t}\nThử lại.",
+                chat_id,
+            )
+            return
+        norm = sh._normalize_for_match(t)
+        if norm and norm not in keywords:
+            keywords.append(norm)
+
+    if not keywords:
+        await zalo.send_text("⚠️ Không có keyword hợp lệ. Thử lại.", chat_id)
+        return
+
+    tz = pytz.timezone(TIMEZONE)
+    month_key = state.get("month_key") or sh.fmt_month(_dt.now(tz))
+    buckets = sh.get_active_buckets(month_key)
+
+    if not buckets:
+        await zalo.send_text(
+            "⚠️ Chưa có category nào. Dùng /manage trên Telegram để tạo category trước, "
+            "rồi quay lại /keywords.",
+            chat_id,
+        )
+        sh.set_state(chat_id, {})
+        return
+
+    # Show numbered bucket list for selection
+    preview = ", ".join(keywords)
+    count_label = "" if len(keywords) == 1 else f" ({len(keywords)} keywords)"
+    msg = f"🔑 Keyword{count_label}: {preview}\n\nMatch vào category nào?\n\n"
+    for i, b in enumerate(buckets, 1):
+        msg += f"{i}. {b['name']}\n"
+    msg += "\nReply số thứ tự category.\n/cancel để hủy."
+
+    sh.set_state(chat_id, {
+        **state,
+        "step": "zalo_kw_pick_bucket",
+        "pending_keywords": keywords,
+        "month_key": month_key,
+    })
+    await zalo.send_text(msg, chat_id)
+
+
+async def _zalo_kw_handle_bucket_pick(text: str, chat_id: str, state: dict):
+    """User picked a bucket number for the new keyword(s)."""
+    from datetime import datetime as _dt
+    import pytz
+
+    if not text.strip().isdigit():
+        await zalo.send_text("⚠️ Reply số thứ tự category.", chat_id)
+        return
+
+    idx = int(text.strip())
+    tz = pytz.timezone(TIMEZONE)
+    month_key = state.get("month_key") or sh.fmt_month(_dt.now(tz))
+    buckets = sh.get_active_buckets(month_key)
+
+    if not (1 <= idx <= len(buckets)):
+        await zalo.send_text(
+            f"⚠️ Số {idx} không hợp lệ. Có {len(buckets)} categories.",
+            chat_id,
+        )
+        return
+
+    bucket = buckets[idx - 1]
+    keywords = state.get("pending_keywords") or []
+    if not keywords:
+        await zalo.send_text("⚠️ Hết phiên. Thử /keywords lại.", chat_id)
+        sh.set_state(chat_id, {})
+        return
+
+    added = []
+    skipped = []
+    for kw in keywords:
+        if sh.add_keyword_rule(kw, bucket["id"], sub_label=""):
+            added.append(kw)
+        else:
+            skipped.append(kw)
+
+    sections = []
+    if added:
+        added_block = ", ".join(added)
+        sections.append(f"✅ Đã thêm {len(added)} rule → {bucket['name']}:\n  {added_block}")
+    if skipped:
+        skipped_block = ", ".join(skipped)
+        sections.append(f"⚠️ {len(skipped)} rule đã tồn tại:\n  {skipped_block}")
+
+    await zalo.send_text("\n\n".join(sections), chat_id)
+    await _zalo_kw_show_list(chat_id)
+
+
+# ─── Zalo Keywords: Edit keyword flow ─────────────────────────
+
+async def _zalo_kw_handle_edit_keyword(text: str, chat_id: str, state: dict):
+    """User typed a new keyword for an existing rule."""
+    import re as _re
+
+    raw = text.strip()
+    if not raw:
+        await zalo.send_text("⚠️ Keyword rỗng. Thử lại hoặc /cancel để hủy.", chat_id)
+        return
+
+    if _re.search(r"[,;]", raw):
+        await zalo.send_text(
+            "⚠️ Chỉ nhận 1 keyword khi sửa.\n"
+            "Muốn add nhiều keyword → xóa rule này và dùng add.",
+            chat_id,
+        )
+        return
+
+    if len(raw) > 60:
+        await zalo.send_text("⚠️ Keyword quá dài (>60 ký tự). Thử lại.", chat_id)
+        return
+
+    new_norm = sh._normalize_for_match(raw)
+    if not new_norm:
+        await zalo.send_text("⚠️ Keyword không hợp lệ. Thử lại.", chat_id)
+        return
+
+    row_num = state.get("selected_row_num")
+    if not row_num:
+        await zalo.send_text("⚠️ Hết phiên. Thử /keywords lại.", chat_id)
+        sh.set_state(chat_id, {})
+        return
+
+    rules = sh.get_keyword_rules(force_refresh=True)
+    rule = next((r for r in rules if r["row_num"] == row_num), None)
+    if not rule:
+        await zalo.send_text("⚠️ Rule không còn tồn tại.", chat_id)
+        await _zalo_kw_show_list(chat_id)
+        return
+
+    old_keyword = rule["keyword"]
+    if new_norm == old_keyword:
+        await zalo.send_text("ℹ️ Keyword không đổi.", chat_id)
+        await _zalo_kw_show_list(chat_id)
+        return
+
+    ok = sh.update_keyword_rule(row_num, keyword=new_norm)
+    if ok:
+        bucket_name = sh.bucket_label(rule["bucket_id"])
+        await zalo.send_text(
+            f"✅ Đã đổi: {old_keyword} → {new_norm}\n(category: {bucket_name})",
+            chat_id,
+        )
+    else:
+        await zalo.send_text("⚠️ Lỗi khi cập nhật rule. Thử lại.", chat_id)
+    await _zalo_kw_show_list(chat_id)
+
+
+# ─── Zalo Keywords: Change category flow ──────────────────────
+
+async def _zalo_kw_prompt_edit_bucket(chat_id: str, state: dict, rule: dict):
+    """Show numbered bucket list so user can pick a new category."""
+    from datetime import datetime as _dt
+    import pytz
+
+    tz = pytz.timezone(TIMEZONE)
+    month_key = state.get("month_key") or sh.fmt_month(_dt.now(tz))
+    buckets = sh.get_active_buckets(month_key)
+
+    if not buckets:
+        await zalo.send_text(
+            "⚠️ Chưa có category nào. Dùng /manage trên Telegram.",
+            chat_id,
+        )
+        return
+
+    current_bucket = sh.bucket_label(rule["bucket_id"])
+    msg = (
+        f"🔑 {rule['keyword']}\n"
+        f"Hiện tại: {current_bucket}\n\n"
+        f"Đổi sang category nào?\n\n"
+    )
+    for i, b in enumerate(buckets, 1):
+        msg += f"{i}. {b['name']}\n"
+    msg += "\nReply số thứ tự category.\n/cancel để hủy."
+
+    sh.set_state(chat_id, {
+        **state,
+        "step": "zalo_kw_pick_edit_bucket",
+        "month_key": month_key,
+    })
+    await zalo.send_text(msg, chat_id)
+
+
+async def _zalo_kw_handle_edit_bucket_pick(text: str, chat_id: str, state: dict):
+    """User picked a new category number for an existing rule."""
+    from datetime import datetime as _dt
+    import pytz
+
+    if not text.strip().isdigit():
+        await zalo.send_text("⚠️ Reply số thứ tự category.", chat_id)
+        return
+
+    idx = int(text.strip())
+    tz = pytz.timezone(TIMEZONE)
+    month_key = state.get("month_key") or sh.fmt_month(_dt.now(tz))
+    buckets = sh.get_active_buckets(month_key)
+
+    if not (1 <= idx <= len(buckets)):
+        await zalo.send_text(
+            f"⚠️ Số {idx} không hợp lệ. Có {len(buckets)} categories.",
+            chat_id,
+        )
+        return
+
+    row_num = state.get("selected_row_num")
+    rules = sh.get_keyword_rules(force_refresh=True)
+    rule = next((r for r in rules if r["row_num"] == row_num), None)
+    if not rule:
+        await zalo.send_text("⚠️ Rule không còn tồn tại.", chat_id)
+        await _zalo_kw_show_list(chat_id)
+        return
+
+    new_bucket = buckets[idx - 1]
+    if rule["bucket_id"] == new_bucket["id"]:
+        await zalo.send_text("ℹ️ Category không đổi.", chat_id)
+        await _zalo_kw_show_list(chat_id)
+        return
+
+    ok = sh.update_keyword_rule(row_num, bucket_id=new_bucket["id"])
+    if ok:
+        old_name = sh.bucket_label(rule["bucket_id"])
+        await zalo.send_text(
+            f"✅ Đã đổi category cho {rule['keyword']}:\n"
+            f"{old_name} → {new_bucket['name']}",
+            chat_id,
+        )
+    else:
+        await zalo.send_text("⚠️ Lỗi khi cập nhật rule.", chat_id)
+    await _zalo_kw_show_list(chat_id)
+
+
+# ─── Zalo Manage: text-based interactive flow ─────────────────
+# Port of /manage (handlers/manage.py) to Zalo text-only interface.
+
+async def _zalo_mg_show_list(chat_id: str):
+    """Show all active buckets as a numbered list + action instructions."""
+    from datetime import datetime as _dt
+    import pytz
+
+    tz = pytz.timezone(TIMEZONE)
+    month_key = sh.fmt_month(_dt.now(tz))
+    buckets = sh.get_active_buckets(month_key)
+
+    if not buckets:
+        # Bootstrap defaults if none exist
+        async with sh.bootstrap_lock:
+            buckets = sh.get_active_buckets(month_key, force_refresh=True)
+            if not buckets:
+                sh.bootstrap_default_categories(month_key)
+                buckets = sh.get_active_buckets(month_key, force_refresh=True)
+
+    msg = f"⚙️ Manage Categories — {month_key}\n\n"
+    total = 0
+    for i, b in enumerate(buckets, 1):
+        alloc = b.get("allocated", 0)
+        if alloc > 0:
+            msg += f"{i}. {b['name']}   {sh.fmt_amount(alloc)}\n"
+            total += alloc
+        else:
+            msg += f"{i}. {b['name']}   🏷️ tracking\n"
+    msg += (
+        f"─────────────────────\n"
+        f"Total budgeted   {sh.fmt_amount(total)}\n\n"
+        "Reply:\n"
+        '- Số (VD: \"3\") để sửa/xóa category đó\n'
+        '- \"add\" để thêm category mới\n'
+        "- /cancel để thoát"
+    )
+
+    sh.set_state(chat_id, {"step": "zalo_mg_list", "month_key": month_key})
+    await zalo.send_text(msg, chat_id)
+
+
+async def _zalo_mg_handle_list_reply(text: str, chat_id: str, state: dict):
+    """Handle user reply when viewing the category list."""
+    text_lower = text.strip().lower()
+
+    if text_lower == "add":
+        sh.set_state(chat_id, {**state, "step": "zalo_mg_await_add_name"})
+        await zalo.send_text(
+            "➕ Add New Category\n\n"
+            "Nhập tên category mới:\n"
+            "(VD: 🎮 Gaming, ✈️ Travel, 🍕 Food)\n\n"
+            "/cancel để hủy.",
+            chat_id,
+        )
+        return
+
+    if text.strip().isdigit():
+        idx = int(text.strip())
+        month_key = state.get("month_key", "")
+        buckets = sh.get_active_buckets(month_key)
+        if 1 <= idx <= len(buckets):
+            bucket = buckets[idx - 1]
+            await _zalo_mg_show_actions(chat_id, state, bucket, idx)
+            return
+        else:
+            await zalo.send_text(
+                f"⚠️ Số {idx} không hợp lệ. Có {len(buckets)} categories.",
+                chat_id,
+            )
+            return
+
+    await zalo.send_text(
+        '⚠️ Không hiểu. Reply "add" hoặc số thứ tự category.',
+        chat_id,
+    )
+
+
+async def _zalo_mg_show_actions(chat_id: str, state: dict, bucket: dict, idx: int):
+    """Show the action menu for a selected bucket."""
+    month_key = state.get("month_key", "")
+    bkt_status = sh.get_bucket_status(bucket["id"], month_key)
+    subs = sh.get_sub_categories(bucket["id"])
+
+    if bkt_status["allocated"] > 0:
+        pct = sh.calc_pct(bkt_status["spent"], bkt_status["allocated"])
+        msg = (
+            f"⚙️ {bucket['name']}\n"
+            f"Mode: 💰 Budgeted\n"
+            f"Allocated: {sh.fmt_amount(bkt_status['allocated'])}\n"
+            f"Spent: {sh.fmt_amount(bkt_status['spent'])} ({pct}%)\n"
+            f"Sub-categories: {len(subs)} active\n\n"
+        )
+    else:
+        msg = (
+            f"⚙️ {bucket['name']}\n"
+            f"Mode: 🏷️ Tracking-only\n"
+            f"Spent: {sh.fmt_amount(bkt_status['spent'])} tháng này\n"
+            f"Sub-categories: {len(subs)} active\n\n"
+        )
+
+    msg += (
+        "Bạn muốn làm gì?\n\n"
+        "Reply:\n"
+        '"amount" — Sửa budget amount\n'
+        '"rename" — Đổi tên category\n'
+        '"subs" — Xem sub-categories\n'
+        '"del" — Xóa category\n'
+        '"back" — Quay lại danh sách'
+    )
+
+    sh.set_state(chat_id, {
+        **state,
+        "step": "zalo_mg_actions",
+        "selected_bucket_id": bucket["id"],
+        "selected_idx": idx,
+    })
+    await zalo.send_text(msg, chat_id)
+
+
+async def _zalo_mg_handle_action_reply(text: str, chat_id: str, state: dict):
+    """Handle action menu reply for a selected bucket."""
+    text_lower = text.strip().lower()
+    bucket_id = state.get("selected_bucket_id")
+    month_key = state.get("month_key", "")
+
+    if text_lower == "amount":
+        buckets = sh.get_active_buckets(month_key)
+        bucket = next((b for b in buckets if b["id"] == bucket_id), None)
+        if not bucket:
+            await zalo.send_text("⚠️ Category không còn tồn tại.", chat_id)
+            await _zalo_mg_show_list(chat_id)
+            return
+
+        current = sh.fmt_amount(bucket.get("allocated", 0)) if bucket.get("allocated", 0) > 0 else "🏷️ tracking-only"
+        sh.set_state(chat_id, {**state, "step": "zalo_mg_await_amount"})
+        await zalo.send_text(
+            f"💰 {bucket['name']} — hiện tại: {current}\n"
+            "Nhập số tiền mới (0 = chuyển sang tracking-only):\n\n"
+            "/cancel để hủy.",
+            chat_id,
+        )
+
+    elif text_lower == "rename":
+        name = sh.bucket_label(bucket_id)
+        sh.set_state(chat_id, {**state, "step": "zalo_mg_await_rename"})
+        await zalo.send_text(
+            f"✏️ Tên hiện tại: {name}\nNhập tên mới:\n\n/cancel để hủy.",
+            chat_id,
+        )
+
+    elif text_lower == "subs":
+        await _zalo_mg_show_subs(chat_id, state, bucket_id)
+
+    elif text_lower == "del":
+        name = sh.bucket_label(bucket_id)
+        tx_count = sh.count_bucket_transactions(bucket_id, month_key)
+        sh.set_state(chat_id, {**state, "step": "zalo_mg_confirm_del"})
+        await zalo.send_text(
+            f"⚠️ Xóa {name}?\n\n"
+            f"Bucket này có {tx_count} transactions trong tháng.\n"
+            "Transactions đã categorize sẽ KHÔNG bị ảnh hưởng.\n\n"
+            'Reply "yes" để xác nhận, "no" để hủy.',
+            chat_id,
+        )
+
+    elif text_lower == "back":
+        await _zalo_mg_show_list(chat_id)
+
+    else:
+        await zalo.send_text(
+            '⚠️ Không hiểu. Reply "amount", "rename", "subs", "del" hoặc "back".',
+            chat_id,
+        )
+
+
+async def _zalo_mg_handle_rename(text: str, chat_id: str, state: dict):
+    """Handle freetext input for new bucket name."""
+    new_name = text.strip()
+    if not new_name:
+        await zalo.send_text("⚠️ Tên không được để trống. Thử lại:", chat_id)
+        return
+
+    bucket_id = state.get("selected_bucket_id")
+    month_key = state.get("month_key", "")
+    old_name = sh.bucket_label(bucket_id)
+
+    sh.update_bucket(month_key, bucket_id, {"name": new_name})
+    await zalo.send_text(f"✅ Renamed: {old_name} → {new_name}", chat_id)
+    await _zalo_mg_show_list(chat_id)
+
+
+async def _zalo_mg_handle_amount(text: str, chat_id: str, state: dict):
+    """Handle freetext input for new allocation amount."""
+    try:
+        digits = "".join(c for c in text if c.isdigit())
+        amount = int(digits) if digits else -1
+        assert amount >= 0
+    except Exception:
+        await zalo.send_text("⚠️ Số tiền không hợp lệ. Thử lại (VD: 3000000 hoặc 0).", chat_id)
+        return
+
+    bucket_id = state.get("selected_bucket_id")
+    month_key = state.get("month_key", "")
+    name = sh.bucket_label(bucket_id)
+
+    sh.update_bucket(month_key, bucket_id, {"allocated": amount})
+    if amount > 0:
+        await zalo.send_text(f"✅ Updated: {name} → {sh.fmt_amount(amount)}", chat_id)
+    else:
+        await zalo.send_text(f"✅ Updated: {name} → 🏷️ tracking-only", chat_id)
+    await _zalo_mg_show_list(chat_id)
+
+
+async def _zalo_mg_handle_confirm_del(text: str, chat_id: str, state: dict):
+    """Handle delete confirmation reply."""
+    text_lower = text.strip().lower()
+    bucket_id = state.get("selected_bucket_id")
+    month_key = state.get("month_key", "")
+
+    if text_lower in ("yes", "y", "co", "có"):
+        name = sh.bucket_label(bucket_id)
+        sh.soft_delete_bucket(month_key, bucket_id)
+        await zalo.send_text(f"🗑️ Deleted: {name}", chat_id)
+        await _zalo_mg_show_list(chat_id)
+
+    elif text_lower in ("no", "n", "khong", "không"):
+        await zalo.send_text("← Đã hủy xóa.", chat_id)
+        await _zalo_mg_show_list(chat_id)
+
+    else:
+        await zalo.send_text('⚠️ Reply "yes" để xóa, "no" để hủy.', chat_id)
+
+
+async def _zalo_mg_handle_add_name(text: str, chat_id: str, state: dict):
+    """Handle freetext input for new category name."""
+    import unicodedata
+    import re
+
+    name = text.strip()
+    if not name:
+        await zalo.send_text("⚠️ Tên không được để trống. Thử lại:", chat_id)
+        return
+
+    # Generate a slug-style ID from the name
+    nid = unicodedata.normalize("NFD", name.lower())
+    nid = re.sub(r"[\u0300-\u036f]", "", nid)  # strip diacritics
+    nid = re.sub(r"[^\w\s]", "", nid)            # strip emoji/symbols
+    nid = re.sub(r"\s+", "_", nid.strip())
+    nid = re.sub(r"[^a-z0-9_]", "", nid)
+    if not nid:
+        nid = "custom"
+
+    month_key = state.get("month_key", "")
+    existing = sh.get_active_buckets(month_key, force_refresh=True)
+    if any(b["id"] == nid for b in existing):
+        await zalo.send_text(
+            f"⚠️ Category {name} đã tồn tại rồi!\n"
+            "Nhập tên khác hoặc /cancel để hủy.",
+            chat_id,
+        )
+        return
+
+    sh.set_state(chat_id, {
+        **state,
+        "step": "zalo_mg_await_add_amount",
+        "new_cat_name": name,
+        "new_cat_id": nid,
+    })
+    await zalo.send_text(
+        f"💰 {name}\n\n"
+        "Nhập budget amount (VD: 2000000)\n"
+        '- Nhập 0 hoặc "track" để tracking-only\n\n'
+        "/cancel để hủy.",
+        chat_id,
+    )
+
+
+async def _zalo_mg_handle_add_amount(text: str, chat_id: str, state: dict):
+    """Handle freetext input for new category amount."""
+    text_lower = text.strip().lower()
+
+    if text_lower == "track":
+        amount = 0
+    else:
+        try:
+            digits = "".join(c for c in text if c.isdigit())
+            amount = int(digits) if digits else -1
+            assert amount >= 0
+        except Exception:
+            await zalo.send_text(
+                '⚠️ Số tiền không hợp lệ. Thử lại (VD: 2000000 hoặc "track").',
+                chat_id,
+            )
+            return
+
+    month_key = state.get("month_key", "")
+    name = state["new_cat_name"]
+    nid = state["new_cat_id"]
+
+    new_bucket = {
+        "id": nid,
+        "name": name,
+        "allocated": amount,
+        "daily_cap": None,
+    }
+    sh.write_budget_row(month_key, new_bucket)
+    sh.invalidate_buckets_cache()
+
+    if amount > 0:
+        await zalo.send_text(f"✅ Đã thêm: {name} — {sh.fmt_amount(amount)}", chat_id)
+    else:
+        await zalo.send_text(f"✅ Đã thêm: {name} — 🏷️ tracking-only", chat_id)
+    await _zalo_mg_show_list(chat_id)
+
+
+# ─── Zalo Manage: Sub-categories ──────────────────────────────
+
+async def _zalo_mg_show_subs(chat_id: str, state: dict, bucket_id: str):
+    """Show all active sub-categories for a bucket as numbered list."""
+    name = sh.bucket_label(bucket_id)
+    subs = sh.get_sub_categories(bucket_id)
+
+    if not subs:
+        sh.set_state(chat_id, {**state, "step": "zalo_mg_list"})
+        await zalo.send_text(
+            f"📂 {name} — no sub-categories yet.\n"
+            "They'll be created automatically when you categorize transactions.\n\n"
+            "Reply số thứ tự category khác hoặc /cancel để thoát.",
+            chat_id,
+        )
+        return
+
+    msg = f"📂 Sub-categories of {name}\n\n"
+    for i, s in enumerate(subs, 1):
+        msg += f"{i}. {s['label']}\n"
+    msg += (
+        "\nReply:\n"
+        '- Số để sửa/xóa sub-category\n'
+        '"back" — quay lại category list\n'
+        "/cancel để thoát"
+    )
+
+    sh.set_state(chat_id, {
+        **state,
+        "step": "zalo_mg_subs",
+        "selected_bucket_id": bucket_id,
+    })
+    await zalo.send_text(msg, chat_id)
+
+
+async def _zalo_mg_handle_sub_reply(text: str, chat_id: str, state: dict):
+    """Handle user reply when viewing sub-categories."""
+    text_lower = text.strip().lower()
+    bucket_id = state.get("selected_bucket_id")
+
+    if text_lower == "back":
+        await _zalo_mg_show_list(chat_id)
+        return
+
+    if text.strip().isdigit():
+        idx = int(text.strip())
+        subs = sh.get_sub_categories(bucket_id)
+        if 1 <= idx <= len(subs):
+            sub = subs[idx - 1]
+            name = sh.bucket_label(bucket_id)
+            sh.set_state(chat_id, {
+                **state,
+                "step": "zalo_mg_sub_actions",
+                "selected_sub_key": sub["key"],
+            })
+            await zalo.send_text(
+                f"⚙️ {sub['label']}\n(sub of {name})\n\n"
+                "Reply:\n"
+                '"rename" — Đổi tên\n'
+                '"del" — Xóa sub-category\n'
+                '"back" — Quay lại danh sách subs',
+                chat_id,
+            )
+            return
+        else:
+            await zalo.send_text(
+                f"⚠️ Số {idx} không hợp lệ. Có {len(subs)} sub-categories.",
+                chat_id,
+            )
+            return
+
+    await zalo.send_text('⚠️ Reply số thứ tự hoặc "back".', chat_id)
+
+
+async def _zalo_mg_handle_sub_action(text: str, chat_id: str, state: dict):
+    """Handle action for a selected sub-category."""
+    text_lower = text.strip().lower()
+    bucket_id = state.get("selected_bucket_id")
+    sub_key = state.get("selected_sub_key")
+
+    if text_lower == "rename":
+        sub_label = sh.get_sub_label(bucket_id, sub_key)
+        sh.set_state(chat_id, {**state, "step": "zalo_mg_await_sub_rename"})
+        await zalo.send_text(
+            f"✏️ Tên hiện tại: {sub_label}\nNhập tên mới:\n\n/cancel để hủy.",
+            chat_id,
+        )
+
+    elif text_lower == "del":
+        sub_label = sh.get_sub_label(bucket_id, sub_key)
+        sh.set_state(chat_id, {**state, "step": "zalo_mg_confirm_sub_del"})
+        await zalo.send_text(
+            f"⚠️ Xóa sub-category: {sub_label}?\n\n"
+            'Reply "yes" để xác nhận, "no" để hủy.',
+            chat_id,
+        )
+
+    elif text_lower == "back":
+        await _zalo_mg_show_subs(chat_id, state, bucket_id)
+
+    else:
+        await zalo.send_text(
+            '⚠️ Reply "rename", "del" hoặc "back".',
+            chat_id,
+        )
+
+
+async def _zalo_mg_handle_sub_rename(text: str, chat_id: str, state: dict):
+    """Handle freetext input for new sub-category name."""
+    new_name = text.strip()
+    if not new_name:
+        await zalo.send_text("⚠️ Tên không được để trống. Thử lại:", chat_id)
+        return
+
+    bucket_id = state.get("selected_bucket_id")
+    sub_key = state.get("selected_sub_key")
+    old_label = sh.get_sub_label(bucket_id, sub_key)
+
+    sh.update_sub_category(bucket_id, sub_key, new_name)
+    await zalo.send_text(f"✅ Renamed: {old_label} → {new_name}", chat_id)
+    await _zalo_mg_show_subs(chat_id, state, bucket_id)
+
+
+async def _zalo_mg_handle_confirm_sub_del(text: str, chat_id: str, state: dict):
+    """Handle delete confirmation for sub-category."""
+    text_lower = text.strip().lower()
+    bucket_id = state.get("selected_bucket_id")
+    sub_key = state.get("selected_sub_key")
+
+    if text_lower in ("yes", "y", "co", "có"):
+        sub_label = sh.get_sub_label(bucket_id, sub_key)
+        sh.soft_delete_sub_category(bucket_id, sub_key)
+        await zalo.send_text(f"🗑️ Deleted: {sub_label}", chat_id)
+        await _zalo_mg_show_subs(chat_id, state, bucket_id)
+
+    elif text_lower in ("no", "n", "khong", "không"):
+        await zalo.send_text("← Đã hủy xóa.", chat_id)
+        await _zalo_mg_show_subs(chat_id, state, bucket_id)
+
+    else:
+        await zalo.send_text('⚠️ Reply "yes" để xóa, "no" để hủy.', chat_id)
+
+
+# ─── Zalo Allocate: text-based budget allocation ──────────────
+# Port of /allocate edit mode (handlers/allocation.py) to Zalo.
+# Only supports edit mode (buckets already exist). First-time setup
+# is complex (wizard) and is best done on Telegram.
+
+async def _zalo_al_show_list(chat_id: str):
+    """Show budget summary as numbered list + edit instructions."""
+    from datetime import datetime as _dt
+    import pytz
+
+    tz = pytz.timezone(TIMEZONE)
+    month_key = sh.fmt_month(_dt.now(tz))
+    buckets = sh.get_active_buckets(month_key, force_refresh=True)
+
+    if not buckets:
+        await zalo.send_text(
+            f"💰 Budget — {month_key}\n\n"
+            "Chưa có category nào.\n"
+            "Dùng /manage để tạo categories trước, rồi quay lại /allocate.",
+            chat_id,
+        )
+        return
+
+    msg = f"💰 Budget — {month_key}\n\n"
+    total = 0
+    for i, b in enumerate(buckets, 1):
+        alloc = b.get("allocated", 0) or 0
+        if alloc > 0:
+            msg += f"{i}. {b['name']}   {sh.fmt_amount(alloc)}\n"
+            total += alloc
+        else:
+            msg += f"{i}. {b['name']}   🏷️ tracking\n"
+    msg += (
+        f"─────────────────────\n"
+        f"Total: {sh.fmt_amount(total)}\n\n"
+        "Reply:\n"
+        '- Số (VD: "2") để sửa limit cho bucket đó\n'
+        "- /cancel để thoát"
+    )
+
+    sh.set_state(chat_id, {"step": "zalo_al_list", "month_key": month_key})
+    await zalo.send_text(msg, chat_id)
+
+
+async def _zalo_al_handle_list_reply(text: str, chat_id: str, state: dict):
+    """Handle user reply when viewing the budget list."""
+    if not text.strip().isdigit():
+        await zalo.send_text("⚠️ Reply số thứ tự bucket.", chat_id)
+        return
+
+    idx = int(text.strip())
+    month_key = state.get("month_key", "")
+    buckets = sh.get_active_buckets(month_key)
+
+    if not (1 <= idx <= len(buckets)):
+        await zalo.send_text(
+            f"⚠️ Số {idx} không hợp lệ. Có {len(buckets)} buckets.",
+            chat_id,
+        )
+        return
+
+    bucket = buckets[idx - 1]
+    current_alloc = bucket.get("allocated", 0) or 0
+    current = sh.fmt_amount(current_alloc) if current_alloc > 0 else "🏷️ tracking-only"
+
+    sh.set_state(chat_id, {
+        **state,
+        "step": "zalo_al_await_amount",
+        "edit_bucket_id": bucket["id"],
+        "edit_bucket_name": bucket["name"],
+    })
+    await zalo.send_text(
+        f"✏️ {bucket['name']} (hiện: {current})\n\n"
+        f"Nhập limit mới cho {month_key}:\n"
+        "(số, vd 3000000, hoặc 0 để track-only)\n\n"
+        "/cancel để hủy.",
+        chat_id,
+    )
+
+
+async def _zalo_al_handle_amount(text: str, chat_id: str, state: dict):
+    """Handle freetext input for new bucket allocation amount."""
+    raw = "".join(c for c in text if c.isdigit())
+    if not raw:
+        await zalo.send_text(
+            "⚠️ Số không hợp lệ. Thử lại (vd 3000000 hoặc 0).",
+            chat_id,
+        )
+        return
+    try:
+        amount = int(raw)
+    except ValueError:
+        await zalo.send_text("⚠️ Số không hợp lệ.", chat_id)
+        return
+    if amount < 0:
+        await zalo.send_text("⚠️ Số phải ≥ 0. 0 = track-only.", chat_id)
+        return
+
+    month_key = state.get("month_key", "")
+    bucket_id = state.get("edit_bucket_id", "")
+    bucket_name = state.get("edit_bucket_name", bucket_id)
+
+    if not month_key or not bucket_id:
+        await zalo.send_text("⚠️ State đã hết hạn. Chạy /allocate lại.", chat_id)
+        sh.set_state(chat_id, {})
+        return
+
+    buckets = sh.get_active_buckets(month_key)
+    bucket = next((b for b in buckets if b["id"] == bucket_id), None)
+    if not bucket:
+        await zalo.send_text(f"⚠️ Bucket {bucket_name} đã biến mất.", chat_id)
+        sh.set_state(chat_id, {})
+        return
+
+    bucket["allocated"] = amount
+    sh.write_budget_row(month_key, bucket)
+    sh.invalidate_buckets_cache()
+
+    suffix = " (track-only)" if amount == 0 else ""
+    await zalo.send_text(
+        f"✅ Đã update {bucket_name} → {sh.fmt_amount(amount)}{suffix}",
+        chat_id,
+    )
+    await _zalo_al_show_list(chat_id)
+

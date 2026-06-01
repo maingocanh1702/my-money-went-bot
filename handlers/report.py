@@ -415,6 +415,18 @@ def _buttons(period_code: str, lens_code: str) -> list:
 # ─── Public entry points ────────────────────────────────────────
 
 
+def build_report_text(period_code: str = "m", lens_code: str = "c") -> str:
+    """Build report text for the given period/lens. No buttons, no send.
+    Used by Zalo dispatcher to serve /report as plain text.
+    """
+    if period_code not in PERIOD_CODES:
+        period_code = "m"
+    if lens_code not in LENS_CODES:
+        lens_code = "c"
+    data = _scan_period(period_code)
+    return _render_account_lens(data) if lens_code == "a" else _render_category_lens(data)
+
+
 _PERIOD_ALIASES = {
     "tuần": "w", "tuan": "w", "week": "w", "w": "w",
     "tháng": "m", "thang": "m", "month": "m", "m": "m",
