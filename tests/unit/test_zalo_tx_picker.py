@@ -60,8 +60,9 @@ def _mock_accounts(monkeypatch):
 
 def _base_payload(ref: str = "ref_001") -> dict:
     """Minimal valid SePay outgoing payload."""
+    from config import SEPAY_SECRET  # read the live value — CI overrides it via env vars
     return {
-        "apikey": "test_sepay_secret",
+        "apikey": SEPAY_SECRET,
         "transferType": "out",
         "transferAmount": 50000,
         "description": "GRAB FOOD",
