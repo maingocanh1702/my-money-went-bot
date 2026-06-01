@@ -11,7 +11,7 @@ from datetime import datetime
 import pytz
 
 from config import CHAT_ID, TELEGRAM_WEBHOOK_SECRET, CRON_SECRET, TIMEZONE
-from config import ZALO_ENABLED, ZALO_INTERACTIVE, ZALO_WEBHOOK_SECRET, ZALO_USER_ID, ZALO_CHAT_ID
+from config import ZALO_ENABLED, ZALO_INTERACTIVE, ZALO_WEBHOOK_SECRET, ZALO_USER_ID
 import sheets as sh
 import telegram_api as tg
 import zalo_api as zalo
