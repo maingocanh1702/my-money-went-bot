@@ -7,7 +7,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 import pytz
 
-from config import CHAT_ID, TIMEZONE, SEPAY_SECRET
+from config import CHAT_ID, TIMEZONE, SEPAY_SECRET, TELEGRAM_ENABLED
 import sheets as sh
 import telegram_api as tg
 import notifier
@@ -238,22 +238,32 @@ async def handle_sepay_webhook(payload: dict):
             await prompt_new_account(resolved.source_key, resolved.identifier, row_num)
         return
 
-    sh.set_state(CHAT_ID, {
-        "step": "await_parent",
-        "row_num": row_num,
-        "amount": amount,
-        "currency": currency,
-        "description": description,
-        "tx_direction": "out",
-    })
-
-    buttons = tg.build_bucket_buttons(buckets, f"p_{row_num}", include_new=True)
-    await tg.send_with_buttons(
-        f"💸 *-{sh.fmt_amount(amount, currency)}*\n"
-        f"`{description}`\n\n"
-        f"Khoản này thuộc mục nào? 🤔",
-        buttons,
-    )
+    if TELEGRAM_ENABLED:
+        sh.set_state(CHAT_ID, {
+            "step": "await_parent",
+            "row_num": row_num,
+            "amount": amount,
+            "currency": currency,
+            "description": description,
+            "tx_direction": "out",
+        })
+        buttons = tg.build_bucket_buttons(buckets, f"p_{row_num}", include_new=True)
+        await tg.send_with_buttons(
+            f"💸 *-{sh.fmt_amount(amount, currency)}*\n"
+            f"`{description}`\n\n"
+            f"Khoản này thuộc mục nào? 🤔",
+            buttons,
+        )
+    else:
+        # Telegram disabled — no interactive picker available.
+        # Transaction is recorded; user can set up keyword rules via /keywords
+        # so future matching transactions are auto-categorized.
+        await notifier.send_text(
+            f"💸 *-{sh.fmt_amount(amount, currency)}*\n"
+            f"`{description}`\n\n"
+            f"Giao dịch đã ghi nhận (row {row_num}). "
+            f"Dùng /keywords để tạo rule phân loại tự động cho giao dịch tương tự."
+        )
 
     # Account onboarding prompt AFTER the tx notification — see incoming
     # branch for rationale.

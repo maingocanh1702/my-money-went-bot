@@ -10,8 +10,11 @@ import uuid
 from datetime import datetime
 import pytz
 
-from config import CHAT_ID, TELEGRAM_WEBHOOK_SECRET, CRON_SECRET, TIMEZONE
-from config import ZALO_ENABLED, ZALO_INTERACTIVE, ZALO_WEBHOOK_SECRET, ZALO_USER_ID
+from config import (
+    CHAT_ID, TELEGRAM_WEBHOOK_SECRET, CRON_SECRET, TIMEZONE,
+    TELEGRAM_ENABLED, ZALO_ENABLED, ZALO_INTERACTIVE, ZALO_WEBHOOK_SECRET, ZALO_USER_ID,
+)
+import notifier
 import sheets as sh
 import telegram_api as tg
 import zalo_api as zalo
@@ -52,10 +55,11 @@ _CALLBACK_MIN_PARTS = {
 async def on_startup():
     import os
     print(f"[startup] running on port {os.environ.get('PORT', 8000)}")
-    try:
-        await tg.set_my_commands()
-    except Exception as e:
-        print(f"[startup] set_my_commands failed (no internet?): {e}")
+    if TELEGRAM_ENABLED:
+        try:
+            await tg.set_my_commands()
+        except Exception as e:
+            print(f"[startup] set_my_commands failed (no internet?): {e}")
 
 
 # ─── Webhook endpoint ─────────────────────────────────────────
@@ -74,8 +78,11 @@ async def webhook(request: Request, bg: BackgroundTasks):
     except Exception:
         return JSONResponse({"ok": True})
 
-    # Telegram updates carry "update_id" — require webhook secret header
+    # Telegram updates carry "update_id" — reject when Telegram is disabled or
+    # when the webhook secret header is missing/wrong.
     if "update_id" in body:
+        if not TELEGRAM_ENABLED:
+            return JSONResponse({"ok": True})
         tg_secret = request.headers.get("x-telegram-bot-api-secret-token", "")
         if not hmac.compare_digest(tg_secret, TELEGRAM_WEBHOOK_SECRET):
             print("[webhook] rejected: invalid Telegram webhook secret")
@@ -167,7 +174,7 @@ async def _process(body: dict):
         err_id = uuid.uuid4().hex[:8]
         print(f"ERROR [{err_id}]:", traceback.format_exc())
         try:
-            await tg.send_text(f"⚠️ Bot gặp lỗi (ref: `{err_id}`). Check server logs.")
+            await notifier.send_text(f"⚠️ Bot gặp lỗi (ref: `{err_id}`). Check server logs.")
         except Exception:
             pass  # don't let notification failure mask the original error
 

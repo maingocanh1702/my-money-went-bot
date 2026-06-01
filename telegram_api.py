@@ -39,6 +39,8 @@ async def _post_with_md_fallback(endpoint: str, payload: dict, label: str):
 
 
 async def send_text(text: str, chat_id: str = None):
+    if not (BOT_TOKEN and CHAT_ID):
+        return None
     chat_id = chat_id or CHAT_ID
     payload = {
         "chat_id":    chat_id,
@@ -49,6 +51,8 @@ async def send_text(text: str, chat_id: str = None):
 
 
 async def send_with_buttons(text: str, inline_keyboard: list, chat_id: str = None):
+    if not (BOT_TOKEN and CHAT_ID):
+        return None
     chat_id = chat_id or CHAT_ID
     payload = {
         "chat_id":      chat_id,
@@ -68,6 +72,8 @@ async def edit_message(
     """Edit an existing message in place. Optionally replace its inline
     keyboard at the same time — passing inline_keyboard=[] clears the buttons.
     """
+    if not (BOT_TOKEN and CHAT_ID):
+        return None
     chat_id = chat_id or CHAT_ID
     payload = {
         "chat_id":    chat_id,
@@ -81,6 +87,8 @@ async def edit_message(
 
 
 async def delete_message(message_id: int, chat_id: str = None):
+    if not (BOT_TOKEN and CHAT_ID):
+        return None
     chat_id = chat_id or CHAT_ID
     await _client.post(f"{BASE}/deleteMessage", json={
         "chat_id":    chat_id,
@@ -89,12 +97,16 @@ async def delete_message(message_id: int, chat_id: str = None):
 
 
 async def answer_callback(callback_id: str):
+    if not (BOT_TOKEN and CHAT_ID):
+        return None
     await _client.post(f"{BASE}/answerCallbackQuery", json={
         "callback_query_id": callback_id,
     })
 
 
 async def set_my_commands():
+    if not (BOT_TOKEN and CHAT_ID):
+        return None
     commands = [
         {"command": "report",   "description": "📊 Chi tiêu theo account + category (tuần/tháng/quý/năm)"},
         {"command": "today",    "description": "🍜 Hôm nay tiêu bao nhiêu?"},
@@ -109,6 +121,8 @@ async def set_my_commands():
 
 async def drop_pending_updates():
     """Call once after setting webhook to flush stale updates."""
+    if not (BOT_TOKEN and CHAT_ID):
+        return None
     r = await _client.get(f"{BASE}/getWebhookInfo")
     print("Webhook info:", r.json())
 
