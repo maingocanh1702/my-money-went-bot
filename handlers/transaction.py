@@ -168,7 +168,7 @@ async def handle_inline_new_cat_name(text: str, state: dict):
         return
 
     tz = pytz.timezone(TIMEZONE)
-    month_key = sh.fmt_month(datetime.now(tz))
+    month_key = state.get("month_key") or sh.fmt_month(datetime.now(tz))
 
     # Dedup against existing buckets this month
     existing = sh.get_active_buckets(month_key, force_refresh=True)
@@ -193,16 +193,27 @@ async def handle_recategorize(parts: list[str], message_id: int):
     description = row[5] if len(row) > 5 else ""
     currency = sh.row_currency(row)
 
+    ledger_type = (row[17] if len(row) > 17 else "").strip().lower()
+    if ledger_type in ("transfer", "cc_payment"):
+        await tg.send_text("ℹ️ Giao dịch chuyển khoản / trả thẻ có ledger riêng — không recat.")
+        return
+
+    row_month = row[14] if len(row) > 14 else ""
+    tz = pytz.timezone(TIMEZONE)
+    month_key = row_month or sh.fmt_month(datetime.now(tz))
+    buckets = sh.get_active_buckets(month_key)
+    if not buckets:
+        await tg.send_text(f"⚠️ Không có category active cho tháng {month_key}. Dùng /manage trước.")
+        return
+
     # Reset finalized columns so the transaction isn't double-counted
     sh.reset_transaction_row(row_num)
-
-    tz = pytz.timezone(TIMEZONE)
-    month_key = sh.fmt_month(datetime.now(tz))
-    buckets = sh.get_active_buckets(month_key)
 
     sh.set_state(CHAT_ID, {
         "step": "await_parent", "row_num": row_num,
         "amount": amount, "currency": currency, "description": description,
+        "month_key": month_key,
+        "tx_date": row[1] if len(row) > 1 else "",
     })
 
     buttons = tg.build_bucket_buttons(buckets, f"p_{row_num}", include_new=True)
@@ -241,8 +252,22 @@ async def _finalize(row_num: int, parent_category: str, sub_label: str, message_
 
     tx_direction = state.get("tx_direction", "out")
     tx_date_str  = state.get("tx_date")
-    tx_date      = datetime.fromisoformat(tx_date_str) if tx_date_str else datetime.now(tz)
-    month_key    = sh.fmt_month(tx_date)
+    if tx_date_str:
+        try:
+            tx_date = datetime.fromisoformat(tx_date_str)
+            if tx_date.tzinfo is None:
+                # Naive ISO strings (no offset) represent local VN time — localize
+                # rather than letting get_daily_status treat them as UTC.
+                tx_date = tz.localize(tx_date)
+        except ValueError:
+            # fromisoformat rejects Vietnamese format (dd/mm/yyyy); _parse_dt handles it.
+            # Vietnamese dates represent local VN time — strip the synthetic UTC that
+            # _parse_dt adds to naive datetimes and re-localize in the bot timezone.
+            parsed = sh._parse_dt(tx_date_str)
+            tx_date = tz.localize(parsed.replace(tzinfo=None)) if parsed else datetime.now(tz)
+    else:
+        tx_date = datetime.now(tz)
+    month_key    = state.get("month_key") or sh.fmt_month(tx_date)
     is_daily     = parent_category == DAILY_BUCKET_ID
     parent_name  = sh.bucket_label(parent_category)
     sub_disp     = f" · {sub_label}" if sub_label else ""

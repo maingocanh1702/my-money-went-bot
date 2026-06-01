@@ -7,8 +7,10 @@ from fastapi.responses import JSONResponse
 import asyncio
 import hmac
 import uuid
+from datetime import datetime
+import pytz
 
-from config import CHAT_ID, TELEGRAM_WEBHOOK_SECRET, CRON_SECRET
+from config import CHAT_ID, TELEGRAM_WEBHOOK_SECRET, CRON_SECRET, TIMEZONE
 import sheets as sh
 import telegram_api as tg
 from handlers.sepay        import handle_sepay_webhook
@@ -255,8 +257,55 @@ async def _handle_message(message: dict):
             "/accounts — list account đã setup / add mới\n"
             "/manage   — sửa categories\n"
             "/keywords — auto-phân loại theo keyword\n"
-            "/allocate — (optional) đặt budget cho từng mục"
+            "/allocate — (optional) đặt budget cho từng mục\n"
+            "/recat    — re-categorize một giao dịch cũ theo số dòng"
         )
+
+
+async def _cmd_recat(text: str):
+    """/recat <row_num> — re-categorize a past transaction via the bucket picker."""
+    parts = text.strip().split()
+    if len(parts) < 2 or not parts[1].isdigit():
+        await tg.send_text("Usage: `/recat <row_number>`\nVd: `/recat 125`")
+        return
+    row_num = int(parts[1])
+    if row_num < 2:
+        await tg.send_text(f"⚠️ Không tìm thấy transaction row {row_num}.")
+        return
+    row = sh.get_transaction_row(row_num)
+    if not row:
+        await tg.send_text(f"⚠️ Không tìm thấy transaction row {row_num}.")
+        return
+    direction = "in" if (row[6] if len(row) > 6 else "") == "Tiền vào" else "out"
+    if direction == "in":
+        await tg.send_text("ℹ️ Income hiện không cần category. Không recat.")
+        return
+    ledger_type = (row[17] if len(row) > 17 else "").strip().lower()
+    if ledger_type in ("transfer", "cc_payment"):
+        await tg.send_text("ℹ️ Giao dịch chuyển khoản / trả thẻ có ledger riêng — không recat.")
+        return
+    amount = sh._parse_amount(row[7]) if len(row) > 7 else 0
+    description = row[5] if len(row) > 5 else ""
+    currency = sh.row_currency(row)
+    row_month = row[14] if len(row) > 14 else ""
+    month_key = row_month or sh.fmt_month(datetime.now(pytz.timezone(TIMEZONE)))
+    buckets = sh.get_active_buckets(month_key)
+    if not buckets:
+        await tg.send_text(f"⚠️ Không có category active cho tháng {month_key}. Dùng /manage trước.")
+        return
+    sh.reset_transaction_row(row_num)
+    sh.set_state(CHAT_ID, {
+        "step": "await_parent", "row_num": row_num,
+        "amount": amount, "currency": currency, "description": description,
+        "month_key": month_key,
+        "tx_date": row[1] if len(row) > 1 else "",
+    })
+    buttons = tg.build_bucket_buttons(buckets, f"p_{row_num}", include_new=True)
+    await tg.send_with_buttons(
+        f"↩️ *Re-categorize: -{sh.fmt_amount(amount, currency)}*\n"
+        f"`{description}`\n\nKhoản này thuộc mục nào?",
+        buttons,
+    )
 
 
 async def _handle_command(text: str):
@@ -273,8 +322,10 @@ async def _handle_command(text: str):
         await start_keywords()
     elif cmd == "/allocate":
         await start_monthly_allocation()
+    elif cmd == "/recat":
+        await _cmd_recat(text)
     else:
         await tg.send_text(
             "Unknown command. Try /today, /report, /accounts, /manage, "
-            "/keywords, or /allocate."
+            "/keywords, /allocate, or /recat."
         )

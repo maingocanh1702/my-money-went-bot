@@ -102,6 +102,7 @@ async def set_my_commands():
         {"command": "manage",   "description": "⚙️ Sửa/xóa categories"},
         {"command": "keywords", "description": "🔑 Auto-phân loại theo keyword"},
         {"command": "allocate", "description": "💰 (Optional) đặt budget"},
+        {"command": "recat",    "description": "↩️ Re-categorize một giao dịch cũ"},
     ]
     await _client.post(f"{BASE}/setMyCommands", json={"commands": commands})
 

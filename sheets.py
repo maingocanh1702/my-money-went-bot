@@ -412,6 +412,8 @@ def _parse_dt(date_str: str):
         "%Y-%m-%dT%H:%M:%S",
         "%Y-%m-%dT%H:%M:%S.%f",
         "%Y-%m-%dT%H:%M:%S%z",
+        "%Y-%m-%d %H:%M:%S%z",   # str(tz_aware_datetime) uses space, not T
+        "%Y-%m-%d %H:%M:%S",
         "%d/%m/%Y %H:%M:%S",
         "%d/%m/%Y %H:%M",
     ):
