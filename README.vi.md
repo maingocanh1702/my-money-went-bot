@@ -146,6 +146,18 @@ Chi tiết từng tính năng:
     <td>Tx từ Bách Hóa Xanh match rule <code>/keywords</code> → auto-tag Food, không hỏi. Bot reply lại số tiền đã log + progress của bucket.</td>
     <td>Tổng spending vs budget, budget bar từng bucket với emoji trạng thái, có thêm section Tracking cho bucket bạn theo dõi mà không đặt cap.</td>
   </tr>
+  <tr>
+    <td width="50%" align="center"><b>📊 <code>/report</code> — lens category</b></td>
+    <td width="50%" align="center"><b>🏦 <code>/report</code> — lens account</b></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/report-monthly-category-telegram.png" alt="Báo cáo Telegram theo category với budget và tracking" /></td>
+    <td><img src="docs/screenshots/report-monthly-account-telegram.png" alt="Báo cáo Telegram theo account với cảnh báo budget" /></td>
+  </tr>
+  <tr>
+    <td>Lens category hiển thị tổng chi tiêu theo budget, bucket đã cap, bucket chỉ tracking, ngày chi nặng nhất, và daily average.</td>
+    <td>Lens account nhóm dòng tiền theo từng tài khoản, kèm cảnh báo bucket vượt budget để bạn đổi kỳ hoặc chuyển lens ngay trong chat.</td>
+  </tr>
 </table>
 
 **💬 Trên Zalo** — cùng luồng đó qua menu đánh số (reply số để chọn category):

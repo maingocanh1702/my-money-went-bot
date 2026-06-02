@@ -147,6 +147,18 @@ The full feature breakdown:
     <td>Tx from Bach Hoa Xanh hits a <code>/keywords</code> rule → auto-tagged Food, no prompt. Bot replies with logged amount + bucket progress.</td>
     <td>Tổng spending vs budget, per-bucket budget bars with status emoji, plus a Tracking section for buckets you watch without capping.</td>
   </tr>
+  <tr>
+    <td width="50%" align="center"><b>📊 <code>/report</code> — category lens</b></td>
+    <td width="50%" align="center"><b>🏦 <code>/report</code> — account lens</b></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/report-monthly-category-telegram.png" alt="Telegram category-lens report with budgets and tracking buckets" /></td>
+    <td><img src="docs/screenshots/report-monthly-account-telegram.png" alt="Telegram account-lens report with budget warning" /></td>
+  </tr>
+  <tr>
+    <td>The category lens shows spending vs budget, capped buckets, tracking-only buckets, the heaviest day, and daily average.</td>
+    <td>The account lens groups cash flow by account and surfaces budget warnings, while keeping period and lens switching inside chat.</td>
+  </tr>
 </table>
 
 **💬 On Zalo** — the same flow through a numbered-text menu (reply a number to pick a category):
