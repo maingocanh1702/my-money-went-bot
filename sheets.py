@@ -366,11 +366,41 @@ def get_default_buckets() -> list[dict]:
     ]
 
 
+def _default_tombstoned(bucket_id: str, rows: list) -> bool:
+    """True nếu user đã CỐ Ý xoá default này và chưa thêm lại.
+
+    Tombstone cross-month: nhìn vào row Budget Config mới nhất (theo month_key)
+    của `bucket_id` trên TẤT CẢ các tháng. Nếu trạng thái mới nhất là inactive
+    (Active=FALSE) → coi như user đã xoá → KHÔNG re-seed ở tháng mới.
+
+    month_key dạng "YYYY-MM" nên so sánh chuỗi = so sánh thời gian.
+
+    Quy tắc:
+      - chưa có row nào          → False (lần đầu, cứ seed)
+      - row mới nhất Active=TRUE  → False (user vẫn dùng / đã thêm lại)
+      - row mới nhất Active=FALSE → True  (đã xoá, tôn trọng ý định)
+    """
+    latest_month = None
+    latest_active = None
+    for r in rows:
+        if len(r) >= 6 and r[1] == bucket_id:
+            mk = r[0]
+            if latest_month is None or mk > latest_month:
+                latest_month = mk
+                latest_active = str(r[5]).upper() == "TRUE"
+    return latest_active is False
+
+
 def bootstrap_default_categories(month_key: str) -> int:
     """Seed default tracking categories cho month_key nếu chưa có.
 
     Idempotent: chỉ tạo những bucket chưa tồn tại trong Budget Config.
     Trả về số category được tạo mới (0 nếu đã có sẵn).
+
+    Tombstone: KHÔNG re-seed default mà user đã cố ý xoá (xem
+    `_default_tombstoned`). Tránh việc category bị xoá "sống lại" khi một
+    tháng mới rơi vào nhánh default-seed (vd tháng trước rỗng nên không clone
+    được).
 
     `allocated=0` → tracking mode. `daily_cap` giữ nguyên từ default
     (daily_spending: 100k để /today + daily recap chạy ngay cho user mới;
@@ -378,11 +408,21 @@ def bootstrap_default_categories(month_key: str) -> int:
 
     Caller cần wrap trong `bootstrap_lock` để chống race trong cùng process.
     """
+    ws = _sheet(S.BUDGET_CONFIG)
+    rows = ws.get_all_values()[1:]  # skip header — đọc 1 lần, dùng cho cả 2 check
     created = 0
     for b in get_default_buckets():
-        if not find_budget_row(month_key, b["id"]):
-            write_budget_row(month_key, {**b, "allocated": 0})
-            created += 1
+        # Đã có row cho bucket này trong CHÍNH tháng đó (kể cả FALSE)? → skip.
+        in_month = any(
+            len(r) >= 2 and r[0] == month_key and r[1] == b["id"] for r in rows
+        )
+        if in_month:
+            continue
+        # User đã cố ý xoá default này ở tháng trước? → tôn trọng, đừng dựng lại.
+        if _default_tombstoned(b["id"], rows):
+            continue
+        write_budget_row(month_key, {**b, "allocated": 0})
+        created += 1
     if created > 0:
         invalidate_buckets_cache()
     return created
