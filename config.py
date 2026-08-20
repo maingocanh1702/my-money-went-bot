@@ -132,3 +132,5 @@ class SHEETS:
     LEDGER          = "Account Ledger"
     PENDING_ACCOUNTS = "Pending Accounts"
     PROCESSED_REFS  = "Processed Refs"
+    CASHBACK_RULES  = "Cashback Rules"
+    CASHBACK_LOG    = "Cashback Log"

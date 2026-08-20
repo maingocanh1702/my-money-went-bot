@@ -288,6 +288,61 @@ async def _finalize(row_num: int, parent_category: str, sub_label: str, message_
     # ── OUTGOING transaction ──────────────────────────────────
     bkt = sh.get_bucket_status(parent_category, month_key)
 
+    # ── Cashback auto-detect (pct-based) ─────────────────────
+    # Compute BEFORE building the message so we can append a subtle note.
+    # Logic: completely automatic, zero user interaction.
+    #   - Has cashback rule for this account? → calculate pct% × amount
+    #   - Apply min/max per-tx clamp + monthly cap
+    #   - Is transfer/cc_payment? → skip (not real spending)
+    #   - No rule? → skip silently, user never knows
+    cb_amount = 0
+    cb_rule_info = ""
+    cb_running_total = 0
+    cb_capped_out = ""
+    try:
+        tx_row = sh.get_transaction_row(row_num)
+        acct_id = (tx_row[16] if len(tx_row) > 16 else "").strip()
+        ledger_type = (tx_row[17] if len(tx_row) > 17 else "expense").strip().lower()
+        desc = state.get("description") or (tx_row[5] if len(tx_row) > 5 else "")
+
+        # Only real spending gets cashback — not transfers or cc payments
+        if (acct_id
+                and currency == "VND"
+                and amount > 0
+                and ledger_type not in ("transfer", "cc_payment")):
+            cb_rule = sh.match_cashback_rule(acct_id, desc, parent_category)
+            if cb_rule and cb_rule["cashback_pct"] > 0:
+                raw_cb = amount * cb_rule["cashback_pct"] / 100
+                cb_amount, cap_info = sh.compute_cashback_amount(
+                    raw_cb, cb_rule, month_key,
+                )
+                if cb_amount > 0:
+                    sh.log_cashback(
+                        account_id=acct_id,
+                        tx_row_num=row_num,
+                        amount=cb_amount,
+                        currency=currency,
+                        source="rule_pct",
+                        rule_row_num=cb_rule["row_num"],
+                        month_key=month_key,
+                    )
+                    # Build info string: "1% shopee, max 200k, 150k/500k"
+                    parts = [f'{cb_rule["cashback_pct"]}%']
+                    kw = cb_rule.get("keyword", "")
+                    if kw:
+                        parts[0] += f" {kw}"
+                    if cap_info:
+                        parts.append(cap_info)
+                    cb_rule_info = " · ".join(parts)
+                    # Running total for this account
+                    cb_running_total = sh.get_cashback_total(acct_id, month_key)
+                elif cap_info:
+                    # cb_amount=0 but cap_info has a message → capped out
+                    cb_capped_out = cap_info
+    except Exception as e:
+        # Cashback is best-effort — never block the main flow
+        print(f"[cashback] auto-log error row={row_num}: {e}")
+
     # Foreign-currency: skip budget-comparison logic vì không sum vào VND.
     # Chỉ confirm transaction + show monthly-foreign aggregate cho currency này.
     if currency != "VND":
@@ -342,5 +397,14 @@ async def _finalize(row_num: int, parent_category: str, sub_label: str, message_
         # Tracking-only: chỉ show tổng tháng, không judge
         msg += f"📊 {parent_name}: tổng tháng này *{sh.fmt_amount(bkt['spent'])}*"
 
+    # Append cashback note — subtle, informational, NO interaction needed
+    if cb_amount > 0:
+        msg += f"\n💰 +{sh.fmt_amount(cb_amount)} cashback ({cb_rule_info})"
+        if cb_running_total > 0:
+            msg += f"\n   Tháng này: {sh.fmt_amount(cb_running_total)}"
+    elif cb_capped_out:
+        msg += f"\n💰 Cashback: {cb_capped_out}"
+
     recat_button = [[{"text": "🔄 Sai mục?", "callback_data": f"recat_{row_num}"}]]
     await tg.send_with_buttons(msg, recat_button)
+

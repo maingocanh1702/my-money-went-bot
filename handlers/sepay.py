@@ -192,6 +192,37 @@ async def handle_sepay_webhook(payload: dict):
         # line. Forcing the user to tap 'Bỏ qua' on every salary/refund tx
         # was noise; income categorization (Salary/Refund/Gift breakdown)
         # is out of scope for the tracking goal.
+
+        # ── Check if this income matches a cashback rule (webhook mode) ──
+        # Rules with cashback_pct=0 use the actual webhook amount instead of
+        # computing a percentage — the bank already tells us the exact refund.
+        if resolved_account_id:
+            try:
+                cb_rule = sh.match_cashback_rule(resolved_account_id, description, "*")
+                if cb_rule and cb_rule["cashback_pct"] == 0:
+                    sh.log_cashback(
+                        account_id=resolved_account_id,
+                        tx_row_num=row_num,
+                        amount=amount,
+                        currency=currency,
+                        source="webhook",
+                        rule_row_num=cb_rule["row_num"],
+                        month_key=month_key,
+                    )
+                    await notifier.send_text(
+                        f"💰 *+{sh.fmt_amount(amount, currency)} cashback!* 🎉\n"
+                        f"`{description}`\n"
+                        f"_(matched: `{cb_rule.get('keyword') or 'default'}` "
+                        f"on {resolved_account_id})_"
+                    )
+                    # Account onboarding prompt comes AFTER the tx notification so the
+                    # user sees the tx first, then the setup ask.
+                    if resolved.status == "new_identifier":
+                        await prompt_new_account(resolved.source_key, resolved.identifier, row_num)
+                    return
+            except Exception as e:
+                print(f"[cashback] webhook match error: {e}")
+
         await notifier.send_text(
             f"💚 *+{sh.fmt_amount(amount, currency)} vừa vào tài khoản!*\n"
             f"`{description}`"

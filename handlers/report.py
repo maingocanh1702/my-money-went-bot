@@ -289,6 +289,21 @@ def _render_account_lens(data: dict) -> str:
     if not data["by_account"]:
         lines.append("_Chưa có tx nào trong period này._")
     else:
+        # Preload cashback summary for monthly view (cashback is logged per month_key)
+        cb_summary_map: dict[str, float] = {}
+        if data["period_code"] == "m":
+            try:
+                # Derive month_key from the period label (e.g. "Tháng 08/2026" → "2026-08")
+                # Safer: use the start of the period range
+                from datetime import datetime as _dt
+                _tz = pytz.timezone(TIMEZONE)
+                _now = _dt.now(_tz)
+                _month_key = sh.fmt_month(_now)
+                for cs in sh.get_cashback_summary(_month_key):
+                    cb_summary_map[cs["account_id"]] = cs["total"]
+            except Exception:
+                pass  # best-effort
+
         for g in data["by_account"]:
             emoji = TYPE_EMOJI.get(g["type"], "❓")
             lines.append(f"{emoji} *{g['name']}* ({g['currency']})")
@@ -302,6 +317,10 @@ def _render_account_lens(data: dict) -> str:
                     f"   Ra:  -{sh.fmt_amount(g['out'], g['currency'])}"
                     f" ({g['out_count']} tx)"
                 )
+            # Cashback line (monthly view, VND only)
+            cb_total = cb_summary_map.get(g.get("account_id", ""), 0)
+            if cb_total > 0:
+                lines.append(f"   💰 Cashback: +{sh.fmt_amount(cb_total)}")
             lines.append("")
 
     # Budget alerts — only meaningful for the monthly view (allocations are

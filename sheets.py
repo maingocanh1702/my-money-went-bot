@@ -1974,3 +1974,470 @@ def get_recent_unresolved_txs(source_key: str, hours: int = 24) -> list[dict]:
             "_row":        r,
         })
     return out
+
+
+# ─── Cashback Rules + Log ─────────────────────────────────────
+# Cashback Rules tab schema:
+#   A: account_id     — Accounts.id or "*" (all accounts)
+#   B: keyword        — normalized (like Keyword Rules); empty = default rule
+#   C: cashback_pct   — percentage (1 = 1%); 0 = use actual webhook amount
+#   D: category_id    — bucket_id or "*" (all categories)
+#   E: active         — "TRUE" / "FALSE"
+#   F: created_at     — ISO timestamp
+#   G: cb_min         — minimum cashback per tx (0 = no minimum)
+#   H: cb_max         — maximum cashback per tx (0 = no maximum)
+#   I: cb_cap         — monthly cap for this rule (0 = unlimited)
+#
+# Cashback Log tab schema:
+#   A: log_id         — auto-increment
+#   B: account_id
+#   C: tx_row_num     — Transactions row (expense or income)
+#   D: amount         — cashback amount
+#   E: currency
+#   F: source         — "rule_pct" or "webhook"
+#   G: rule_row_num   — Cashback Rules row that fired
+#   H: month_key      — "2026-08"
+#   I: created_at
+
+CASHBACK_RULES_HEADER = [
+    "account_id", "keyword", "cashback_pct", "category_id", "active", "created_at",
+    "cb_min", "cb_max", "cb_cap",
+]
+CASHBACK_LOG_HEADER = [
+    "log_id", "account_id", "tx_row_num", "amount", "currency",
+    "source", "rule_row_num", "month_key", "created_at",
+]
+
+_cashback_rules_cache: list | None = None
+
+
+def _ensure_cashback_rules_tab():
+    """Create the Cashback Rules tab with header row if it doesn't exist."""
+    ss = _get_spreadsheet()
+    try:
+        ws = ss.worksheet(S.CASHBACK_RULES)
+    except gspread.WorksheetNotFound:
+        ws = ss.add_worksheet(title=S.CASHBACK_RULES, rows=200, cols=len(CASHBACK_RULES_HEADER))
+        ws.update("A1:I1", [CASHBACK_RULES_HEADER])
+        print(f"[cashback] created tab {S.CASHBACK_RULES!r}")
+    return ws
+
+
+def _ensure_cashback_log_tab():
+    """Create the Cashback Log tab with header row if it doesn't exist."""
+    ss = _get_spreadsheet()
+    try:
+        ws = ss.worksheet(S.CASHBACK_LOG)
+    except gspread.WorksheetNotFound:
+        ws = ss.add_worksheet(title=S.CASHBACK_LOG, rows=500, cols=len(CASHBACK_LOG_HEADER))
+        ws.update("A1:I1", [CASHBACK_LOG_HEADER])
+        print(f"[cashback] created tab {S.CASHBACK_LOG!r}")
+    return ws
+
+
+def invalidate_cashback_rules_cache():
+    global _cashback_rules_cache
+    _cashback_rules_cache = None
+
+
+def _safe_float(val, default=0.0) -> float:
+    """Parse a cell value to float, return default on failure."""
+    try:
+        return float(str(val).replace(",", ".").strip() or "0")
+    except (ValueError, TypeError):
+        return default
+
+
+def get_cashback_rules(account_id: str | None = None, force_refresh: bool = False) -> list[dict]:
+    """Return active cashback rules. Optionally filter by account_id.
+
+    Each rule: {account_id, keyword, cashback_pct, category_id, cb_min, cb_max, cb_cap, row_num}.
+    `keyword` is normalized (may be empty = default rule for the account).
+    `cb_min`/`cb_max`: per-transaction cashback floor/ceiling (0 = none).
+    `cb_cap`: monthly cap for this specific rule (0 = unlimited).
+    """
+    global _cashback_rules_cache
+    if not force_refresh and _cashback_rules_cache is not None:
+        rules = _cashback_rules_cache
+    else:
+        ws = _ensure_cashback_rules_tab()
+        rows = ws.get_all_values()[1:]  # skip header
+        result = []
+        for i, r in enumerate(rows):
+            if len(r) < 5:
+                continue
+            if str(r[4]).upper() != "TRUE":
+                continue
+            acc = (r[0] or "").strip()
+            if not acc:
+                continue
+            kw = _normalize_for_match(r[1]) if r[1] else ""
+            pct = _safe_float(r[2])
+            cat_id = (r[3] or "*").strip()
+            cb_min = _safe_float(r[6]) if len(r) > 6 else 0.0
+            cb_max = _safe_float(r[7]) if len(r) > 7 else 0.0
+            cb_cap = _safe_float(r[8]) if len(r) > 8 else 0.0
+            result.append({
+                "account_id":   acc,
+                "keyword":      kw,
+                "cashback_pct": pct,
+                "category_id":  cat_id,
+                "cb_min":       cb_min,
+                "cb_max":       cb_max,
+                "cb_cap":       cb_cap,
+                "row_num":      i + 2,
+            })
+        _cashback_rules_cache = result
+        rules = result
+
+    if account_id:
+        return [r for r in rules if r["account_id"] in (account_id, "*")]
+    return list(rules)
+
+
+def match_cashback_rule(
+    account_id: str,
+    description: str,
+    category_id: str = "*",
+) -> dict | None:
+    """Find best-matching cashback rule for a transaction.
+
+    Priority:
+      1. Specific keyword match (longest wins) + specific account
+      2. Specific keyword match + wildcard account (*)
+      3. Default rule (empty keyword) + specific account
+      4. Default rule + wildcard account (*)
+    Within each tier, specific category_id beats wildcard.
+    """
+    if not account_id:
+        return None
+    rules = get_cashback_rules()
+    desc_norm = _normalize_for_match(description) if description else ""
+
+    # Separate keyword rules from default rules (empty keyword)
+    keyword_rules = [r for r in rules if r["keyword"]]
+    default_rules = [r for r in rules if not r["keyword"]]
+
+    # Try keyword match first (longest wins)
+    best = None
+    best_len = 0
+    for rule in keyword_rules:
+        # Account must match
+        if rule["account_id"] not in (account_id, "*"):
+            continue
+        # Category must match (if not wildcard)
+        if rule["category_id"] != "*" and category_id != "*" and rule["category_id"] != category_id:
+            continue
+        kw = rule["keyword"]
+        if kw and desc_norm and kw in desc_norm:
+            # Score: longer keyword + specific account beats wildcard
+            score = len(kw) * 10 + (1 if rule["account_id"] == account_id else 0)
+            if score > best_len:
+                best = rule
+                best_len = score
+
+    if best:
+        print(f"[cashback] matched keyword: {best['keyword']!r} "
+              f"→ {best['cashback_pct']}% on {best['account_id']}")
+        return best
+
+    # Fall back to default rule (empty keyword)
+    for rule in default_rules:
+        if rule["account_id"] not in (account_id, "*"):
+            continue
+        if rule["category_id"] != "*" and category_id != "*" and rule["category_id"] != category_id:
+            continue
+        # Prefer specific account over wildcard
+        if best is None or (rule["account_id"] == account_id and best["account_id"] == "*"):
+            best = rule
+
+    if best:
+        print(f"[cashback] matched default rule: "
+              f"{best['cashback_pct']}% on {best['account_id']}")
+    return best
+
+
+def add_cashback_rule(
+    account_id: str,
+    keyword: str,
+    cashback_pct: float,
+    category_id: str = "*",
+    cb_min: float = 0,
+    cb_max: float = 0,
+    cb_cap: float = 0,
+) -> bool:
+    """Add a new active cashback rule. Returns False if duplicate exists.
+
+    cb_min/cb_max: per-tx cashback floor/ceiling (0 = none).
+    cb_cap: monthly cap for this rule (0 = unlimited).
+    """
+    acc = (account_id or "").strip()
+    if not acc:
+        return False
+    kw_norm = _normalize_for_match(keyword) if keyword else ""
+    cat = (category_id or "*").strip()
+
+    ws = _ensure_cashback_rules_tab()
+    rows = ws.get_all_values()[1:]
+    for r in rows:
+        if (len(r) >= 5
+                and (r[0] or "").strip() == acc
+                and _normalize_for_match(r[1] or "") == kw_norm
+                and str(r[4]).upper() == "TRUE"):
+            return False  # duplicate
+
+    next_row = _next_row(ws, col=1)
+    now_str = datetime.utcnow().isoformat()
+    ws.update(f"A{next_row}:I{next_row}", [[
+        acc, kw_norm, str(cashback_pct), cat, "TRUE", now_str,
+        str(cb_min), str(cb_max), str(cb_cap),
+    ]])
+    invalidate_cashback_rules_cache()
+    print(f"[cashback] added rule: {acc} kw={kw_norm!r} pct={cashback_pct} "
+          f"min={cb_min} max={cb_max} cap={cb_cap}")
+    return True
+
+
+def update_cashback_rule(
+    row_num: int,
+    *,
+    keyword: str | None = None,
+    cashback_pct: float | None = None,
+    category_id: str | None = None,
+    cb_min: float | None = None,
+    cb_max: float | None = None,
+    cb_cap: float | None = None,
+) -> bool:
+    """Update fields on an existing cashback rule."""
+    ws = _ensure_cashback_rules_tab()
+    try:
+        if keyword is not None:
+            ws.update_cell(row_num, 2, _normalize_for_match(keyword) if keyword else "")
+        if cashback_pct is not None:
+            ws.update_cell(row_num, 3, str(cashback_pct))
+        if category_id is not None:
+            ws.update_cell(row_num, 4, (category_id or "*").strip())
+        if cb_min is not None:
+            ws.update_cell(row_num, 7, str(cb_min))
+        if cb_max is not None:
+            ws.update_cell(row_num, 8, str(cb_max))
+        if cb_cap is not None:
+            ws.update_cell(row_num, 9, str(cb_cap))
+        invalidate_cashback_rules_cache()
+        return True
+    except Exception as e:
+        print(f"[cashback] update error row={row_num}: {e}")
+        return False
+
+
+def soft_delete_cashback_rule(row_num: int) -> bool:
+    """Set active=FALSE for the rule at the given sheet row."""
+    ws = _ensure_cashback_rules_tab()
+    try:
+        ws.update_cell(row_num, 5, "FALSE")
+        invalidate_cashback_rules_cache()
+        return True
+    except Exception as e:
+        print(f"[cashback] delete error row={row_num}: {e}")
+        return False
+
+
+def get_rule_month_total(rule_row_num: int, month_key: str) -> float:
+    """Sum cashback already logged for a specific rule in a month. VND only."""
+    ws = _ensure_cashback_log_tab()
+    rows = ws.get_all_values()[1:]
+    total = 0.0
+    for r in rows:
+        if len(r) < 8:
+            continue
+        if str(r[6]).strip() != str(rule_row_num):
+            continue
+        if (r[7] or "").strip() != month_key:
+            continue
+        if (r[4] or "VND").upper().strip() != "VND":
+            continue
+        total += _parse_amount(r[3])
+    return total
+
+
+def compute_cashback_amount(
+    raw_amount: float,
+    rule: dict,
+    month_key: str,
+) -> tuple[int, str]:
+    """Calculate final cashback amount after applying min/max clamp and monthly cap.
+
+    Args:
+        raw_amount: pct% × expense amount (already calculated by caller)
+        rule: matched cashback rule dict (must have cb_min, cb_max, cb_cap, row_num)
+        month_key: current month for cap check
+
+    Returns:
+        (final_amount, cap_info_str)
+        final_amount: cashback amount after clamping + cap (0 if capped out)
+        cap_info_str: human-readable note about limits applied ("" if none)
+    """
+    cb_min = rule.get("cb_min", 0)
+    cb_max = rule.get("cb_max", 0)
+    cb_cap = rule.get("cb_cap", 0)
+
+    amount = raw_amount
+    info_parts = []
+
+    # 1. Clamp to [cb_min, cb_max]
+    if cb_min > 0 and amount < cb_min:
+        amount = cb_min
+        info_parts.append(f"min {fmt_amount(cb_min)}")
+    if cb_max > 0 and amount > cb_max:
+        amount = cb_max
+        info_parts.append(f"max {fmt_amount(cb_max)}")
+
+    amount = int(amount)
+    if amount <= 0:
+        return 0, ""
+
+    # 2. Monthly cap check
+    if cb_cap > 0:
+        used = get_rule_month_total(rule["row_num"], month_key)
+        remaining = cb_cap - used
+        if remaining <= 0:
+            return 0, f"đã đạt cap {fmt_amount(cb_cap)}/tháng"
+        if amount > remaining:
+            amount = int(remaining)
+            info_parts.append(f"cap còn {fmt_amount(remaining)}")
+        else:
+            # Show cap progress
+            info_parts.append(f"{fmt_amount(used + amount)}/{fmt_amount(cb_cap)}")
+
+    cap_info = ", ".join(info_parts)
+    return amount, cap_info
+
+
+def log_cashback(
+    account_id: str,
+    tx_row_num: int,
+    amount: float,
+    currency: str,
+    source: str,
+    rule_row_num: int,
+    month_key: str,
+) -> int:
+    """Append a cashback log entry. Returns the row number.
+
+    Idempotent: skips if (tx_row_num, source) already exists.
+    """
+    ws = _ensure_cashback_log_tab()
+    rows = ws.get_all_values()[1:]
+
+    # Dedup: same tx_row + source → already logged
+    for r in rows:
+        if len(r) >= 6 and str(r[2]).strip() == str(tx_row_num) and (r[5] or "") == source:
+            print(f"[cashback] dedup: tx_row={tx_row_num} source={source}")
+            return 0
+
+    next_row = _next_row(ws, col=1)
+    log_id = next_row - 1  # simple auto-increment
+    now_str = datetime.utcnow().isoformat()
+    ws.update(f"A{next_row}:I{next_row}", [[
+        str(log_id),
+        account_id,
+        str(tx_row_num),
+        str(amount),
+        (currency or "VND").upper(),
+        source,
+        str(rule_row_num),
+        month_key,
+        now_str,
+    ]])
+    print(f"[cashback] logged: {amount} {currency} for tx_row={tx_row_num} "
+          f"source={source} account={account_id}")
+    return next_row
+
+
+def get_cashback_total(account_id: str, month_key: str) -> float:
+    """Sum cashback for a specific account in a month. VND only."""
+    ws = _ensure_cashback_log_tab()
+    rows = ws.get_all_values()[1:]
+    total = 0.0
+    for r in rows:
+        if len(r) < 8:
+            continue
+        if (r[1] or "").strip() != account_id:
+            continue
+        if (r[7] or "").strip() != month_key:
+            continue
+        if (r[4] or "VND").upper().strip() != "VND":
+            continue
+        total += _parse_amount(r[3])
+    return total
+
+
+def get_cashback_summary(month_key: str) -> list[dict]:
+    """Aggregate cashback per account for a month.
+
+    Returns: [{account_id, total, by_source: {rule_pct: X, webhook: Y}}, ...]
+    """
+    ws = _ensure_cashback_log_tab()
+    rows = ws.get_all_values()[1:]
+
+    agg: dict[str, dict] = {}
+    for r in rows:
+        if len(r) < 8:
+            continue
+        if (r[7] or "").strip() != month_key:
+            continue
+        if (r[4] or "VND").upper().strip() != "VND":
+            continue
+        acc = (r[1] or "").strip()
+        if not acc:
+            continue
+        amount = _parse_amount(r[3])
+        source = (r[5] or "").strip()
+
+        if acc not in agg:
+            agg[acc] = {"account_id": acc, "total": 0.0, "by_source": {}}
+        agg[acc]["total"] += amount
+        agg[acc]["by_source"][source] = agg[acc]["by_source"].get(source, 0.0) + amount
+
+    return sorted(agg.values(), key=lambda x: x["total"], reverse=True)
+
+
+def get_cashback_by_rule(account_id: str, month_key: str) -> list[dict]:
+    """Break down cashback per rule for a specific account in a month.
+
+    Returns: [{rule_row_num, keyword, cashback_pct, total, count}, ...]
+    """
+    ws = _ensure_cashback_log_tab()
+    rows = ws.get_all_values()[1:]
+
+    # Build rule lookup for display info
+    rules = get_cashback_rules()
+    rule_map = {r["row_num"]: r for r in rules}
+
+    agg: dict[int, dict] = {}
+    for r in rows:
+        if len(r) < 8:
+            continue
+        if (r[1] or "").strip() != account_id:
+            continue
+        if (r[7] or "").strip() != month_key:
+            continue
+        if (r[4] or "VND").upper().strip() != "VND":
+            continue
+
+        rule_rn = int(r[6]) if str(r[6]).strip().isdigit() else 0
+        amount = _parse_amount(r[3])
+
+        if rule_rn not in agg:
+            rule_info = rule_map.get(rule_rn, {})
+            agg[rule_rn] = {
+                "rule_row_num": rule_rn,
+                "keyword":      rule_info.get("keyword", ""),
+                "cashback_pct": rule_info.get("cashback_pct", 0),
+                "total":        0.0,
+                "count":        0,
+            }
+        agg[rule_rn]["total"] += amount
+        agg[rule_rn]["count"] += 1
+
+    return sorted(agg.values(), key=lambda x: x["total"], reverse=True)

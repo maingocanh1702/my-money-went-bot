@@ -41,6 +41,11 @@ from handlers.accounts    import (
     cmd_accounts,
 )
 from handlers.report      import cmd_report, handle_report_callback
+from handlers.cashback    import (
+    cmd_cashback, handle_cashback_callback,
+    handle_cashback_keyword_input, handle_cashback_pct_input,
+    handle_cashback_limits_input, _save_rule,
+)
 
 app = FastAPI(title="Financial Tracking Bot")
 
@@ -48,6 +53,7 @@ app = FastAPI(title="Financial Tracking Bot")
 _CALLBACK_MIN_PARTS = {
     "p": 2, "s": 2, "al": 2, "recat": 2,
     "mg": 2, "kw": 2, "acc": 2, "asg": 2, "rpt": 2,
+    "cb": 2,
 }
 
 
@@ -240,6 +246,8 @@ async def _handle_callback(cb: dict):
         await handle_assign_callback(parts, message_id)
     elif prefix == "rpt":
         await handle_report_callback(parts, message_id)
+    elif prefix == "cb":
+        await handle_cashback_callback(parts, message_id)
 
 
 async def _handle_message(message: dict):
@@ -295,17 +303,24 @@ async def _handle_message(message: dict):
     elif step == "await_new_account_balance":
         # Legacy: kept so wizards started before the simplification can finish.
         await handle_new_account_balance(text, state)
+    elif step == "cashback_await_keyword":
+        await handle_cashback_keyword_input(text, state)
+    elif step == "cashback_await_pct":
+        await handle_cashback_pct_input(text, state)
+    elif step == "cashback_await_limits":
+        await handle_cashback_limits_input(text, state)
     else:
         await tg.send_text(
             "🤖 *Financial Tracking Bot*\n\n"
             "Tự động ghi mọi giao dịch ngân hàng. Bạn chỉ cần phân loại — bot lo phần còn lại.\n\n"
-            "/report   — chi tiêu theo account + category (tuần/tháng/quý/năm)\n"
-            "/today    — hôm nay tiêu bao nhiêu?\n"
-            "/accounts — list account đã setup / add mới\n"
-            "/manage   — sửa categories\n"
-            "/keywords — auto-phân loại theo keyword\n"
-            "/allocate — (optional) đặt budget cho từng mục\n"
-            "/recat    — re-categorize một giao dịch cũ theo số dòng"
+            "/report    — chi tiêu theo account + category (tuần/tháng/quý/năm)\n"
+            "/today     — hôm nay tiêu bao nhiêu?\n"
+            "/accounts  — list account đã setup / add mới\n"
+            "/manage    — sửa categories\n"
+            "/keywords  — auto-phân loại theo keyword\n"
+            "/cashback  — tracking cashback per thẻ\n"
+            "/allocate  — (optional) đặt budget cho từng mục\n"
+            "/recat     — re-categorize một giao dịch cũ theo số dòng"
         )
 
 
@@ -371,10 +386,12 @@ async def _handle_command(text: str):
         await start_monthly_allocation()
     elif cmd == "/recat":
         await _cmd_recat(text)
+    elif cmd == "/cashback":
+        await cmd_cashback(text)
     else:
         await tg.send_text(
             "Unknown command. Try /today, /report, /accounts, /manage, "
-            "/keywords, /allocate, or /recat."
+            "/keywords, /cashback, /allocate, or /recat."
         )
 
 

@@ -221,6 +221,41 @@ async def _save_rule_with_bucket(bucket_id: str, message_id: int):
         sections.append(f"⚠️ {len(skipped)} rule đã tồn tại sẵn:\n{skipped_block}")
 
     await tg.edit_message(message_id, "\n\n".join(sections))
+
+    # ── Cashback suggestion ──────────────────────────────────
+    # If user has cashback rules, suggest adding these keywords as cashback
+    # rules too. Non-blocking: just a button, user can ignore.
+    if added:
+        try:
+            cb_rules = sh.get_cashback_rules()
+            if cb_rules:
+                # Get unique accounts that have cashback rules
+                cb_accounts = list({r["account_id"] for r in cb_rules if r["account_id"] != "*"})
+                if cb_accounts:
+                    kw_preview = ", ".join(f"`{k}`" for k in added[:3])
+                    if len(added) > 3:
+                        kw_preview += f" +{len(added) - 3}"
+                    buttons = []
+                    for kw in added[:2]:  # max 2 suggestions
+                        for acc_id in cb_accounts[:2]:  # max 2 accounts
+                            acc = sh.find_account_by_id(acc_id)
+                            acc_name = acc["name"] if acc else acc_id
+                            label = f"💰 {kw} → {acc_name}"
+                            if len(label) > 50:
+                                label = label[:47] + "…"
+                            buttons.append([{
+                                "text": label,
+                                "callback_data": f"cb_suggest_{acc_id}_{kw}",
+                            }])
+                    buttons.append([{"text": "⏩ Bỏ qua", "callback_data": "cb_suggest_skip"}])
+                    await tg.send_with_buttons(
+                        f"💡 *Cashback?* Keyword {kw_preview} cũng áp dụng "
+                        f"cashback cho thẻ/tài khoản nào không?",
+                        buttons,
+                    )
+        except Exception:
+            pass  # best-effort suggestion
+
     await _show_rule_list()
 
 

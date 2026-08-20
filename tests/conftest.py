@@ -158,6 +158,7 @@ def fake_ss(monkeypatch):
     sh._keyword_rules_cache = None
     sh._state_cache.clear()
     sh._accounts_cache = None
+    sh._cashback_rules_cache = None
     return ss
 
 
