@@ -1,136 +1,179 @@
-"""Vietnamese language pack.
+"""Vietnamese (default) UI strings for all bot handlers."""
 
-Keep keys flat (no nesting) — namespaced via `prefix.subkey` dotted strings.
-Every key here MUST also exist in i18n/en.py (enforced by parity test).
+STRINGS: dict[str, str] = {
+    # ── Common ────────────────────────────────────────────────
+    "btn.back":             "← Quay lại",
+    "btn.cancel":           "❌ Hủy",
+    "btn.confirm_delete":   "❌ Xác nhận xoá",
+    "btn.confirm_reset":    "❌ Xác nhận reset",
+    "btn.save_done":        "✅ Lưu & xong",
+    "btn.skip":             "⏭️ Bỏ qua",
+    "cancelled":            "✅ Đã hủy.",
+    "session_expired":      "⚠️ Phiên hết hạn. Chạy lại lệnh.",
+    "invalid_state":        "⚠️ State không hợp lệ. Dùng lệnh tương ứng để bắt đầu lại.",
 
-Prefix conventions (see feature-i18n.md §4):
-    onboard.*   — welcome, path select, wizard steps
-    cat.*       — category picker, confirmation, inline create
-    manage.*    — /manage CRUD screens
-    report.*    — /status, /today, daily recap, /weekly
-    settings.*  — settings view + change screens
-    upgrade.*   — pricing, plan display, upgrade flow
-    payment.*   — pending payment, QR, matched confirmation
-    job.*       — scheduled job messages (recap, reminder)
-    error.*     — generic, rate limit, pro-only, DB
-    btn.*       — button labels
-    fmt.*       — currency / number formatting helpers
-    lang.*      — language selection screens
-"""
+    # ── /lang ─────────────────────────────────────────────────
+    "lang.title":           "🌐 *Ngôn ngữ / Language*",
+    "lang.current":         "Ngôn ngữ hiện tại: *{lang_name}*",
+    "lang.choose":          "Chọn ngôn ngữ:",
+    "lang.switched":        "✅ Đã chuyển sang *{lang_name}*",
 
-from __future__ import annotations
+    # ── /manage ───────────────────────────────────────────────
+    "mg.title":             "⚙️ *Quản lý mục chi — {month}*",
+    "mg.total_budgeted":    "Tổng đã đặt",
+    "mg.choose_edit":       "Chọn mục để sửa:",
+    "mg.tracking":          "🏷️ chỉ theo dõi",
+    "mg.btn_add":           "➕ Thêm mục",
+    "mg.btn_edit_budget":   "✏️ Sửa budget",
+    "mg.btn_rename":        "📝 Đổi tên",
+    "mg.btn_subs":          "📂 Mục con",
+    "mg.btn_delete":        "🗑️ Xóa",
+    "mg.what_to_do":        "Bạn muốn làm gì?",
+    "mg.budgeted":          "💰 Đã đặt · {amount}",
+    "mg.spent":             "Đã chi: {amount} ({pct}%)",
+    "mg.spent_month":       "Đã chi: {amount} tháng này",
+    "mg.tracking_only":     "🏷️ Tracking-only",
+    "mg.sub_count":         "📂 {count} mục con",
+    # Edit amount
+    "mg.edit_amount_prompt": "💰 *{name}* — hiện tại: {current}\nNhập số tiền mới (0 = chuyển sang chỉ theo dõi):",
+    "mg.edit_amount_err":   "⚠️ Số tiền không hợp lệ. Thử lại (VD: `3000000`, `3tr`, `500k` hoặc `0`).",
+    "mg.updated_amount":    "✅ Đã cập nhật: {name} → *{amount}*",
+    "mg.updated_tracking":  "✅ Đã cập nhật: {name} → 🏷️ chỉ theo dõi",
+    # Rename
+    "mg.rename_prompt":     "✏️ Tên hiện tại: {name}\nNhập tên mới:",
+    "mg.renamed":           "✅ Đã đổi tên: {old} → *{new}*",
+    # Delete bucket
+    "mg.delete_confirm":    "⚠️ *Xóa {name}?*\n\nMục này có {count} giao dịch trong tháng.\nGiao dịch đã phân loại sẽ KHÔNG bị ảnh hưởng.",
+    "mg.deleted":           "🗑️ Đã xóa: {name}",
+    # Sub-categories
+    "mg.subs_empty":        "📂 *{name}* — chưa có mục con.\nSẽ tự tạo khi bạn phân loại giao dịch.",
+    "mg.subs_title":        "📂 *Mục con của {name}*",
+    "mg.sub_actions_title": "⚙️ *{sub}*\n_(thuộc {parent})_",
+    "mg.sub_rename_prompt": "✏️ Tên hiện tại: {name}\nNhập tên mới:",
+    "mg.sub_delete_confirm":"⚠️ *Xoá mục con `{sub}`?*\n_(thuộc {parent})_",
+    "mg.sub_deleted":       "🗑️ Đã xoá: {name}",
+    "mg.btn_cancel_del":    "← Huỷ",
+    # Add category
+    "mg.add_title":         "➕ *Thêm Mục Mới*\n\nNhập tên mục mới:\n_(VD: 🎮 Gaming, ✈️ Du lịch, 🍕 Ăn uống)_",
+    "mg.add_name_empty":    "⚠️ Tên không được để trống. Thử lại:",
+    "mg.add_duplicate":     "⚠️ Mục *{name}* đã tồn tại rồi!\nNhập tên khác hoặc gửi /manage để quay lại.",
+    "mg.add_mode":          "💰 *{name}* — chọn mode:\n• Nhập số tiền budget (VD: 2000000)\n• Hoặc tap *Chỉ theo dõi* để không đặt budget",
+    "mg.btn_track_only":    "🏷️ Chỉ theo dõi",
+    "mg.add_amount_err":    "⚠️ Số tiền không hợp lệ. Thử lại (VD: `2000000`, `2tr`, `500k` hoặc `0`).",
+    "mg.added_budgeted":    "✅ Đã thêm: *{name}* — {amount}",
+    "mg.added_tracking":    "✅ Đã thêm: *{name}* — 🏷️ chỉ theo dõi",
+    # Daily cap (Daily Spending bucket)
+    "mg.btn_daily_cap":     "⏰ Daily cap",
+    "mg.daily_cap_line":    "⏰ Daily cap: {amount}/ngày",
+    "mg.daily_cap_prompt":  "⏰ *{name}* — daily cap hiện tại: {current}\nNhập cap mới cho MỖI NGÀY (VD: `100k`, `150000` — `0` để tắt):",
+    "mg.daily_cap_err":     "⚠️ Số không hợp lệ. Thử lại (VD: `100k`, `150000` hoặc `0` để tắt).",
+    "mg.daily_cap_set":     "✅ Daily cap: {name} → *{amount}/ngày*\n/today và recap cuối ngày sẽ so với cap này.",
+    "mg.daily_cap_off":     "✅ Đã tắt daily cap cho {name}.\n/today chỉ hiển thị tổng đã tiêu (không so cap).",
 
-VI: dict[str, str] = {
-    # ── language selection (onboarding step) ─────────────────────
-    "lang.detected_prompt": (
-        "🌐 Ngôn ngữ đã được nhận diện:\n🇻🇳 Tiếng Việt\n\n" "Đúng rồi, hoặc chọn ngôn ngữ khác:"
+    # ── /allocate ─────────────────────────────────────────────
+    "al.title":             "💰 *Đặt hạn mức chi tiêu (tuỳ chọn)*",
+    "al.desc":              "Đặt ngân sách cho từng mục để bot cảnh báo khi sắp cạn. Bỏ qua cũng OK — các mục sẽ chạy ở chế độ chỉ theo dõi (ghi lại tổng tiêu).",
+    "al.prev_hint":         "Tháng trước ({month}):",
+    "al.btn_keep":          "📋 Giữ tháng {month}",
+    "al.btn_enter":         "✏️ Nhập budget",
+    "al.btn_track_all":     "🏷️ Không đặt — track only",
+    "al.btn_add":           "➕ Thêm mục",
+    "al.btn_reset":         "🔄 Reset toàn bộ",
+    "al.btn_close":         "✅ Xong",
+    "al.no_prev":           "⚠️ Không tìm thấy ngân sách tháng {month}. Bắt đầu mới!",
+    "al.skip":              "👌 OK, không đặt budget. Các mục vẫn ghi lại tổng tiêu mỗi tháng.\nĐổi ý lúc nào dùng /allocate hoặc /manage.",
+    "al.bucket_prompt":     "📊 Mục {idx}/{total}\n\n*{name}* — ngân sách tháng {month}?\n_(VD: `3000000`, `3tr`, `500k` — hoặc `0` để chỉ theo dõi)_",
+    "al.btn_skip_bucket":   "⏭️ Bỏ qua (chỉ theo dõi)",
+    "al.invalid_number":    "⚠️ Số không hợp lệ. Thử lại (VD: `3000000`, `3tr`, `500k` — hoặc `0` để chỉ theo dõi).",
+    "al.negative":          "⚠️ Số phải ≥ 0. `0` = chỉ theo dõi không cap.",
+    "al.new_name_prompt":   "📝 Tên mục mới? _(VD: Hanoi Trip)_",
+    "al.summary_title":     "✅ *Ngân sách {month}:*",
+    "al.summary_total":     "Tổng đã đặt",
+    "al.summary_add_more":  "Thêm mục nữa?",
+    "al.done_title":        "🎯 *Ngân sách {month} đã lưu!*",
+    "al.done_tip":          "_💡 Chỉnh ngân sách cho 1 mục đơn lẻ: dùng /manage (không cần chạy lại /allocate từ đầu)._",
+    "al.reset_confirm":     "⚠️ *Reset toàn bộ ngân sách?*\n\nBạn sẽ nhập lại ngân sách từ đầu cho tất cả các mục.",
+    "al.edit_title":        "✏️ *Chỉnh ngân sách {month}*\n\nChọn mục cần sửa:",
+
+    # ── /keywords ─────────────────────────────────────────────
+    "kw.title":             "🔑 *Keyword Rules*",
+    "kw.empty":             "Chưa có rule nào.\n\nKeyword rule giúp bot tự phân loại giao dịch: khi mô tả tx chứa keyword → tự phân loại vào category bạn cấu hình.\n\nVD: `highland` → ☕ Coffee, `winmart` → 🍜 Food",
+    "kw.btn_add":           "➕ Thêm rule",
+    "kw.list_header":       "📋 *{count} keyword rules* — chọn để sửa/xóa:",
+    "kw.add_prompt":        "🔑 Nhập keyword (hoặc nhiều keyword cách nhau bằng dấu phẩy):\n\n_(VD: `grab, gojek, be` → cùng map vào 1 category)_",
+    "kw.keyword_empty":     "⚠️ Keyword rỗng. Thử lại hoặc /keywords để hủy.",
+    "kw.keyword_too_long":  "⚠️ Keyword quá dài (>60 ký tự): `{kw}`.\nThử lại.",
+    "kw.keyword_invalid":   "⚠️ Không có keyword hợp lệ. Thử lại.",
+    "kw.no_categories":     "⚠️ Chưa có category nào. Dùng /manage để tạo category trước, rồi quay lại /keywords.",
+    "kw.pick_bucket":       "🔑 Keyword{count_label}: {preview}{conflict}\n\nMatch vào category nào?",
+    "kw.conflict_header":   "\n\n⚠️ *Đã có rule:*\n{list}\n_Chọn category mới sẽ ghi đè rule cũ._",
+    "kw.saved":             "✅ Đã thêm {count} rule → *{bucket}*:",
+    "kw.skipped":           "⚠️ {count} rule đã tồn tại sẵn:",
+    "kw.rule_detail":       "📋 *Rule:* `{keyword}` → {bucket}\n\nBạn muốn làm gì?",
+    "kw.btn_edit_keyword":  "✏️ Đổi keyword",
+    "kw.btn_edit_bucket":   "🔄 Đổi category",
+    "kw.rule_not_found":    "⚠️ Rule không còn tồn tại.",
+    "kw.edit_prompt":       "✏️ Keyword hiện tại: `{keyword}`\n\nNhập keyword mới (1 keyword duy nhất). Muốn add nhiều keyword cùng lúc thì xóa rule này và dùng *➕ Thêm rule*.",
+    "kw.edit_single_only":  "⚠️ Chỉ nhận *1 keyword* khi sửa.\nMuốn add nhiều keyword 1 lúc → xóa rule này và dùng *➕ Thêm rule*.",
+    "kw.edit_too_long":     "⚠️ Keyword quá dài (>60 ký tự). Thử lại.",
+    "kw.edit_duplicate":    "⚠️ Keyword `{keyword}` đã tồn tại (→ {bucket}). Chọn keyword khác.",
+    "kw.edited":            "✅ Đã đổi: `{old}` → `{new}`",
+    "kw.edit_bucket_prompt":"🔄 *Đổi category cho:* `{keyword}`\n\nHiện tại: {bucket}\nChọn category mới:",
+    "kw.bucket_changed":    "✅ Đã chuyển: `{keyword}` → *{bucket}*",
+    "kw.delete_confirm":    "⚠️ *Xóa rule này?*\n\n`{keyword}` → {bucket}",
+    "kw.btn_confirm_del":   "❌ Xóa",
+    "kw.deleted":           "🗑️ Đã xóa rule: `{keyword}`",
+
+    # ── /accounts ─────────────────────────────────────────────
+    "ac.unmapped":          "🔍 *Tài khoản chưa liên kết:* `{masked}`\n(nguồn: `{source}`)\n\nBot chưa nhận diện tài khoản/thẻ này. Cài đặt ngay?\n_Còn hiệu lực 24h kể cả khi có tx khác đến._",
+    "ac.btn_setup":         "✅ Cài đặt",
+    "ac.btn_skip":          "⏭️ Bỏ qua",
+    "ac.setup_title":       "📝 *Cài đặt tài khoản mới* — `{masked}`\n\nBước {step}/{total} — Tên hiển thị (vd: `TCB Tiêu dùng`, `Cake Visa ****8421`):",
+    "ac.step_type":         "Bước {step}/{total} — Loại tài khoản? (slug: `{slug}`)",
+    "ac.step_limit":        "🪧 Bước {step}/{total} — *Hạn mức thẻ* (VND)? (số, vd `30000000`)",
+    "ac.step_outstanding":  "💳 Bước {step}/{total} — *Dư nợ hiện tại* (VND)?\n(số đang nợ trên thẻ ngay lúc cài đặt, vd `3000000`. `0` nếu thẻ chưa dùng / đã trả hết.)",
+    "ac.step_statement":    "Bước {step}/{total} — 📅 Ngày chốt sao kê (statement day, 1–28)?\nNgày này quyết định cách gom giao dịch vào kỳ.\nGõ 'skip' nếu chưa biết — tạm tính theo tháng dương lịch.",
+    "ac.step_due":          "Bước {step}/{total} — 📅 Ngày đáo hạn (due day, 1–28)?\nChỉ để nhắc thanh toán. Gõ 'skip' nếu bỏ qua.",
+    "ac.setup_done":        "✅ Tài khoản *{name}* đã cài đặt\n  · slug: `{slug}`\n  · loại: {type} · {currency}",
+    "ac.list_title":        "🏦 *Tài khoản đã cài đặt*",
+    "ac.not_found":         "⚠️ Tài khoản `{slug}` không tồn tại. /accounts để xem danh sách.",
+    "ac.currency_mismatch": "⚠️ Loại tiền không khớp: {from_cur} → {to_cur}. Bot không tự convert.",
+    "ac.backfilled":        "\n🔁 Đã backfill {count} tx gần đây.",
+
+    # ── transaction / budget feedback ─────────────────────────
+    "tx.logged":            "✅ Đã ghi *-{amount}*",
+    "tx.budget_bar":        "{name}: {spent}/{budget} {bar} {pct}%",
+    "tx.over_budget":       "⚠️ *{name}* — vượt {pct}% budget!",
+    "tx.near_budget":       "🔔 *{name}* — đã dùng {pct}% budget",
+
+    # Rule field prompts
+    # Rule detail
+    # Rule validation messages
+    # Learning flow
+
+    # ── Unknown command ───────────────────────────────────────
+    "unknown_command":      "🤔 Không hiểu lệnh này. Gửi /help để xem danh sách lệnh đầy đủ.",
+
+    # ── /help, /start ─────────────────────────────────────────
+    "help": (
+        "🤖 *Financial Tracking Bot*\n\n"
+        "Tự động ghi mọi giao dịch ngân hàng. Bạn chỉ cần phân loại — bot lo phần còn lại.\n\n"
+        "*📊 Xem báo cáo:*\n"
+        "/report — chi tiêu theo account + category\n"
+        "/today — chi tiêu hôm nay\n\n"
+        "*⚙️ Quản lý:*\n"
+        "/manage — sửa/xóa/thêm categories (kèm ⏰ daily cap)\n"
+        "/accounts — danh sách tài khoản\n"
+        "/allocate — đặt budget cho từng mục\n"
+        "/keywords — rule auto-phân loại theo keyword\n"
+        "*💰 Ghi tay:*\n"
+        "/transfer — chuyển tiền giữa các account\n"
+        "/cc pay — ghi nhận trả thẻ tín dụng\n\n"
+        "*Khác:*\n"
+        "/recat — sửa phân loại giao dịch cũ\n"
+        "/pending — phân loại giao dịch đang chờ\n"
+        "/lang — đổi ngôn ngữ vi/en\n"
+        "/cancel — hủy thao tác đang làm dở\n\n"
+        "💡 _Mẹo: khi nhập số tiền có thể viết tắt — `500k`, `3tr`, `3tr5`, `1m2`._"
     ),
-    "lang.change_prompt": "🌐 Chọn ngôn ngữ:",
-    "lang.changed": "✅ Đã đổi ngôn ngữ sang Tiếng Việt.",
-    # ── onboarding ───────────────────────────────────────────────
-    "onboard.welcome": "Xin chào {name}! 👋 Mình là bot quản lý chi tiêu cá nhân.",
-    "onboard.path_prompt": "Bạn muốn bắt đầu kiểu nào?",
-    "onboard.path_quick": "⚡ Bắt đầu nhanh (3 danh mục mẫu)",
-    "onboard.path_custom": "✏️ Tự chọn danh mục",
-    "onboard.done": "Xong! Gõ /help để xem hướng dẫn.",
-    "onboard.welcome_new": (
-        "👋 Chào mừng bạn đến với MyMoneyWent!\n\n"
-        "🎁 Bạn được dùng thử Pro miễn phí đến hết ngày {trial_end}.\n\n"
-        "Gõ /help để xem hướng dẫn."
-    ),
-    "onboard.welcome_back": "👋 Chào mừng bạn quay lại!",
-    "onboard.trial_expired_info": "⏰ Trial Pro đã hết hạn. Bạn đang ở gói Free.",
-    "onboard.create_fail": "⚠️ Không tạo được tài khoản. Vui lòng thử lại sau ít phút.",
-    # ── categories ───────────────────────────────────────────────
-    "cat.pick_prompt": "📂 Chọn nhóm chi tiêu cho khoản này:",
-    "cat.confirm_tracking": "Đã ghi vào {name}: {amount}.",
-    "cat.created": "✅ Đã tạo nhóm “{name}”.",
-    "cat.default.daily_spending": "🛒 Chi tiêu hàng ngày",
-    "cat.default.saving": "🏦 Tiết kiệm",
-    "cat.default.subscription": "📱 Đăng ký dịch vụ",
-    # ── categorize flow (Zalo numbered picker) ───────────────────
-    "categorize.no_categories": "Đã ghi nhận giao dịch mới. Bạn chưa có danh mục nào active cho tháng này.",
-    "categorize.pick_prefix": "Chọn danh mục cho giao dịch:",
-    "categorize.pick_invalid": "Số không hợp lệ. Chọn lại:",
-    "categorize.confirmed": "Đã phân loại giao dịch vào {name}.",
-    "categorize.queue_added": "Đã thêm giao dịch mới vào hàng đợi phân loại ({count} giao dịch).",
-    "categorize.expired": "Phiên phân loại đã hết hạn. Mình sẽ hỏi lại ở giao dịch mới.",
-    "categorize.direction_in": "thu",
-    "categorize.direction_out": "chi",
-    "categorize.no_description": "(không có mô tả)",
-    "categorize.help_fallback": "Mình đã nhận tin nhắn. Hiện tại Zalo hỗ trợ /start và chọn danh mục bằng số.",
-    # ── manage ───────────────────────────────────────────────────
-    "manage.list_header": "Danh mục của bạn:",
-    "manage.deleted": "🗑️ Đã xoá nhóm “{name}”.",
-    # ── reports ──────────────────────────────────────────────────
-    "report.today_header": "Hôm nay bạn đã chi:",
-    "report.today_empty": "Hôm nay chưa có giao dịch nào.",
-    "report.weekly_header": "Báo cáo tuần này:",
-    "report.csv_header_date": "Ngày",
-    "report.csv_header_amount": "Số tiền",
-    "report.csv_header_category": "Danh mục",
-    "report.csv_header_note": "Ghi chú",
-    # ── settings ─────────────────────────────────────────────────
-    "settings.menu_header": "⚙️ Cài đặt:",
-    "settings.lang_label": "🌐 Ngôn ngữ",
-    "settings.recap_label": "📊 Tóm tắt hàng ngày",
-    "settings.loading": "⏳ Đang tải settings...",
-    "settings.overview_title": "⚙️ Cài đặt",
-    "settings.row_webhook_configured": "🔗 Webhook: đã thiết lập ✓ (tạo {created}) · ...{suffix}",
-    "settings.row_webhook_configured_no_suffix": "🔗 Webhook: đã thiết lập ✓ (tạo {created})",
-    "settings.row_webhook_missing": "🔗 Webhook: chưa thiết lập",
-    "settings.row_email": "📧 Email: {email}",
-    "settings.row_timezone": "🌐 Timezone: {tz}",
-    "settings.row_recap_on": "🌙 Tóm tắt ngày: ✅ Bật",
-    "settings.row_recap_off": "🌙 Tóm tắt ngày: ⛔ Tắt",
-    "settings.row_plan_free": "📋 Gói: Free",
-    "settings.row_plan_trial": "📋 Gói: {plan} (trial, còn {days} ngày)",
-    "settings.row_plan_active": "📋 Gói: {plan}",
-    "settings.row_plan_expired": "📋 Gói: {plan} (hết hạn)",
-    "settings.row_language_vi": "🌐 Ngôn ngữ: 🇻🇳 Tiếng Việt",
-    "settings.row_language_en": "🌐 Ngôn ngữ: 🇬🇧 English",
-    "settings.btn_regen": "🔄 Regenerate URL",
-    "settings.btn_tz": "🌐 Đổi timezone",
-    "settings.btn_recap_off": "🌙 Tắt recap",
-    "settings.btn_recap_on": "🌙 Bật recap",
-    "settings.btn_upgrade": "⬆️ Upgrade",
-    "settings.btn_lang": "🌐 Đổi ngôn ngữ",
-    "settings.lang_pick_prompt": "🌐 Chọn ngôn ngữ:",
-    "settings.tz_prompt": "Nhập timezone (ví dụ: Asia/Ho_Chi_Minh, Asia/Tokyo):",
-    "settings.tz_invalid": (
-        "⚠️ Timezone không hợp lệ. Ví dụ: Asia/Ho_Chi_Minh, Asia/Tokyo, Europe/London."
-    ),
-    "settings.tz_changed": "✅ Đã đổi timezone sang {tz}.",
-    "settings.recap_toggled_on": "✅ Đã bật tóm tắt hàng ngày.",
-    "settings.recap_toggled_off": "✅ Đã tắt tóm tắt hàng ngày.",
-    "settings.regen_success": (
-        "✅ URL webhook mới đã được tạo. Cập nhật SePay với token này (chỉ hiện 1 lần):\n\n"
-        "{token}"
-    ),
-    "settings.regen_fail": "⚠️ Không tạo được URL mới.",
-    # ── upgrade / payment ────────────────────────────────────────
-    "upgrade.cta": "🚀 Nâng cấp lên Pro để mở khoá tính năng.",
-    "payment.pending": "Đang chờ thanh toán… Quét QR và mình sẽ ghi nhận tự động.",
-    "payment.matched": "✅ Đã nhận thanh toán {amount}. Cảm ơn bạn!",
-    # ── scheduled jobs ───────────────────────────────────────────
-    "job.daily_recap_header": "📊 Tóm tắt hôm nay:",
-    "job.daily_recap_empty": "Hôm nay không có giao dịch nào.",
-    "job.reminder_no_activity": "Bạn chưa ghi nhận chi tiêu nào hôm nay. Cập nhật chút nhé?",
-    # ── errors ───────────────────────────────────────────────────
-    "error.generic": "⚠️ Có lỗi xảy ra. Vui lòng thử lại.",
-    "error.rate_limit": "⏱️ Bạn thao tác hơi nhanh, đợi vài giây rồi thử lại.",
-    "error.pro_only": "🔒 Tính năng này dành cho gói Pro.",
-    "error.db": "💾 Lỗi cơ sở dữ liệu, vui lòng thử lại sau.",
-    # ── buttons ──────────────────────────────────────────────────
-    "btn.confirm": "✅ Xác nhận",
-    "btn.cancel": "❌ Huỷ",
-    "btn.skip": "⏭️ Bỏ qua",
-    "btn.new": "➕ Thêm mới",
-    "btn.done": "✅ Xong",
-    "btn.help": "❓ Trợ giúp",
-    "btn.lang_vi": "🇻🇳 Tiếng Việt",
-    "btn.lang_en": "🇬🇧 English",
-    # ── formatting ───────────────────────────────────────────────
-    "fmt.remaining": "Còn lại: {amount}",
-    "fmt.spent": "Đã chi: {amount}",
 }
