@@ -115,6 +115,9 @@ Pre-flight gate (HARD GATE)
   [if Codex review required:] CODEX="${AUTOPILOT_CODEX_BIN:-<full path to review-capable codex>}"
     [ -x "$CODEX" ] || HALT; "$CODEX" review --base <DEFAULT_BRANCH> | head -c1 | wc -c  # MUST be >0
     (0 bytes / interactive-only binary -> CODEX_UNAVAILABLE breaker -> HALT. Never use bare `which codex`.)
+  # Run <VERIFY_CMD> with the SAME env vars the CI workflow sets (its `env:` block), not just
+  # local defaults — CI often overrides secrets/config (e.g. SEPAY_SECRET). Local-green ≠ CI-green
+  # when tests read those values. Mirror CI's env before this step.
   <VERIFY_CMD>                    # MUST be green — baseline <N> tests pass
   Risk-tier self-check: grep the in-scope files for auth|token|billing|funding|
     transactions|migration|secret. If ANY match AND Risk tier < P0
@@ -128,6 +131,9 @@ Anti-patterns (NEVER do — each with reason)
     TYPE_IGNORE_PROPOSED breaker, founder approval required.
   * Auto-merge outside the merge policy in the Risk header — violates locked policy.
   * Touch out-of-scope files/modules/branches — scope creep hides intent; bisect noise.
+  * Hardcode a value the CI workflow overrides (secrets / env-derived config, e.g. SEPAY_SECRET) in
+    tests or fixtures — read it from `config`/env instead. Reason: local pytest passes with the
+    default but CI sets a different value, so the test silently fails ONLY in CI (incident 2026-06-01).
   * Thread raw/un-normalized data (dates, encodings, free text) into a parse path when a
     precomputed/normalized value through state already fixes the finding — it opens an
     edge minefield the reviewer will chase round after round (see REGION_THRASH).
@@ -403,3 +409,8 @@ là READY/COMPLETE → đó là silent drop → fail run, không merge.
   (`row[1]`) into a parse path (the finding needed only a `month_key` state override). Findings
   cascaded in one region, each distinct so RECURRING never fired. Fix: REGION_THRASH breaker +
   fix-round revert-to-lean rule + anti-pattern against threading raw data into parse paths.
+- 2026-06-01 — `zalo-tx-picker` pilot: reached READY with local pytest green, but CI's `lint-and-test`
+  failed — 4 new tests hardcoded `apikey: "test_sepay_secret"` while CI overrides `SEPAY_SECRET`, so
+  the SePay webhook was rejected only in CI. Fix: tests read `config.SEPAY_SECRET`; pre-flight runs
+  tests with CI's env block + anti-pattern against hardcoding CI-overridden values. Lesson: local
+  pytest green ≠ CI green when env differs.

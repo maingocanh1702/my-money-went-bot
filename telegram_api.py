@@ -1,6 +1,3 @@
-# ⚠️ DEPRECATED — Legacy Telegram API wrapper.
-# DO NOT add new features here. Use core/messenger/telegram.py (BaseSender pattern).
-# Delete target: Phase 2 F02 cutover. See docs/implementation-plans/phase-2-handlers.md
 import httpx
 from config import BOT_TOKEN, CHAT_ID
 
@@ -9,41 +6,78 @@ BASE = f"https://api.telegram.org/bot{BOT_TOKEN}"
 _client = httpx.AsyncClient(timeout=10)
 
 
+async def _post_with_md_fallback(endpoint: str, payload: dict, label: str):
+    """POST `payload` with Markdown parse_mode; if Telegram rejects with a
+    parse error (400 'can't parse entities'), retry the SAME payload as plain
+    text so the user still sees the message. Loud-prints failure either way.
+
+    Markdown failures are the most common silent-drop mode for this bot:
+    a slug containing `_` inside an italic-wrapped backtick segment, an
+    unbalanced asterisk, etc. Retrying as plain text guarantees delivery
+    even when formatting is malformed.
+    """
+    r = await _client.post(f"{BASE}/{endpoint}", json=payload)
+    data = r.json()
+    if data.get("ok"):
+        return data
+
+    desc = (data.get("description") or "").lower()
+    is_parse_err = ("can't parse" in desc) or ("entities" in desc and "parse" in desc)
+    if is_parse_err and payload.get("parse_mode"):
+        # Retry as plain text — drop parse_mode entirely.
+        retry_payload = {k: v for k, v in payload.items() if k != "parse_mode"}
+        r2 = await _client.post(f"{BASE}/{endpoint}", json=retry_payload)
+        data2 = r2.json()
+        if data2.get("ok"):
+            print(f"{label} recovered via plaintext fallback. Original error: {desc!r}")
+            return data2
+        print(f"{label} fallback ALSO failed:", data2)
+        return data2
+
+    print(f"{label} error:", data)
+    return data
+
+
 async def send_text(text: str, chat_id: str = None):
     chat_id = chat_id or CHAT_ID
-    r = await _client.post(f"{BASE}/sendMessage", json={
+    payload = {
         "chat_id":    chat_id,
         "text":       text,
         "parse_mode": "Markdown",
-    })
-    data = r.json()
-    if not data.get("ok"):
-        print("sendText error:", data)
-    return data
+    }
+    return await _post_with_md_fallback("sendMessage", payload, "sendText")
 
 
 async def send_with_buttons(text: str, inline_keyboard: list, chat_id: str = None):
     chat_id = chat_id or CHAT_ID
-    r = await _client.post(f"{BASE}/sendMessage", json={
+    payload = {
         "chat_id":      chat_id,
         "text":         text,
         "parse_mode":   "Markdown",
         "reply_markup": {"inline_keyboard": inline_keyboard},
-    })
-    data = r.json()
-    if not data.get("ok"):
-        print("sendWithButtons error:", data)
-    return data
+    }
+    return await _post_with_md_fallback("sendMessage", payload, "sendWithButtons")
 
 
-async def edit_message(message_id: int, text: str, chat_id: str = None):
+async def edit_message(
+    message_id: int,
+    text: str,
+    chat_id: str = None,
+    inline_keyboard: list | None = None,
+):
+    """Edit an existing message in place. Optionally replace its inline
+    keyboard at the same time — passing inline_keyboard=[] clears the buttons.
+    """
     chat_id = chat_id or CHAT_ID
-    await _client.post(f"{BASE}/editMessageText", json={
+    payload = {
         "chat_id":    chat_id,
         "message_id": message_id,
         "text":       text,
         "parse_mode": "Markdown",
-    })
+    }
+    if inline_keyboard is not None:
+        payload["reply_markup"] = {"inline_keyboard": inline_keyboard}
+    return await _post_with_md_fallback("editMessageText", payload, "editMessage")
 
 
 async def delete_message(message_id: int, chat_id: str = None):
@@ -62,13 +96,19 @@ async def answer_callback(callback_id: str):
 
 async def set_my_commands():
     commands = [
-        {"command": "status",   "description": "📊 Tổng quan tháng này"},
+        {"command": "report",   "description": "📊 Chi tiêu theo account + category (tuần/tháng/quý/năm)"},
         {"command": "today",    "description": "🍜 Hôm nay tiêu bao nhiêu?"},
-        {"command": "banks",    "description": "🏦 Chi tiêu theo từng bank account"},
+        {"command": "accounts", "description": "🏦 List accounts / add mới"},
         {"command": "manage",   "description": "⚙️ Sửa/xóa categories"},
+        {"command": "keywords", "description": "🔑 Auto-phân loại theo keyword"},
         {"command": "allocate", "description": "💰 (Optional) đặt budget"},
-        {"command": "weekly",   "description": "📈 Tổng kết tuần"},
-        {"command": "report",   "description": "📅 Báo cáo tháng đầy đủ"},
+        {"command": "recat",    "description": "↩️ Sửa phân loại giao dịch cũ"},
+        {"command": "pending",  "description": "📌 Phân loại giao dịch đang chờ"},
+        {"command": "transfer", "description": "🔁 Chuyển tiền giữa các account"},
+        {"command": "cc",       "description": "💳 Ghi nhận trả thẻ tín dụng"},
+        {"command": "lang",     "description": "🌐 Đổi ngôn ngữ vi/en"},
+        {"command": "cancel",   "description": "❌ Hủy thao tác đang làm dở"},
+        {"command": "help",     "description": "❓ Danh sách lệnh"},
     ]
     await _client.post(f"{BASE}/setMyCommands", json={"commands": commands})
 
@@ -79,19 +119,40 @@ async def drop_pending_updates():
     print("Webhook info:", r.json())
 
 
-def build_bucket_buttons(buckets: list[dict], prefix: str, include_new: bool = False) -> list[list]:
-    """2-column grid of bucket buttons.
+def build_bucket_buttons(buckets: list[dict], prefix: str, include_new: bool = False,
+                         frequent_ids: list[str] | None = None) -> list[list]:
+    """2-column grid of bucket buttons with optional frequent-first row.
 
-    If `include_new=True`, append a full-width '➕ New category' button at the bottom
-    (callback_data = f"{prefix}_new"). Used when categorizing a transaction so users
-    can create a new bucket inline without going through /manage.
+    If `frequent_ids` is provided, those buckets are shown first as a
+    highlighted '⚡' row, then the remaining buckets follow in 2-column grid.
+    If `include_new=True`, append a full-width '➕ New category' button.
     """
-    buttons = [
+    freq_set = set(frequent_ids or [])
+    freq_buckets = []
+    rest_buckets = []
+    for b in buckets:
+        if b["id"] in freq_set:
+            freq_buckets.append(b)
+        else:
+            rest_buckets.append(b)
+    # Sort frequent buckets by the order in frequent_ids
+    if frequent_ids:
+        freq_order = {fid: i for i, fid in enumerate(frequent_ids)}
+        freq_buckets.sort(key=lambda b: freq_order.get(b["id"], 99))
+
+    rows = []
+    # Frequent row (up to 3 in one row)
+    if freq_buckets:
+        rows.append([
+            {"text": f"⚡ {b['name']}", "callback_data": f"{prefix}_{b['id']}"}
+            for b in freq_buckets
+        ])
+    # Remaining in 2-column grid
+    rest_buttons = [
         {"text": b["name"], "callback_data": f"{prefix}_{b['id']}"}
-        for b in buckets
+        for b in rest_buckets
     ]
-    # Pair them into rows of 2
-    rows = [buttons[i:i+2] for i in range(0, len(buttons), 2)]
+    rows += [rest_buttons[i:i+2] for i in range(0, len(rest_buttons), 2)]
     if include_new:
         rows.append([{"text": "➕ New category", "callback_data": f"{prefix}_new"}])
     return rows

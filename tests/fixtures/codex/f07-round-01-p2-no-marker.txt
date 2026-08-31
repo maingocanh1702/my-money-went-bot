@@ -1,6 +1,0 @@
-The settings feature is mostly solid, but analytics writes can currently raise and break primary user flows despite being intended as non-blocking. That behavior is a functional reliability bug in the new code.
-
-Review comment:
-
-- [P2] Prevent analytics insert failures from breaking settings flows — /Users/maingocanh/Projects/MyMoneyWent/core/settings_svc.py:270-279
-  `emit_analytics()` is documented as “Never raises on caller path”, but it currently performs a bare `INSERT` without error handling. Any transient DB error (e.g., lock timeout, dropped connection, or malformed JSON edge case) will raise and fail user-facing handlers like `/settings`, timezone updates, or recap toggles after the main action has already completed, causing inconsistent UX and retried side effects. Wrap the insert in a local `try/except` (with logging) so analytics remains best-effort as intended.

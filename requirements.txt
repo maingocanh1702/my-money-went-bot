@@ -16,3 +16,8 @@ sentry-sdk[fastapi]==2.18.0
 # jinja2 needed by sentry-sdk's StarletteIntegration template patch
 # Pinned to 3.1.6+ to address CVE-2024-56326, CVE-2024-56201, CVE-2025-27516
 jinja2==3.1.6
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.25.2
+freezegun==1.5.1

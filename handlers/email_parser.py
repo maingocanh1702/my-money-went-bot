@@ -1,15 +1,14 @@
-# ⚠️ DEPRECATED — Legacy email parser. New parsers go in markets/vn/email_parsers/.
-# DO NOT add new bank parsers here. See docs/implementation-plans/phase-2-handlers.md
 """
 handlers/email_parser.py — Parse bank notification emails thành transaction data
 
 Supported banks:
-  - Techcombank (TCB)
-  - Cake by VPBank
+  - Techcombank (TCB)            — VND
+  - Cake by VPBank               — VND
+  - Hang Seng Bank (Hong Kong)   — HKD (outgoing transfers only)
 
 Flow:
   Google Apps Script nhận email → POST /webhook/email
-  → parse_email() → dict giống SePay payload
+  → parse_email() → dict giống SePay payload (có thêm field "currency")
   → handle_sepay_webhook() xử lý như bình thường
 """
 
@@ -21,13 +20,14 @@ from datetime import datetime
 # ─── Sender → parser mapping ──────────────────────────────────────────────────
 
 BANK_SENDERS = {
-    "automail@techcombank.com.vn": "tcb",
-    "ebank@techcombank.com.vn":    "tcb",
-    "no-reply@techcombank.com.vn": "tcb",
-    "thongbao@techcombank.com.vn": "tcb",
-    "no-reply@cake.vn":            "cake",
-    "notification@cake.vn":        "cake",
-    "noreply@cake.vn":             "cake",
+    "automail@techcombank.com.vn":         "tcb",
+    "ebank@techcombank.com.vn":            "tcb",
+    "no-reply@techcombank.com.vn":         "tcb",
+    "thongbao@techcombank.com.vn":         "tcb",
+    "no-reply@cake.vn":                    "cake",
+    "notification@cake.vn":                "cake",
+    "noreply@cake.vn":                     "cake",
+    "hangseng@infoservices.hangseng.com":  "hangseng",
 }
 
 
@@ -35,29 +35,96 @@ def parse_email(from_addr: str, subject: str, body: str, date: str) -> dict | No
     """
     Parse một email thông báo ngân hàng thành dict giống SePay payload.
     Trả về None nếu không nhận ra format hoặc không phải email giao dịch.
+
+    Hỗ trợ 2 trường hợp:
+    1. Email gốc từ bank → match qua sender header
+    2. Email forward từ Gmail account khác (vd habt04 → maingocanh1702):
+       header `From:` lúc này là forwarder, sender thật chỉ nằm trong body
+       sau dòng "Forwarded message". Hàm sẽ scan body để extract sender gốc.
     """
     # Normalize sender (lấy phần email trong "Name <email>")
     sender = _extract_email_addr(from_addr).lower()
 
-    bank = BANK_SENDERS.get(sender)
+    bank = _route_by_sender(sender)
+
+    # Nếu sender không match bank trực tiếp, thử detect forwarded email
     if bank is None:
-        # Thử match domain
-        domain = sender.split("@")[-1] if "@" in sender else ""
-        if "techcombank" in domain:
-            bank = "tcb"
-        elif "cake" in domain:
-            bank = "cake"
+        original_sender = _extract_forwarded_sender(body)
+        if original_sender:
+            bank = _route_by_sender(original_sender.lower())
+            if bank:
+                print(f"[email_parser] detected forwarded mail: "
+                      f"{sender!r} → original sender {original_sender!r} → bank={bank!r}")
 
     if bank is None:
         print(f"[email_parser] unknown sender: {sender!r}")
         return None
 
+    # Strip "Fwd:" / "Fw:" prefix khỏi subject — parser sau dùng subject để
+    # confirm transaction kind.
+    clean_subject = re.sub(r'^\s*(?:Fwd?:?\s*)+', '', subject, flags=re.IGNORECASE)
+
     if bank == "tcb":
-        return _parse_tcb(subject, body, date)
+        return _parse_tcb(clean_subject, body, date)
     elif bank == "cake":
-        return _parse_cake(subject, body, date)
+        return _parse_cake(clean_subject, body, date)
+    elif bank == "hangseng":
+        return _parse_hangseng(clean_subject, body, date)
 
     return None
+
+
+def _route_by_sender(sender: str) -> str | None:
+    """Map email địa chỉ → bank code. Return None nếu không match."""
+    bank = BANK_SENDERS.get(sender)
+    if bank is not None:
+        return bank
+    domain = sender.split("@")[-1] if "@" in sender else ""
+    if "techcombank" in domain:
+        return "tcb"
+    if "cake" in domain:
+        return "cake"
+    if "hangseng" in domain or "infoservices.hangseng" in domain:
+        return "hangseng"
+    return None
+
+
+def _extract_forwarded_sender(body: str) -> str | None:
+    """
+    Tìm sender gốc trong body của email đã forward.
+
+    Gmail forward template (zh & en):
+      ---------- Forwarded message ---------
+      From: <Display Name> <email@domain.com>
+      Date: ...
+      Subject: ...
+
+    Trả về địa chỉ email (chỉ phần trong dấu < >, hoặc bare addr).
+    """
+    # Tìm block "Forwarded message" — Gmail dùng dashes hoặc html h-prefix
+    fwd_idx = -1
+    for marker in ("Forwarded message", "Forwarded Message", "tin nhắn được chuyển tiếp"):
+        idx = body.find(marker)
+        if idx >= 0:
+            fwd_idx = idx
+            break
+    if fwd_idx < 0:
+        return None
+
+    # Trong block sau marker, tìm dòng "From: ..."
+    fwd_block = body[fwd_idx:fwd_idx + 2000]  # đủ rộng cho full header
+    m = re.search(r'^\s*From\s*:\s*(.+)$', fwd_block, re.MULTILINE | re.IGNORECASE)
+    if not m:
+        return None
+
+    raw = m.group(1).strip()
+    # Lấy email trong dấu < > nếu có
+    angle = re.search(r'<\s*([^>\s]+@[^>\s]+)\s*>', raw)
+    if angle:
+        return angle.group(1).strip()
+    # Fallback: tìm bare email pattern
+    bare = re.search(r'([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})', raw)
+    return bare.group(1).strip() if bare else None
 
 
 # ─── Techcombank parser ────────────────────────────────────────────────────────
@@ -133,19 +200,23 @@ def _parse_tcb(subject: str, body: str, date: str) -> dict | None:
         or hashlib.md5(f"{amount}|{description}|{tx_date}".encode()).hexdigest()[:16]
     )
 
-    # Bank account ID — TCB email có "Tài khoản: ****1234"
-    last4 = _extract_account_last4(body)
-    bank_account = f"TCB-{last4}" if last4 else "TCB"
+    # Extract masked account number (Tài khoản: ****1234) for resolver
+    account_hint = None
+    acct_m = re.search(r'Tài khoản\s*[:#]?\s*([\*xX\d\-]{4,30})',
+                       body, re.IGNORECASE)
+    if acct_m:
+        account_hint = acct_m.group(1).strip()
 
     return {
         "transferAmount":  amount,
         "transferType":    tx_type,
+        "currency":        "VND",
         "description":     description,
         "content":         description,
         "transactionDate": tx_date,
         "referenceCode":   ref_code,
-        "bankAccount":     bank_account,
         "_source":         "email_tcb",
+        "_account_hint":   account_hint or "",
     }
 
 
@@ -257,25 +328,37 @@ def _parse_cake(subject: str, body: str, date: str) -> dict | None:
         or hashlib.md5(f"{amount}|{description}|{tx_date}".encode()).hexdigest()[:16]
     )
 
-    # Bank account ID — Cake debit (format 1) thường có acc number, credit
-    # card (format 2) có "Thẻ: ****5678". Nếu cả 2 đều miss → fallback "Cake".
-    last4 = _extract_account_last4(body)
-    if last4:
-        # Phân biệt thẻ tín dụng vs tài khoản gửi → giúp user thấy rõ trong /banks
-        is_card = bool(re.search(r'Thẻ|the|Card', body, re.IGNORECASE))
-        bank_account = f"Cake-Card-{last4}" if is_card else f"Cake-{last4}"
-    else:
-        bank_account = "Cake"
+    # Cake has 2 product lines, distinguished by email body shape:
+    #   - Format 1 (bank account biến động): starts with ±amount, has
+    #     "Số dư", "Từ", "Nội dung", "Lúc" lines.
+    #   - Format 2 (credit card POS/QR payment): has "Giao dịch: Thanh toán"
+    #     header, no signed amount prefix, has "Tại:" / "Vào lúc:" / "Tình trạng:".
+    # The merchant-ref suffix (_NNNN) is a Payoo merchant code, NOT a card
+    # last-4 — different merchants will yield different IDs even for the
+    # same physical card. So we don't try to extract a card identifier.
+    # Instead: one hint per product line (`cake_main` for bank, `cake_cc`
+    # for credit card). User maps each to its own account on first sight.
+    body_lower = body.lower()
+    is_cc_payment = bool(
+        re.search(r'giao\s*d[ịi]ch[:\s]+thanh\s*to[áa]n', body, re.IGNORECASE)
+        or any(kw in body_lower for kw in (
+            "thanh toán pos", "thanh toan pos",
+            "thanh toán qr", "thanh toan qr",
+            "the tin dung", "thẻ tín dụng",
+        ))
+    )
+    account_hint = "cake_cc" if is_cc_payment else "cake_main"
 
     return {
         "transferAmount":  amount,
         "transferType":    tx_type,
+        "currency":        "VND",
         "description":     description,
         "content":         description,
         "transactionDate": tx_date,
         "referenceCode":   ref_code,
-        "bankAccount":     bank_account,
         "_source":         "email_cake",
+        "_account_hint":   account_hint,
     }
 
 
@@ -308,6 +391,220 @@ def _parse_cake_date(body: str) -> str | None:
                     return m.group(1)
             except ValueError:
                 continue
+    return None
+
+
+# ─── Hang Seng Bank parser (Hong Kong, HKD) ───────────────────────────────────
+
+# Marker phrases (zh-Hant + EN) confirming đây là email giao dịch — đối ngẫu
+# với subject filter của TCB/Cake. Hang Seng email body có cả 2 ngôn ngữ.
+_HANGSENG_TX_MARKERS = (
+    "your transfer is successful",
+    "你已成功轉賬",
+    "successfully transferred to payee",
+    "已成功轉賬至收款人",
+    "transfer status",
+    "交易狀況",
+)
+
+
+def _parse_hangseng(subject: str, body: str, date: str) -> dict | None:
+    """
+    Hang Seng Bank email format (bilingual zh-Hant / English).
+
+    Reference body (outgoing transfer to non-registered payee):
+      你已成功轉賬（未登記收款人）
+      Your transfer is successful (Non-registered payee)
+      由 From: 218-763XXX-888
+      HKD300.00
+      至 To: 11XXXX876
+      交易狀況 Transfer status: 已成功轉賬至收款人 / Successfully transferred to payee
+      轉賬日期 Transfer date: 2026-05-06
+      收款銀行 Receiving bank: The Hongkong and Shanghai Banking Corporation Limited
+      預設銀行 Default bank: Y
+      交易號碼 Transaction ID: HD12650698975039
+      參考編號 Reference number: N50651066103
+
+    Hiện chỉ hỗ trợ outgoing transfer (chuyển đi). Incoming/credit-card emails
+    chưa có mẫu — sẽ thêm khi anh forward sample.
+    """
+    # Confirm đây là email giao dịch (subject hoặc body phải chứa marker)
+    blob_lower = f"{subject}\n{body}".lower()
+    if not any(marker.lower() in blob_lower for marker in _HANGSENG_TX_MARKERS):
+        print(f"[email_parser][hangseng] skipping non-transaction email: subject={subject!r}")
+        return None
+
+    # ── Amount + currency ─────────────────────────────────────────
+    # Hang Seng format số tiền có dạng "HKD300.00" (currency liền số) —
+    # khác hẳn TCB/Cake (số trước, đơn vị sau). Regex bắt cả 2 thứ tự cho an toàn.
+    amount_patterns = [
+        r'(HKD|USD|CNY|EUR|GBP|JPY)\s*([\d,]+\.\d{1,2})',  # "HKD300.00"
+        r'(HKD|USD|CNY|EUR|GBP|JPY)\s*([\d,]+)',           # "HKD 300"
+        r'([\d,]+\.\d{1,2})\s*(HKD|USD|CNY|EUR|GBP|JPY)',  # fallback "300.00 HKD"
+    ]
+    amount = None
+    currency = "HKD"  # default cho Hang Seng
+    for pattern in amount_patterns:
+        m = re.search(pattern, body, re.IGNORECASE)
+        if m:
+            g1, g2 = m.group(1), m.group(2)
+            # Xác định group nào là currency / số
+            if g1.upper() in {"HKD", "USD", "CNY", "EUR", "GBP", "JPY"}:
+                currency = g1.upper()
+                amount_str = g2
+            else:
+                currency = g2.upper()
+                amount_str = g1
+            try:
+                amount = float(amount_str.replace(",", ""))
+                break
+            except ValueError:
+                continue
+
+    if amount is None:
+        print(f"[email_parser][hangseng] could not find amount in body")
+        return None
+
+    # ── Transaction direction ─────────────────────────────────────
+    # 你已成功轉賬 / Your transfer is successful → outgoing
+    # 你已成功收款 / Your transfer received → incoming (chưa hỗ trợ — chưa có mẫu)
+    body_lower = body.lower()
+    if "你已成功收款" in body or "你已成功收到" in body or "your transfer received" in body_lower:
+        tx_type = "in"
+    else:
+        # Default: outgoing (subject hiện tại của Hang Seng chỉ là transfer-out)
+        tx_type = "out"
+
+    # ── Description ───────────────────────────────────────────────
+    # Format: "<Title> · To <account> @ <bank>"
+    # Title: lấy line đầu tiên có "Your transfer" hoặc "你已成功"
+    title = "Hang Seng transfer"
+    title_patterns = [
+        r'(Your transfer\s+(?:is\s+\w+|received)(?:\s*\([^)]+\))?)',
+        r'(你已成功[^\n]+)',
+    ]
+    for pattern in title_patterns:
+        m = re.search(pattern, body, re.IGNORECASE)
+        if m:
+            title = m.group(1).strip()
+            break
+
+    # Tài khoản đích — Hang Seng có nhiều format:
+    #   "至 To: 11XXXX876"           — masked account number
+    #   "至 To: +852-6655****"        — Hong Kong mobile (FPS payment)
+    #   "至 To: john@example.com"    — FPS email proxy
+    # Charset: digits, +, -, *, X, @, ., _ (allow most identifiers)
+    to_match = re.search(
+        r'(?:至\s*)?To[:\s]+([+\dA-Z\-X*@._]+)',
+        body, re.IGNORECASE,
+    )
+    to_acct = to_match.group(1).strip() if to_match else ""
+
+    # Receiving bank
+    bank_match = re.search(
+        r'(?:收款銀行|Receiving bank)[:\s]+(.+?)(?:\n|預設銀行|Default bank|$)',
+        body, re.IGNORECASE | re.DOTALL,
+    )
+    receiving_bank = bank_match.group(1).strip() if bank_match else ""
+
+    # Compose description
+    desc_parts = [title]
+    if to_acct:
+        desc_parts.append(f"To {to_acct}")
+    if receiving_bank:
+        # Rút gọn tên bank dài cho dễ đọc trong sheet
+        short_bank = (receiving_bank[:60] + "…") if len(receiving_bank) > 60 else receiving_bank
+        desc_parts.append(f"@ {short_bank}")
+    description = " · ".join(desc_parts)[:200]
+
+    # ── Date ──────────────────────────────────────────────────────
+    tx_date = _parse_hangseng_date(body) or date
+
+    # ── Reference code ────────────────────────────────────────────
+    # Ưu tiên: Transaction ID (HD…) > Subject ref [Cxxx] > Reference number > hash fallback
+    # Subject ref [Cxxx] có ở 1 số loại GD (vd FPS), không phải email nào cũng có.
+    subject_ref_match = re.search(r'Ref\s*:?\s*\[?([A-Z0-9]{6,30})\]?', subject, re.IGNORECASE)
+    subject_ref = subject_ref_match.group(1) if subject_ref_match else None
+
+    ref_code = (
+        _hangseng_find_ref(body)
+        or subject_ref
+        or _find_ref_code(body)
+        or hashlib.md5(f"{amount}|{currency}|{description}|{tx_date}".encode()).hexdigest()[:16]
+    )
+
+    # ── Account hint (sender side) ────────────────────────────────
+    # "由 From: 218-763999-888" → "218-763999-888"
+    from_match = re.search(
+        r'(?:由\s*)?From[:\s]+([+\dA-Z\-X*@._]+)',
+        body, re.IGNORECASE,
+    )
+    account_hint = from_match.group(1).strip() if from_match else ""
+
+    return {
+        "transferAmount":  amount,
+        "transferType":    tx_type,
+        "currency":        currency,
+        "description":     description,
+        "content":         description,
+        "transactionDate": tx_date,
+        "referenceCode":   ref_code,
+        "_source":         "email_hangseng",
+        "_account_hint":   account_hint,
+    }
+
+
+def _parse_hangseng_date(body: str) -> str | None:
+    """Hang Seng emails dùng ISO format 'YYYY-MM-DD' cho Transfer date."""
+    patterns = [
+        # "Transfer date: 2026-05-06" hoặc "轉賬日期 Transfer date: 2026-05-06"
+        r'(?:轉賬日期[\s\S]*?|Transfer date[:\s]+)(\d{4}-\d{2}-\d{2})',
+        # Fallback: bất kỳ ISO date nào trong body
+        r'(\d{4}-\d{2}-\d{2})',
+    ]
+    for pattern in patterns:
+        m = re.search(pattern, body, re.IGNORECASE)
+        if m:
+            raw = m.group(1).strip()
+            try:
+                # Chỉ có ngày, không có giờ — dùng noon local time để tránh rơi
+                # qua ngày khi convert timezone
+                dt = datetime.strptime(raw, "%Y-%m-%d").replace(hour=12)
+                return dt.isoformat()
+            except ValueError:
+                return raw
+    return None
+
+
+def _hangseng_find_ref(body: str) -> str | None:
+    """Tìm Transaction ID (HD…) hoặc Reference number (N…) trong body Hang Seng.
+
+    Cẩn thận: không dùng re.IGNORECASE với charset [A-Z0-9] vì sẽ match cả
+    chữ thường (vd "Transaction" sẽ pass [A-Z0-9]{8,30}). Match nhãn riêng,
+    capture giá trị riêng — strict uppercase + digits only.
+    """
+    label_patterns = [
+        # Nhãn EN — thường có ngay sau dấu ":"
+        r'Transaction ID\s*[:\-]?\s*([A-Z0-9]{8,30})\b',
+        r'Reference number\s*[:\-]?\s*([A-Z0-9]{8,30})\b',
+        # Nhãn zh-Hant — value có thể ở line tiếp theo
+        r'交易號碼\s*[:\-]?[\s\n]*(?:Transaction ID\s*[:\-]?\s*)?([A-Z0-9]{8,30})\b',
+        r'參考編號\s*[:\-]?[\s\n]*(?:Reference number\s*[:\-]?\s*)?([A-Z0-9]{8,30})\b',
+    ]
+    for pattern in label_patterns:
+        # IGNORECASE only for label text — capture group has explicit uppercase charset
+        m = re.search(pattern, body)
+        if m:
+            return m.group(1).strip()
+        # Fallback: try with IGNORECASE for label, but the [A-Z0-9] in the
+        # capture is still upper-only because IGNORECASE only takes effect
+        # at the literal character class ranges.
+        m = re.search(pattern, body, re.IGNORECASE)
+        if m:
+            val = m.group(1).strip()
+            # Đảm bảo value đúng uppercase + digits (loại bỏ false-positive như "Transaction")
+            if re.fullmatch(r'[A-Z0-9]{8,30}', val):
+                return val
     return None
 
 
@@ -349,25 +646,3 @@ def _find_ref_code(body: str) -> str | None:
         if m:
             return m.group(1).strip()
     return None
-
-
-def _extract_account_last4(body: str) -> str:
-    """Trích last 4 chữ số của số tài khoản / thẻ trong email body.
-
-    Bank email thường mask số TK kiểu "****1234" / "x1234" / "Tài khoản: ...1234".
-    Trả về '' nếu không tìm thấy — caller fallback sang tên bank thuần.
-    """
-    patterns = [
-        r'Tài khoản[^\n:]*:[^\n]*?(\d{4})\b',
-        r'Số tài khoản[^\n:]*:[^\n]*?(\d{4})\b',
-        r'Thẻ[^\n:]*:[^\n]*?(\d{4})\b',
-        r'Account[^\n:]*:[^\n]*?(\d{4})\b',
-        r'Card[^\n:]*:[^\n]*?(\d{4})\b',
-        r'\*{2,}\s*(\d{4})\b',          # generic "****1234"
-        r'[xX]{2,}\s*(\d{4})\b',        # generic "xxxx1234"
-    ]
-    for pattern in patterns:
-        m = re.search(pattern, body, re.IGNORECASE)
-        if m:
-            return m.group(1)
-    return ""
