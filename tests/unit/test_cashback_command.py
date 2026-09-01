@@ -95,7 +95,7 @@ def test_mcc_overview_groups_patterns_by_mcc(fake_ss):
     # header counts: 23 seeded patterns across 5 MCCs
     assert "5 MCC" in s
     # grouped under the card's rule name (not bare MCC code) + emoji prefix
-    assert "🛒" in s and "Siêu thị" in s and "(5411)" in s
+    assert "🏷️" in s and "Siêu thị" in s and "(5411)" in s
     # patterns shown uppercased, comma-joined, on the same line as their MCC
     line_5411 = next(ln for ln in s.splitlines() if "(5411)" in ln)
     assert "WINMART" in line_5411 and "BHX" in line_5411

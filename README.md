@@ -1,10 +1,7 @@
 # 💰 My Money Went Bot
 
-![My Money Went Bot — Telegram bot catches every Vietnamese bank transaction and writes it to your Google Sheet](docs/screenshots/banner.png)
-
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
-[![Tests: 300+ passing](https://img.shields.io/badge/tests-300%2B%20passing-brightgreen.svg)](tests/)
 
 [🇻🇳 Tiếng Việt](README.vi.md)
 
@@ -14,7 +11,7 @@
 
 ## What it does
 
-![How it works — 5-step flow: bank transaction, SePay webhook, bot processes, write to Google Sheet, Telegram report](docs/screenshots/how-it-works.png)
+
 
 **My Money Went Bot is a personal expense tracker that lives in your Telegram chat.** Every time a Vietnamese bank sends a transaction notification (via [SePay](https://sepay.vn)), the bot logs it to a Google Sheet *you own* and asks you to tap a category — or skips that step entirely if you've taught it a keyword rule. Type `/report` anytime to see where your money went, sliced by account, category, and time period.
 
@@ -66,7 +63,7 @@ Most personal finance apps (Money Lover, Misa, MoneyKeeper, ...) want your bank 
 
 ## Features
 
-![Feature overview — 6 features, system architecture, supported banks, and command list](docs/screenshots/features-architecture.png)
+
 
 The full feature breakdown:
 
@@ -94,22 +91,7 @@ The full feature breakdown:
 
 ---
 
-## Screenshots
 
-<table>
-  <tr>
-    <td width="50%" align="center"><b>🤖 Auto-categorize + log</b></td>
-    <td width="50%" align="center"><b>📊 <code>/report</code> — monthly category lens</b></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/auto-categorize.png" alt="Auto-categorize a Bach Hoa Xanh transaction" /></td>
-    <td><img src="docs/screenshots/report-monthly.png" alt="Monthly report with budget bars and tracking buckets" /></td>
-  </tr>
-  <tr>
-    <td>Tx from Bach Hoa Xanh hits a <code>/keywords</code> rule → auto-tagged Food, no prompt. Bot replies with logged amount + bucket progress.</td>
-    <td>Tổng spending vs budget, per-bucket budget bars with status emoji, plus a Tracking section for buckets you watch without capping.</td>
-  </tr>
-</table>
 
 ---
 
@@ -174,6 +156,11 @@ A subset (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) use **direct API in
 | `Keyword Rules` | Auto-categorize patterns |
 | `Bot State` | Wizard / picker state per chat |
 | `Monthly Reports` | Archived monthly summaries |
+| `Cashback Rules` | MCC-based cashback rules per card |
+| `Cashback Tx Tiers` | Per-transaction cap tiers |
+| `Cashback Card Config` | Card cashback settings (rate, gate, period) |
+| `Cashback Ledger` | Per-MCC cashback earned per cycle |
+| `MCC Map` | Keyword → MCC code mapping |
 
 ### Step 3 — Set up SePay
 
@@ -189,7 +176,7 @@ A subset (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) use **direct API in
 
 ```bash
 git clone https://github.com/maingocanh1702/MyMoneyWent.git
-cd my-money-went-bot
+cd MyMoneyWent
 cp .env.example .env
 # Edit .env: BOT_TOKEN, CHAT_ID, SHEET_ID, GOOGLE_CREDS_JSON (or GOOGLE_CREDS)
 ```
@@ -255,6 +242,11 @@ Future tx from the same account auto-route. Set up `/keywords` rules to auto-cat
 | `/keywords` | Manage auto-categorize rules. |
 | `/allocate` | Edit budget. Wizard on first run, per-bucket edit-mode after. |
 | `/cashback` | Credit-card cashback: rules, MCC map, billing cycle, overview. |
+| `/cashback templates` | List available YAML card templates. |
+| `/cashback seed <template> [cc]` | Apply a template (Cake Freedom, Techcombank Visa, etc.). |
+| `/cashback setup [cc]` | Wizard to create custom cashback rules from scratch. |
+| `/cashback export [cc]` | Export card config as YAML template. |
+| `/cashback savetemplate [cc]` | Save current config as a reusable template. |
 | `/transfer <amount> <from> <to>` | Record an internal transfer between tracked accounts. |
 | `/cc pay <amount> [bank] <cc>` | Record a credit-card payment. |
 | `/recat [row]` | Re-categorize a past transaction. No argument → pick from the 8 most recent; `/recat <row>` targets a sheet row directly. |
@@ -308,7 +300,13 @@ Future tx from the same account auto-route. Set up `/keywords` rules to auto-cat
 │   ├── reports.py                # /today snapshot + daily recap
 │   ├── zalo_queue.py             # Durable Zalo pending-tx queue (/pending)
 │   └── zalo_render.py            # Zalo plain-text summaries
-├── tests/unit/                   # 300+ unit tests, in-memory FakeSpreadsheet
+├── card_templates/               # YAML cashback card templates
+│   ├── __init__.py               # Loader, validator, exporter, cache
+│   ├── schema.py                 # CardTemplate, CardConfig, RuleConfig dataclasses
+│   ├── validate.py               # Standalone CLI validator
+│   ├── cake_freedom.yaml         # Cake by VPBank Freedom template
+│   └── techcombank_visa.yaml     # Techcombank Visa template
+├── tests/unit/                   # Unit tests, in-memory FakeSpreadsheet
 ├── google_apps_script.js         # Gmail → /webhook/email forwarder
 ├── .env.example                  # Template — copy to .env and fill in
 ├── crontab.txt                   # Example cron jobs (VPS reference; prod = GitHub Actions)

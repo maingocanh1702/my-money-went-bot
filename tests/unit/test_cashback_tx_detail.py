@@ -62,7 +62,7 @@ def test_detail_has_all_four_blocks(fake_ss):
     # 4. which card
     assert "Cake CC" in s
     # 1. this category accrued vs per-cycle cap (200k)
-    assert "🛒 Siêu thị" in s
+    assert "🏷️ Siêu thị" in s
     assert "200.000" in s
     # 2. cycle total first, then activated portion (pending = total − activated)
     assert "Σ hoàn kỳ này" in s and "đã kích hoạt" in s
