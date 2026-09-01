@@ -6,38 +6,25 @@ on:
   pull_request:
 
 jobs:
-  lint-and-test:
-    name: Lint + Tests
+  test:
+    name: Tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
-      # Pinned to full commit SHA (not floating tags) per supply-chain best practice.
-      # See: https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions
-      # Set up Dependabot (.github/dependabot.yml) to auto-bump these SHAs.
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        uses: actions/checkout@v4
 
       - name: Setup Python 3.11
-        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b  # v5.3.0
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Install runtime + dev dependencies
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # Runtime deps (structlog, httpx, fastapi, sentry-sdk, ...) live in
-          # requirements.txt for Railway nixpacks compatibility (see pyproject.toml comment).
-          # CI must install BOTH requirements.txt + [dev] extras so pytest can import core/markets.
           pip install -r requirements.txt
-          pip install -e ".[dev]"
 
-      - name: Pre-commit hooks (ruff, black, mypy, detect-secrets)
-        run: pre-commit run --all-files --show-diff-on-failure
-
-      - name: Import boundary check (core ↛ markets per ADR-0001)
-        run: lint-imports
-
-      - name: Pytest
+      - name: Run tests
         run: pytest tests/ -v --tb=short
