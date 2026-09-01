@@ -175,8 +175,8 @@ A subset (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) use **direct API in
 ### Step 4 — Deploy
 
 ```bash
-git clone https://github.com/maingocanh1702/MyMoneyWent.git
-cd MyMoneyWent
+git clone https://github.com/maingocanh1702/my-money-went-bot.git
+cd my-money-went-bot
 cp .env.example .env
 # Edit .env: BOT_TOKEN, CHAT_ID, SHEET_ID, GOOGLE_CREDS_JSON (or GOOGLE_CREDS)
 ```
