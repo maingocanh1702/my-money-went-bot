@@ -1,10 +1,8 @@
 # 💰 My Money Went Bot
 
-![My Money Went Bot — Bot Telegram tự động theo dõi chi tiêu từ ngân hàng Việt Nam và ghi vào Google Sheet của bạn](docs/screenshots/banner.png)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
-[![Tests: 300+ passing](https://img.shields.io/badge/tests-300%2B%20passing-brightgreen.svg)](tests/)
 
 [🇬🇧 English](README.md)
 
@@ -14,7 +12,6 @@
 
 ## Bot làm gì
 
-![Cách hoạt động — 5 bước: giao dịch ngân hàng, SePay webhook, bot xử lý, ghi Google Sheet, báo cáo Telegram](docs/screenshots/how-it-works.png)
 
 **My Money Went Bot là 1 bot Telegram theo dõi chi tiêu cá nhân.** Mỗi lần ngân hàng VN gửi thông báo giao dịch (qua [SePay](https://sepay.vn)), bot ghi vào Google Sheet *của bạn* và hỏi bạn tap phân loại — hoặc skip luôn nếu bạn đã dạy nó 1 keyword rule. Gõ `/report` bất cứ lúc nào để xem tiền đã đi đâu, slice theo account, category, và khoảng thời gian.
 
@@ -66,7 +63,6 @@ Các app tài chính cá nhân (Money Lover, Misa, MoneyKeeper, ...) thường �
 
 ## Tính năng
 
-![Tính năng nổi bật — 6 feature, kiến trúc hệ thống, ngân hàng hỗ trợ, và list command](docs/screenshots/features-architecture.png)
 
 Chi tiết từng tính năng:
 
@@ -96,20 +92,6 @@ Chi tiết từng tính năng:
 
 ## Screenshots
 
-<table>
-  <tr>
-    <td width="50%" align="center"><b>🤖 Auto-categorize + log</b></td>
-    <td width="50%" align="center"><b>📊 <code>/report</code> — lens category theo tháng</b></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/auto-categorize.png" alt="Auto-categorize tx Bách Hóa Xanh" /></td>
-    <td><img src="docs/screenshots/report-monthly.png" alt="Báo cáo tháng với budget bar và bucket tracking" /></td>
-  </tr>
-  <tr>
-    <td>Tx từ Bách Hóa Xanh match rule <code>/keywords</code> → auto-tag Food, không hỏi. Bot reply lại số tiền đã log + progress của bucket.</td>
-    <td>Tổng spending vs budget, budget bar từng bucket với emoji trạng thái, có thêm section Tracking cho bucket bạn theo dõi mà không đặt cap.</td>
-  </tr>
-</table>
 
 ---
 
@@ -189,7 +171,7 @@ Một số bank (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) dùng **API 
 
 ```bash
 git clone https://github.com/maingocanh1702/MyMoneyWent.git
-cd my-money-went-bot
+cd MyMoneyWent
 cp .env.example .env
 # Sửa .env: BOT_TOKEN, CHAT_ID, SHEET_ID, GOOGLE_CREDS_JSON (hoặc GOOGLE_CREDS)
 ```
