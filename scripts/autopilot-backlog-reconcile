@@ -1,0 +1,428 @@
+#!/usr/bin/env bash
+# KIT_VERSION: 8
+# v8 (2026-08-05) — a `ready` task carrying close_by:hand ages out. Measured in a consumer repo: three
+# close_by:hand tasks were simultaneously wrong (all three had already merged, contradicting their own
+# "ready" status) while this script reported "No stale entries" — the manual-close bucket is excluded
+# from the staleness check by design (v5's whole reason for existing: no discriminating probe CAN exist
+# for the dependency-security/owner-evidence-gate/docs-reconcile classes) and nothing ever re-examined
+# the exemption after it was granted. kit-design-debt.md §7 already named this exact shape in passing —
+# "close_by: hand … a value chosen at the earliest possible moment, with nothing checking it stays
+# true" — this is that check, for that value specifically.
+# This does NOT add a probe; that would contradict v5 for the same three classes. It warns when a task
+# has been sitting at `status: ready` with `close_by` present too long, using the git commit date of
+# the STATUS LINE (via `git blame --porcelain`, a `stln` line-number field threaded through the same
+# awk/SEP handoff v6 fixed) as the "how long has this been ready" clock, compared against
+# AUTOPILOT_CLOSE_BY_AGE_WARN_DAYS (default 5).
+# THE CLOCK IS status:ready, NOT close_by's declaration — this was wrong in the first draft and caught
+# in review before it shipped. The risk this check exists to catch ("merged but nobody flipped it")
+# cannot exist before a task reaches ready; a slice legitimately in flight with close_by already
+# declared is not yet rotting, and clocking from declaration time warns on live work instead. It also
+# forced the wrong threshold: on the declaration clock, all three motivating entries would still be
+# unflagged at 14 days (they went wrong within ~2 days of declaring, but the check would not fire until
+# 2026-08-17) — a check calibrated to miss the cases that motivated it is switched off with extra steps,
+# not conservative. Blaming the STATUS line and gating on status==ready measures the actual window and
+# lets the threshold drop to 5 days: in this project a ready slice normally merges same-day (DD-29 and
+# AP-49 both did, the week this was written), so 5 days at ready is already anomalous, and it would have
+# caught all three motivating entries within days instead of two weeks. The self-correction property is
+# unchanged from the first draft, just moved to a different line: a real status transition (ready ->
+# merged, or back to planned) changes the status line's text, blame resets, the clock restarts; git
+# diff/blame track by content match, not byte position, so an unrelated whole-file rewrite does not
+# reset it (confirmed against this file's own --fix, which rewrites every line via `{ print }` but
+# changes none of them for a task outside the stale bucket).
+# ASSUMES status-line churn tracks real status transitions. Checked, not assumed blind, on 2026-08-05:
+# no script in this kit rewrites a status: line except this file's own --fix, which touches ONLY entries
+# already in the stale[] bucket (manual-close/aged entries `continue` before reaching that code), and
+# autopilot-update.sh explicitly documents that it never touches docs/autopilot-backlog.md at all. If a
+# future tool or a human editing pattern is later found rewriting status: lines for reasons other than
+# an actual transition (a formatting pass, a bulk find-replace), this clock reads that as a false reset
+# — say so and revisit rather than silently trusting the ages it reports.
+# REJECTED (1): a hand-typed close_by date field. Doesn't retroactively cover existing entries — none
+# of the three motivating ones would have carried it — and repeats the authoring-burden-nobody-
+# remembers failure close_by's own free-text reason already tolerates only because a human reads it at
+# declare time, not later.
+# REJECTED (2): the backlog FILE's own last-commit date. Resets on ANY unrelated edit to
+# docs/autopilot-backlog.md — the base_sha "one token, two meanings" mistake again: touching a different
+# task would silently un-age this one.
+# SUPERSEDED (3): the first draft of this feature blamed the close_by: LINE itself, gated on nothing
+# (any manual-close, regardless of status), default 14 days. Same mechanism — git blame on one specific
+# line — wrong line; see "THE CLOCK IS status:ready" above for why it measured the wrong window.
+# RULING, not open — exit code stays warn-only. An aged manual-close prints "⚠ AGED manual-close" and is
+# counted, but — like WEAK-PROBE — never fails --check; only a genuine STALE (a merged_probe that
+# resolves) does. Line age is a proxy for merge state, not merge state itself, and a proxy that can be
+# wrong in both directions must not gate other repos' CI — the first false block teaches people to route
+# around the check, which is how close_by came to be trusted unconditionally in the first place.
+# Reopening trigger: revisit once this has produced findings for long enough to know its false-positive
+# rate, not before. An unmeasurable age (uncommitted line, blame failure) stays silent rather than
+# guessing.
+# v7 (2026-07-31) — three defects in the close_by/scope guard logic, found by a live slice's Codex
+# review rounds the same day as the base_sha overload (see autopilot-scope-gate's v26 note). All three
+# were introduced by this author, in this file, while shipping the guards they broke.
+# (1) The ABUSE branch (scope contains a file that could carry a symbol) did `weak+=(...); continue`,
+# skipping the strict merged_probe check entirely — unlike the MALFORMED branch right above it, which
+# deliberately falls through. A task that is both wrongly abuse-flagged and genuinely merged had no
+# path to auto-flip: stuck as weak forever. Fixed to match MALFORMED exactly — no bucket, no continue,
+# let the strict rules classify it; adding a bucket here too would double-count it.
+# (2) scope_can_carry_symbol failed OPEN on empty/missing scope: the `for _p in $_s` loop never
+# executes on an empty string, so control fell straight through to `return 1` ("cannot carry a
+# symbol") and close_by was granted unchecked. A guard whose entire job is refusing an exemption it
+# cannot verify must fail CLOSED on absent input, not open. Now tracks whether the loop ever ran a
+# single iteration; empty/blank scope returns 0 ("treat as can-carry-a-symbol, refuse").
+# (3) The `*.config.*` exemption from v22 was written for eslint.config.mjs (a flat config array,
+# nothing probe-worthy) but the same wildcard also exempted next.config.mjs and vitest.config.ts,
+# both of which commonly carry real exported identifiers a merged_probe could reference. Narrowed to
+# eslint.config.* specifically, the case that motivated it; every other *.config.* basename is real
+# config-with-code and stays refused.
+# v6 (2026-07-30) — fixes a field-shift defect that v5 activated. The awk→bash handoff used TAB as its
+# delimiter, and bash classifies tab as "IFS whitespace": a run of them collapses into one delimiter no
+# matter what IFS is set to. A task with no `merged_probe` emits two consecutive empty fields, they
+# collapse, and every later field shifts LEFT BY TWO — so `close_by`'s value landed in the probe-file
+# variable and the task was reported as `? no merged_probe` instead of `⊘ manual-close`. That shape is
+# not an edge case: "no probe AND close_by" is the defining shape of the owner-evidence-gate class this
+# whole feature exists for, and the same shift also disabled the abuse guard for it. The defect was
+# latent long before v5 — harmless while pf/pr were the LAST two fields, because nothing followed them
+# to shift. Appending cb/sc made it reachable. Delimiter is now ASCII Unit Separator via octal `\037`
+# (bash 3.2 on macOS is the floor, so not `\x1f`); non-whitespace delimiters have no collapsing rule.
+# Found by the regression suite the consuming slice was writing — the tests caught it before the
+# reviewer ever saw the code, which is the outcome the tests-in-the-consumer split was designed for.
+# v5 (2026-07-30) — adds `close_by:`, a third classification beside "usable probe" and "authoring nit".
+# Before this, three whole task classes were permanently displayed as unfixed authoring defects:
+# dependency-security (a lockfile bump introduces no symbol — its version string is a shared literal
+# that collides with unrelated content already on the default branch), owner-evidence-gate (closed by
+# evidence, not by a commit) and docs-reconcile (hyphenated tokens fail is_symbol_probe by construction).
+# The script told all of them to "replace merged_probe with a code symbol this slice introduces" —
+# impossible advice, since no such symbol exists. Observed on Plexco deps-security-bump after it merged
+# cleanly at 61a2575: correct work, permanently reported as a defect, with the status flip left to be
+# done by hand every time. Two guards keep the new field from becoming a bypass: a MALFORMED declaration
+# (no reason given) falls back to the strict path and exempts nothing, and a declaration whose scope
+# contains a file that could carry a symbol is REFUSED outright — if you touch source, write a real probe.
+# autopilot-backlog-reconcile — derive backlog merged-status from CODE (ground truth), not the hand-typed field.
+#
+# WHY: backlog `status:` is hand-maintained; merges update INFLIGHT + code but the markdown field rots
+#   ("ready/planned" while already merged → wasted re-run, L24). This makes the field self-correcting.
+#
+# HOW: each task block carries a `merged_probe:` line = a symbol that exists on origin/<default> ONLY if
+#   THIS feature merged. Probe format (safe, no eval):
+#     merged_probe: <file> :: <grep -E regex>
+#   e.g.  merged_probe: src/gendered-fee-core.ts :: sessionFeeTotals
+#
+#   ⚠️ DISCRIMINATOR RULE (KIT_VERSION 3 — added after the ap-93 false-flip, 2026-07-24):
+#   the probe regex MUST be a SLICE-UNIQUE CODE SYMBOL (an identifier, optionally alternated
+#   `foo|Bar_baz`), NEVER a shared literal like a date "26/7", a number, or a path fragment. A literal
+#   collides with unrelated pre-existing content already on origin/main (ap-93's `:: 26/7` matched
+#   A-era test pins from the already-merged ap-90 slice) → a FALSE "merged" flip → an in-flight slice
+#   gets torn down. This script now REFUSES to auto-flip a probe that is not identifier-shaped;
+#   `--check` reports it loudly as WEAK-PROBE (warn-only — it cannot cause a flip) so it gets fixed
+#   at authoring time without breaking CI.
+#   AUTHOR-TIME GUARD: right after you write a task's merged_probe, run `--audit`; a freshly-authored
+#   planned/ready task whose probe ALREADY matches origin/main means the probe is non-discriminating
+#   (or the slice is truly merged — you'd know). Fix it before it can auto-flip.
+#
+# Usage:
+#   scripts/autopilot-backlog-reconcile            # REPORT: which planned/ready/blocked tasks are actually merged
+#   scripts/autopilot-backlog-reconcile --audit    # same report, framed for author-time probe verification
+#   scripts/autopilot-backlog-reconcile --fix      # FLIP genuinely-merged tasks' status -> merged (never weak probes)
+#   scripts/autopilot-backlog-reconcile --check    # exit 1 if any stale OR any weak (non-discriminating) probe
+#
+# A task with NO merged_probe is reported as "no-probe" (can't auto-verify) — add a symbol when you author it.
+#
+# A `ready` task carrying `close_by: hand` for longer than AUTOPILOT_CLOSE_BY_AGE_WARN_DAYS (default 5)
+# is reported as AGED in every mode — warn-only, like WEAK-PROBE, never affects exit code (a ruling, not
+# an open question — see KIT_VERSION 8 header). A close_by declared on a planned/blocked task is not
+# aged; the clock only runs while status is ready, since that is when "merged but nobody flipped it"
+# becomes possible.
+set -uo pipefail
+
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BL="$REPO/docs/autopilot-backlog.md"
+[ -f "$BL" ] || { echo "HALT: backlog not found at $BL" >&2; exit 2; }
+MODE="${1:-report}"
+
+# How many days a task may sit at status:ready with close_by present before it is flagged AGED (see v8
+# comment above for why the clock is status:ready and not close_by's own declaration). Override locally
+# with AUTOPILOT_CLOSE_BY_AGE_WARN_DAYS.
+CLOSE_BY_AGE_WARN_DAYS="${AUTOPILOT_CLOSE_BY_AGE_WARN_DAYS:-5}"
+
+# Probe the MERGED state on origin/<default>, NOT the working tree. A feature worktree carries the
+# slice's OWN not-yet-merged symbol, which would false-positive as "already merged" (and make --check
+# exit 1 spuriously). Refresh the ref first so the probe reflects what actually landed on origin.
+git -C "$REPO" fetch origin --quiet 2>/dev/null || true
+
+# RESOLVE the default branch; never assume it. Until KIT_VERSION 4 this was `DEFAULT_BRANCH="main"`,
+# hard-coded — and the probe on line ~90 runs `git grep ... "origin/$DEFAULT_BRANCH" ... 2>/dev/null`,
+# so in a `master`-default repository the ref simply did not exist, the grep failed silently, and EVERY
+# task reported "genuinely pending". `--check` returned `No stale entries` and exit 0 while detecting
+# nothing at all, and `--fix` could never flip anything. The anti-rot mechanism was a silent no-op in
+# exactly the repositories nobody was watching. Found 2026-07-30 in a master-default consumer whose
+# clean report was vacuous rather than clean.
+#
+# FAIL CLOSED. A wrong branch here does not produce a wrong answer, it produces a confident empty one,
+# which is worse: it reads as evidence. If the branch cannot be resolved, HALT and say so.
+DEFAULT_BRANCH="${AUTOPILOT_DEFAULT_BRANCH:-}"
+if [ -z "$DEFAULT_BRANCH" ]; then
+  # 1. origin/HEAD symref, set by `git clone` and by `git remote set-head origin -a`
+  DEFAULT_BRANCH="$(git -C "$REPO" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')"
+fi
+if [ -z "$DEFAULT_BRANCH" ]; then
+  # 2. exactly one of the conventional names exists as a remote-tracking ref
+  _cand=""
+  for _b in main master trunk; do
+    git -C "$REPO" rev-parse --verify --quiet "refs/remotes/origin/$_b" >/dev/null 2>&1 && _cand="$_cand $_b"
+  done
+  set -- $_cand
+  [ "$#" -eq 1 ] && DEFAULT_BRANCH="$1"
+fi
+if [ -z "$DEFAULT_BRANCH" ]; then
+  echo "HALT DEFAULT_BRANCH_UNRESOLVED: cannot determine origin's default branch." >&2
+  echo "  Fix one of these, then re-run:" >&2
+  echo "    git remote set-head origin -a                  # records refs/remotes/origin/HEAD" >&2
+  echo "    AUTOPILOT_DEFAULT_BRANCH=<name> $0 $MODE       # explicit override" >&2
+  echo "  Refusing to guess: a wrong ref makes every probe silently report 'pending'." >&2
+  exit 2
+fi
+git -C "$REPO" rev-parse --verify --quiet "refs/remotes/origin/$DEFAULT_BRANCH" >/dev/null 2>&1 || {
+  echo "HALT DEFAULT_BRANCH_MISSING: refs/remotes/origin/$DEFAULT_BRANCH does not exist." >&2
+  echo "  Every probe would fail silently and report 'pending'. Fetch or correct the branch name." >&2
+  exit 2
+}
+
+# is_symbol_probe <regex> → 0 iff EVERY alternation token is a bare code identifier
+# ([A-Za-z_][A-Za-z0-9_]*). Rejects literals with '/', digits-led, or punctuation (dates, numbers,
+# path fragments) — the non-discriminating shapes that collide with shared origin/main content.
+is_symbol_probe() {
+  local re="$1" tok
+  re="${re//[()]/}"                     # allow grouping parens around a symbol set
+  # The rule's own guidance is "don't set IFS globally; set it locally" — which is exactly what this is.
+  # `local IFS` is scoped to this function and restored on return, so word-splitting elsewhere is unaffected.
+  # Semgrep's pattern matches any IFS assignment without distinguishing scope, so this is a false positive.
+  #
+  # The suppression MUST stay on the line immediately above the match. It was four lines up (behind the
+  # three explanation lines) from the day it was written, so Semgrep never honoured it and every consumer
+  # running `semgrep scan --config auto --error` had a permanently red Security job for one false positive.
+  # Measured on Plexco 2026-08-10: Security #217, 1 blocking finding, exit 1.
+  # nosemgrep: bash.lang.security.ifs-tampering.ifs-tampering
+  local IFS='|'; local toks=($re)       # split on alternation
+  [ "${#toks[@]}" -eq 0 ] && return 1
+  for tok in "${toks[@]}"; do
+    tok="${tok#"${tok%%[![:space:]]*}"}"; tok="${tok%"${tok##*[![:space:]]}"}"   # trim ws
+    [ -z "$tok" ] && return 1
+    [[ "$tok" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || return 1
+  done
+  return 0
+}
+
+# A THIRD state, besides "has a usable probe" and "authoring nit".
+#
+# Some tasks CANNOT have a discriminating probe, and no amount of authoring effort creates one:
+#   · dependency-security — a lockfile bump introduces no symbol; its version string is a shared
+#     literal that collides with unrelated content already on the default branch;
+#   · owner-evidence-gate — closed by evidence, not by a commit;
+#   · docs-reconcile — every scope token is hyphenated, so it fails is_symbol_probe by construction.
+# Before this, all three were reported as `✗ WEAK-PROBE … replace merged_probe with a code symbol this
+# slice introduces` — advice that is correct for most slices and impossible for these. The script had no
+# vocabulary to tell "the author was lazy" apart from "no valid probe exists", so a real limitation was
+# permanently displayed as an unfixed authoring defect.
+#
+# `close_by: hand · <one-line reason>` declares the limitation deliberately. Two guards keep it from
+# becoming a back door:
+#   1. MALFORMED (declared with no reason) falls back to the STRICT path and grants nothing. A broken
+#      field that loosens the rules would itself be the bypass.
+#   2. ABUSE (declared, but the scope contains a file that could carry a symbol) is refused. If your
+#      slice touches source, you can probe it — write a real probe.
+#
+# Parse blocks → "slug<TAB>status<TAB>probe_file<TAB>probe_regex<TAB>close_by<TAB>scope<TAB>status_line".
+# bash 3.2 (macOS default) has no `mapfile` → read into array with a portable loop.
+# status_line (kit v8) is the awk NR the `status:` field matched at — the line number `git blame` needs
+# to date how long this task has held its CURRENT status (the "how long has this been ready" clock; see
+# v8 header comment). It trails every existing field so a blank value still leaves it last and empty,
+# the same shape v6 already fixed for cb/sc; adding a field after the ones that shift does not reopen
+# that defect.
+#
+# THE DELIMITER IS ASCII Unit Separator (0x1F), NOT TAB — and that is load-bearing.
+# Bash classifies space, tab and newline as "IFS whitespace": a run of them collapses into ONE
+# delimiter and leading/trailing ones are dropped, no matter what IFS is set to. So with a tab
+# delimiter, a task carrying no `merged_probe` emits two consecutive empty fields, they collapse, and
+# every field after shifts LEFT BY TWO — `close_by`'s value silently lands in the probe-file variable.
+# Measured: `slug<TAB>ready<TAB><TAB><TAB>hand · reason<TAB>[docs/a.md]` parses to
+# pf=[hand · reason] pr=[[docs/a.md]] cb=[] — a task declaring an intentional manual close is read as
+# a task with a probe it never wrote. A non-whitespace delimiter has no collapsing rule, so empty
+# fields stay empty. Octal `\037` rather than `\x1f`: bash 3.2 (macOS default) is the floor here.
+# This latent defect predates close_by — it was harmless while `pf`/`pr` were the LAST two fields,
+# because there was nothing after them to shift. Appending cb/sc is what made it reachable.
+SEP=$(printf '\037')
+ROWS=()
+while IFS= read -r line; do ROWS+=("$line"); done < <(awk -v S="$SEP" '
+  function flush(){ if (slug!="" && (st=="planned"||st=="ready"||st=="blocked")) printf "%s%s%s%s%s%s%s%s%s%s%s%s%s\n", slug, S, st, S, pf, S, pr, S, cb, S, sc, S, stln; slug="" }
+  /^## task:/ { flush(); slug=$3; gsub(/[()]/,"",slug); st=""; pf=""; pr=""; cb=""; sc=""; stln="" }
+  /^status:/  { st=$2; stln=NR }
+  /^close_by:/ { cb=$0; sub(/^close_by:[[:space:]]*/,"",cb); gsub(S," ",cb) }
+  /^scope:/    { sc=$0; sub(/^scope:[[:space:]]*/,"",sc);    gsub(S," ",sc) }
+  /^merged_probe:/ {
+    line=$0; sub(/^merged_probe:[[:space:]]*/,"",line)
+    n=split(line, a, /[[:space:]]*::[[:space:]]*/); if(n==2){ pf=a[1]; pr=a[2] }
+  }
+  END { flush() }
+' "$BL")
+
+# A close_by declaration is well-formed when a REASON follows the `hand` keyword. `hand` alone, or
+# `hand` with only a separator after it, is MALFORMED — the reason is the entire point of the field.
+# The `·` in the documented form is CONVENTION, not syntax: a rule that hinges on one hard-to-type
+# character invents a fresh class of authoring error while protecting nothing. Any separator is accepted;
+# an absent reason is not.
+is_wellformed_close_by() {
+  case "$1" in
+    hand) return 1 ;;
+    hand[[:space:]]*) ;;
+    *) return 1 ;;
+  esac
+  _r="${1#hand}"
+  _r="$(printf '%s' "$_r" | tr -d '[:space:]·:-')"
+  [ -n "$_r" ]
+}
+
+# A scope entry that could carry a greppable symbol disqualifies close_by: write a real probe instead.
+# The test is CONFIG-vs-SOURCE, not file extension. Extension alone was wrong and blocked a live task:
+# eslint.config.mjs is `.mjs`, so it read as source and the guard refused a dependency slice that has
+# nothing symbol-like to probe — the same category as pnpm-workspace.yaml, which was already allowed.
+# Config filenames (`*.config.*`, dotfile rc files, lockfiles) join docs, data and manifests on the
+# allowed side; real source and bare scripts stay refused.
+scope_can_carry_symbol() {
+  _s="$(printf '%s' "$1" | tr ',[]' '   ')"
+  _seen=0
+  for _p in $_s; do
+    _seen=1
+    _b="${_p##*/}"
+    case "$_p" in docs/*|*.json|*.yaml|*.yml|*.lock|*.md|"") continue ;; esac
+    case "$_b" in eslint.config.*|.*rc|.*rc.*|*.lock) continue ;; esac
+    return 0
+  done
+  # Empty/missing scope tells us NOTHING — fail closed (treat as can-carry-a-symbol) rather than
+  # falling through to the "nothing here can carry a symbol" return below, which would silently grant
+  # the close_by exemption to a task that never declared a scope to check.
+  [ "$_seen" -eq 1 ] || return 0
+  return 1
+}
+
+# blame_line_age_from_porcelain <porcelain_text> <now_epoch> — PURE, and deliberately generic: it
+# knows nothing about close_by or status, only "how old is this one blamed line". Parses `git blame -L
+# N,N --porcelain` output for exactly one line and prints its age in whole days as of <now_epoch>.
+# Fails silently (empty stdout, return 1) rather than guessing when the line is uncommitted (blame's
+# all-zero "Not Committed Yet" SHA — nothing to measure yet, not age zero) or the text carries no usable
+# `author-time`. This is an advisory nudge, not a gate; an unmeasurable age must never manufacture a
+# warning. Separated from the git call below so it can be unit-tested with canned text. The caller below
+# decides WHICH line matters (the status: line, per the v8 header comment) and WHEN to ask (status ==
+# ready) — this function has no opinion on either.
+blame_line_age_from_porcelain() {
+  _blp_text="$1" _blp_now="$2"
+  _blp_sha="$(printf '%s\n' "$_blp_text" | head -1 | awk '{print $1}')"
+  [ -z "$_blp_sha" ] && return 1
+  case "$_blp_sha" in 0000000000000000000000000000000000000000) return 1 ;; esac
+  _blp_ts="$(printf '%s\n' "$_blp_text" | awk '/^author-time /{print $2; exit}')"
+  case "$_blp_ts" in ''|*[!0-9]*) return 1 ;; esac   # absent or non-numeric — never trust a guess
+  echo $(( (_blp_now - _blp_ts) / 86400 ))
+}
+
+# blame_line_age_days <line_no> — IMPURE wrapper: real `git blame` against the CURRENT WORKING TREE of
+# $BL (no revision pinned), which is exactly the copy the awk parser above just read — so a line number
+# captured as awk's NR lines up with blame's line numbering with nothing in between able to shift it.
+# Covered by test/e2e.sh, which has real git history to blame against.
+blame_line_age_days() {
+  _bld_ln="$1"
+  _bld_out="$(git -C "$REPO" blame -L "${_bld_ln},${_bld_ln}" --porcelain -- "$BL" 2>/dev/null)" || return 1
+  [ -z "$_bld_out" ] && return 1
+  blame_line_age_from_porcelain "$_bld_out" "$(date +%s)"
+}
+
+stale=(); weak=(); manual=(); aged=()
+# ${ROWS[@]+...} guard: under `set -u`, expanding an empty array errors on bash 3.2.
+for row in ${ROWS[@]+"${ROWS[@]}"}; do
+  IFS="$SEP" read -r slug st pf pr cb sc stln <<< "$row"
+
+  if [ -n "$cb" ]; then
+    if ! is_wellformed_close_by "$cb"; then
+      # Fall through to the strict rules below — declaring the field badly must exempt nothing.
+      echo "  ✗ MALFORMED close_by: $slug ($st) — declared but the reason is missing or empty."
+      echo "       Treated as UNDECLARED; the strict probe rules still apply, nothing was exempted."
+      echo "       Fix: 'close_by: hand <one-line reason>' — the reason is the whole point of the field."
+      echo "       Any separator works; the · in the docs is convention, not syntax."
+      # Deliberately no bucket and no `continue`: the strict rules below classify it exactly as they
+      # would an entry with no close_by at all. Adding it here too would double-count it.
+    elif scope_can_carry_symbol "$sc"; then
+      echo "  ✗ close_by REFUSED: $slug ($st) — scope contains a file that can carry a symbol."
+      echo "       close_by exists for slices where no discriminating probe CAN exist (lockfile bumps,"
+      echo "       evidence gates, prose reconciles). Yours touches source — write a real merged_probe."
+      # Deliberately no bucket and no `continue`, same reasoning as MALFORMED above: abuse does not
+      # grant an exemption either, so the strict rules still run and can auto-flip a task that is both
+      # wrongly abuse-flagged and genuinely merged. Adding it here too would double-count it.
+    else
+      echo "  ⊘ manual-close: $slug ($st) — $cb"
+      manual+=("$slug")
+      # The clock is status:ready, not close_by's own declaration (see v8 header comment) — a
+      # planned/blocked task carrying close_by is legitimately in flight, not rotting, so the age check
+      # only runs once status is ready.
+      if [ "$st" = "ready" ]; then
+        if _age="$(blame_line_age_days "$stln")" && [ -n "$_age" ] && [ "$_age" -ge "$CLOSE_BY_AGE_WARN_DAYS" ]; then
+          echo "  ⚠ AGED manual-close: $slug ($st) — ready+close_by unresolved for ${_age}d (>= ${CLOSE_BY_AGE_WARN_DAYS}d)."
+          echo "       Age alone is not proof the exemption is wrong — re-verify it still holds (nothing"
+          echo "       else does). Does not affect exit code (ruling, not open — see KIT_VERSION 8 header)."
+          aged+=("$slug")
+        fi
+      fi
+      continue
+    fi
+  fi
+
+  if [ -z "$pf" ] || [ -z "$pr" ]; then
+    echo "  ?  $slug ($st) — no merged_probe (can't auto-verify; add: merged_probe: <file> :: <symbol>)"
+    continue
+  fi
+  if git -C "$REPO" grep -qE "$pr" "origin/$DEFAULT_BRANCH" -- "$pf" 2>/dev/null; then
+    if is_symbol_probe "$pr"; then
+      echo "  ⚠ STALE: $slug ($st) — probe on origin/$DEFAULT_BRANCH → already MERGED"
+      stale+=("$slug")
+    else
+      echo "  ✗ WEAK-PROBE: $slug ($st) — probe '$pr' matched but is NOT a slice-unique symbol"
+      echo "       (shared literal → collides with unrelated origin/$DEFAULT_BRANCH content). REFUSING to auto-flip;"
+      echo "       replace merged_probe with a code symbol this slice introduces."
+      weak+=("$slug")
+    fi
+  else
+    echo "  ✓  $slug ($st) — genuinely pending (not on origin/$DEFAULT_BRANCH)"
+  fi
+done
+
+[ "${#manual[@]}" -gt 0 ] && echo "NOTE: ${#manual[@]} task(s) declared close_by — intentional manual close, not a defect."
+[ "${#aged[@]}" -gt 0 ] && echo "NOTE: ${#aged[@]} of those are AGED (>= ${CLOSE_BY_AGE_WARN_DAYS}d at status:ready with close_by present, see ⚠ above) — re-verify by hand; does not affect exit code (ruling: stays warn-only until it has produced findings long enough to know its false-positive rate — see KIT_VERSION 8 header)."
+
+if [ "${#stale[@]}" -eq 0 ] && [ "${#weak[@]}" -eq 0 ]; then
+  echo "No stale entries."; exit 0
+fi
+
+if [ "$MODE" = "--check" ]; then
+  # Weak probes are reported loudly but do NOT fail --check (they can't cause an auto-flip — --fix
+  # refuses them — so they are an authoring nit, not a CI-blocking staleness). Only a genuine STALE
+  # (a slice-unique symbol present on origin while the field still says planned/ready) fails.
+  [ "${#weak[@]}" -gt 0 ]  && echo "NOTE: ${#weak[@]} weak-probe task(s) — non-discriminating merged_probe; won't auto-flip, please improve (see above)." >&2
+  if [ "${#stale[@]}" -gt 0 ]; then echo "STALE (${#stale[@]}): run with --fix." >&2; exit 1; fi
+  exit 0
+fi
+
+if [ "$MODE" = "--fix" ]; then
+  [ "${#weak[@]}" -gt 0 ] && echo "NOTE: ${#weak[@]} weak-probe task(s) NOT flipped (non-discriminating) — fix their merged_probe by hand." >&2
+  if [ "${#stale[@]}" -eq 0 ]; then echo "Nothing to flip (only weak-probe entries)."; exit 0; fi
+  today="$(date +%Y-%m-%d)"   # BSD awk (macOS) has no strftime() → pass the date in.
+  for slug in ${stale[@]+"${stale[@]}"}; do
+    if awk -v s="$slug" -v today="$today" -v br="$DEFAULT_BRANCH" '
+      $0 ~ "^## task: "s"([ (]|$)" { inblk=1 }
+      inblk && /^status:/ && !done { print "status: merged"; print "note_merged: auto-reconciled — slice-unique merged_probe matched origin/" br " (" today "). Was: " $2; done=1; next }
+      /^## task:/ && inblk && $3!~s { inblk=0 }
+      { print }
+    ' "$BL" > "$BL.tmp"; then
+      mv "$BL.tmp" "$BL"
+      echo "  → flipped $slug → merged"
+    else
+      rm -f "$BL.tmp"   # never leave a partial tmp behind (it gets committed by git add -A)
+      echo "  ✗ FAILED to flip $slug (awk error) — backlog unchanged" >&2
+    fi
+  done
+  echo "Done. Review: git diff docs/autopilot-backlog.md"
+fi
