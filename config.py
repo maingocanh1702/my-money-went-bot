@@ -40,8 +40,9 @@ if _missing and not BOT_TOKEN.startswith("test:"):
 # Google credentials — two ways to provide (Railway: dùng GOOGLE_CREDS_JSON)
 # Option A (cloud/Railway): set GOOGLE_CREDS_JSON = nội dung file credentials.json
 # Option B (local): set GOOGLE_CREDS = đường dẫn tới file credentials.json
-GOOGLE_CREDS_JSON = os.environ.get("GOOGLE_CREDS_JSON")        # JSON string
-CREDS_FILE        = os.environ.get("GOOGLE_CREDS", "credentials.json")  # file path fallback
+GOOGLE_CREDS_JSON = os.environ.get("GOOGLE_CREDS_JSON", "").strip()  # JSON string
+GOOGLE_CREDS_PATH = os.environ.get("GOOGLE_CREDS", "").strip()
+CREDS_FILE        = GOOGLE_CREDS_PATH or "credentials.json"  # local file fallback
 
 # Required in production: SePay webhook secret. The bot rejects requests that
 # do not match this token.
@@ -92,7 +93,6 @@ if not BOT_TOKEN.startswith("test:"):
         "BOT_TOKEN": BOT_TOKEN,
         "CHAT_ID": CHAT_ID,
         "SHEET_ID": SHEET_ID,
-        "GOOGLE_CREDS_JSON": GOOGLE_CREDS_JSON,
         "SEPAY_SECRET": SEPAY_SECRET,
         "TELEGRAM_WEBHOOK_SECRET": TELEGRAM_WEBHOOK_SECRET,
         "EMAIL_SECRET": EMAIL_SECRET,
@@ -101,6 +101,8 @@ if not BOT_TOKEN.startswith("test:"):
     if ZALO_ENABLED:
         _required["ZALO_SECRET_TOKEN"] = ZALO_SECRET_TOKEN
     _missing = [name for name, value in _required.items() if not value]
+    if not GOOGLE_CREDS_JSON and not GOOGLE_CREDS_PATH:
+        _missing.append("GOOGLE_CREDS_JSON or GOOGLE_CREDS")
     if _missing:
         raise RuntimeError("Missing required production environment variables: " + ", ".join(_missing))
 

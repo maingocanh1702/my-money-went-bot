@@ -684,7 +684,7 @@ def find_recent_duplicate(amount: float, tx_type: str, tx_date: str, currency: s
 # -----------------------------------------------------
 # Transaction Write — durable idempotency
 # -----------------------------------------------------
-_processed_refs: dict[str, float] = {}  # active or committed ref_code → timestamp
+_processed_refs: dict[str, tuple[str, float]] = {}  # ref_code → (processing|committed, timestamp)
 PROCESSED_REF_CLAIM_TTL_SECONDS = 5 * 60
 
 
@@ -701,7 +701,11 @@ class RetryableTransactionClaimError(RuntimeError):
     """The idempotency state could not be durably read or reserved."""
 
 
-def _get_processed_ref(ref_code: str, *, retry_on_failure: bool = False) -> tuple[str | None, int | None, str]:
+class TransactionClaimInProgressError(RetryableTransactionClaimError):
+    """A prior write may still be in progress, so the sender must retry."""
+
+
+def _get_processed_ref(ref_code: str) -> tuple[str | None, int | None, str]:
     """Return durable status, row number, and timestamp; lookup errors fail closed."""
     if not ref_code:
         return None, None, ""
@@ -715,9 +719,7 @@ def _get_processed_ref(ref_code: str, *, retry_on_failure: bool = False) -> tupl
         return None, None, ""
     except Exception as e:
         print(f"[dedup] processed-ref lookup error (FAIL-CLOSED): {e}")
-        if retry_on_failure:
-            raise RetryableTransactionClaimError("processed-ref lookup failed") from e
-        return "committed", None, ""
+        raise RetryableTransactionClaimError("processed-ref lookup failed") from e
 
 
 def _processing_claim_is_fresh(updated_at: str) -> bool:
@@ -734,12 +736,13 @@ def _processing_claim_is_fresh(updated_at: str) -> bool:
     age = (datetime.now(timezone.utc) - stamped).total_seconds()
     return age <= PROCESSED_REF_CLAIM_TTL_SECONDS
 
-def tx_exists(ref_code: str, *, retry_on_failure: bool = False) -> bool:
+def tx_exists(ref_code: str) -> bool:
     """Claim a transaction reference or return True when it must not be written.
 
     A successful claim is committed only after ``append_transaction`` writes.
-    All lookup/reservation failures are fail-closed: a webhook can retry a
-    missing transaction, while a duplicate corrupts balances and cashback.
+    ``True`` means the durable transaction row is already committed. An
+    unresolved claim or an unavailable claim store raises a retryable error;
+    acknowledging either outcome would permanently lose a financial event.
     """
     if not ref_code:
         return False
@@ -747,21 +750,34 @@ def tx_exists(ref_code: str, *, retry_on_failure: bool = False) -> bool:
     # webhook cannot overwrite an active reservation before its append commits.
     with tx_write_lock:
         now = time.time()
-        expired = [k for k, v in _processed_refs.items() if now - v > PROCESSED_REF_CLAIM_TTL_SECONDS]
+        expired = [k for k, (_status, stamped) in _processed_refs.items()
+                   if now - stamped > PROCESSED_REF_CLAIM_TTL_SECONDS]
         for k in expired:
             del _processed_refs[k]
 
-        if ref_code in _processed_refs:
+        cached = _processed_refs.get(ref_code)
+        if cached:
+            status, _stamped = cached
+            if status == "committed":
+                return True
+            # A transaction write can succeed while its subsequent marker update
+            # times out. Confirm the source-of-truth row before asking SePay to
+            # retry, so a locally cached processing claim never masks a commit.
+            if _ref_in_sheet(ref_code):
+                _processed_refs[ref_code] = ("committed", now)
+                return True
+            raise TransactionClaimInProgressError("transaction claim is still processing")
+
+        if _ref_in_sheet(ref_code):
+            _processed_refs[ref_code] = ("committed", now)
             return True
 
-        if _ref_in_sheet(ref_code, retry_on_failure=retry_on_failure):
-            _processed_refs[ref_code] = now
+        status, row_num, updated_at = _get_processed_ref(ref_code)
+        if status == "committed":
+            _processed_refs[ref_code] = ("committed", now)
             return True
-
-        status, row_num, updated_at = _get_processed_ref(ref_code, retry_on_failure=retry_on_failure)
-        if status == "committed" or (status == "processing" and _processing_claim_is_fresh(updated_at)):
-            _processed_refs[ref_code] = now
-            return True
+        if status == "processing" and _processing_claim_is_fresh(updated_at):
+            raise TransactionClaimInProgressError("transaction claim is still processing")
         try:
             ws = _ensure_processed_refs_tab()
             stamp = datetime.now(timezone.utc).isoformat()
@@ -772,9 +788,8 @@ def tx_exists(ref_code: str, *, retry_on_failure: bool = False) -> bool:
                 ws.update(f"B{row_num}:C{row_num}", [["processing", stamp]])
         except Exception as e:
             print(f"[dedup] reservation write error (FAIL-CLOSED): {e}")
-            if retry_on_failure:
-                raise RetryableTransactionClaimError("processed-ref reservation failed") from e
-            return True
+            raise RetryableTransactionClaimError("processed-ref reservation failed") from e
+        _processed_refs[ref_code] = ("processing", now)
         return False
 
 
@@ -791,7 +806,7 @@ def mark_ref_committed(ref_code: str):
             ws.update(f"A{row_num}:C{row_num}", [[ref_code, "committed", stamp]])
         else:
             ws.update(f"B{row_num}:C{row_num}", [["committed", stamp]])
-        _processed_refs[ref_code] = time.time()
+        _processed_refs[ref_code] = ("committed", time.time())
     except Exception as e:
         print(f"[dedup] commit marker error (FAIL-CLOSED): {e}")
 
@@ -814,7 +829,7 @@ def mark_ref_failed(ref_code: str):
         print(f"[dedup] failure marker error: {e}")
 
 
-def _ref_in_sheet(ref_code: str, *, retry_on_failure: bool = False) -> bool:
+def _ref_in_sheet(ref_code: str) -> bool:
     """Check if ref_code exists in column I of "Đầu ra" sheet.
     Dùng cache TTL 30s để tránh đọc sheet nhiều lần khi xử lý burst email.
     Fail-closed: an unknown ledger state must not permit a duplicate."""
@@ -829,9 +844,7 @@ def _ref_in_sheet(ref_code: str, *, retry_on_failure: bool = False) -> bool:
         return False
     except Exception as e:
         print(f"[tx_exists] sheet lookup error (FAIL-CLOSED): {e}")
-        if retry_on_failure:
-            raise RetryableTransactionClaimError("transaction lookup failed") from e
-        return True
+        raise RetryableTransactionClaimError("transaction lookup failed") from e
 
 
 def append_transaction(
@@ -968,7 +981,7 @@ def _recompute_cashback_after_backfill(account_id: str):
     """Recompute cashback for a newly-onboarded credit card's transactions.
 
     No-op unless the account is `type=credit` with an active config. Recomputes
-    once per unique statement-cycle the account has expense tx in (covers both
+    once per unique configured cashback cycle the account has expense tx in (covers both
     backfilled rows and the wizard trigger row stamped earlier). recompute_*
     rebuilds the whole cycle from one representative row.
     """
@@ -978,7 +991,6 @@ def _recompute_cashback_after_backfill(account_id: str):
     cfg = get_card_config(account_id)
     if not cfg or not cfg.get("active"):
         return
-    statement_day = acc.get("statement_day")
     try:
         ws = _sheet(S.TRANSACTIONS)
     except gspread.WorksheetNotFound:
@@ -989,7 +1001,7 @@ def _recompute_cashback_after_backfill(account_id: str):
             continue
         if ((r[17] if len(r) > 17 else "").strip() or "expense") != "expense":
             continue
-        cyc = cycle_id(account_id, r[1] if len(r) > 1 else "", statement_day)
+        cyc = cashback_cycle_id(account_id, r[1] if len(r) > 1 else "", acc, cfg)
         if cyc in seen_cycles:
             continue
         seen_cycles.add(cyc)
@@ -1923,12 +1935,39 @@ def cycle_id(account_id: str, tx_date, statement_day) -> str:
 
 def cashback_cycle_id(account_id: str, tx_date, account: dict | None = None,
                       config: dict | None = None) -> str:
-    """Return the configured cap period for a card from one canonical helper."""
+    """Return a collision-free identifier for the card's configured cap period.
+
+    ``<account>_YYYY-MM`` is the legacy statement-cycle namespace. Calendar
+    months use ``<account>_calendar_YYYY-MM`` so a historical statement cycle
+    that closes in (for example) July can never consume July's calendar cap.
+    Recomputing an affected calendar month voids and rebuilds the old rows under
+    the versioned identifier.
+    """
     account = account or find_account_by_id(account_id) or {}
     config = config or get_card_config(account_id) or {}
     if config.get("cap_period") == "calendar_month":
-        return cycle_id(account_id, tx_date, None)
+        d = _parse_tx_date(tx_date)
+        return f"{account_id}_calendar_{d.strftime('%Y-%m')}" if d else f"{account_id}_calendar_unknown"
     return cycle_id(account_id, tx_date, account.get("statement_day"))
+
+
+def normalize_cashback_cycle_id(account_id: str, cycle: str,
+                                account: dict | None = None,
+                                config: dict | None = None) -> str:
+    """Normalize a user-supplied short or legacy cycle label for this card."""
+    account = account or find_account_by_id(account_id) or {}
+    config = config or get_card_config(account_id) or {}
+    raw = str(cycle or "").strip()
+    if not raw:
+        return ""
+    calendar_prefix = f"{account_id}_calendar_"
+    legacy_prefix = f"{account_id}_"
+    if config.get("cap_period") == "calendar_month":
+        suffix = raw[len(calendar_prefix):] if raw.startswith(calendar_prefix) else raw
+        if suffix.startswith(legacy_prefix):
+            suffix = suffix[len(legacy_prefix):]
+        return f"{calendar_prefix}{suffix}"
+    return raw if raw.startswith(legacy_prefix) else f"{legacy_prefix}{raw}"
 
 
 def eligible_spend_in_cycle(account_id: str, cycle: str, exclude_tx_row: int | None = None) -> float:
@@ -2070,6 +2109,12 @@ def compute_and_record_cashback(tx_row_num: int) -> dict:
         if not config or not config.get("active", False):
             return _empty_cashback_result()
 
+        # Calendar-month rules received a new, collision-free namespace. Rebuild
+        # the month from source transactions so legacy statement-cycle lines
+        # cannot participate in its caps or activation gate.
+        if config.get("cap_period") == "calendar_month":
+            return recompute_cashback_for_tx(tx_row_num)
+
         mcc_match = resolve_mcc_or_exclusion(description)
         mcc = mcc_match["mcc_code"] if mcc_match else ""
         rules = get_cashback_rules(account_id)
@@ -2130,7 +2175,7 @@ def compute_and_record_cashback(tx_row_num: int) -> dict:
 
 
 def recompute_cashback_for_tx(tx_row_num: int) -> dict:
-    """Rebuild cashback for the tx's whole statement CYCLE, in timestamp order.
+    """Rebuild cashback for the tx's whole configured CYCLE, in timestamp order.
 
     Recomputing the entire same-account cycle (not just the day, not just
     same-MCC) is deliberate — two dependencies span the rebuild:

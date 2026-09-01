@@ -173,8 +173,9 @@ Một số bank (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) dùng **API 
 git clone https://github.com/maingocanh1702/my-money-went-bot.git
 cd my-money-went-bot
 cp .env.example .env
-# Điền các biến bắt buộc: BOT_TOKEN, CHAT_ID, SHEET_ID, GOOGLE_CREDS_JSON,
-# SEPAY_SECRET, TELEGRAM_WEBHOOK_SECRET, CRON_SECRET, EMAIL_SECRET
+# Điền các biến bắt buộc: BOT_TOKEN, CHAT_ID, SHEET_ID, GOOGLE_CREDS_JSON
+# (hoặc GOOGLE_CREDS=credentials.json), SEPAY_SECRET,
+# TELEGRAM_WEBHOOK_SECRET, CRON_SECRET, EMAIL_SECRET
 # (và ZALO_SECRET_TOKEN nếu ZALO_ENABLED=true)
 ```
 

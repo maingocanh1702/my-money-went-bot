@@ -177,6 +177,26 @@ async def test_sepay_replay_does_not_double_write(fake_world):
     assert len(rows) == 2
 
 
+@pytest.mark.asyncio
+async def test_sepay_claim_store_failure_is_retryable(fake_world, monkeypatch):
+    payload = _basic_payload(ref="CLAIM_STORE_DOWN")
+
+    def unavailable(_ref_code):
+        raise sh.RetryableTransactionClaimError("claim store unavailable")
+
+    monkeypatch.setattr(sh, "_ref_in_sheet", unavailable)
+    with pytest.raises(sh.RetryableTransactionClaimError):
+        await sepay.handle_sepay_webhook(payload)
+
+
+@pytest.mark.asyncio
+async def test_sepay_rejects_non_finite_amount_without_writing(fake_world):
+    payload = _basic_payload(amount="NaN", ref="NAN_AMOUNT")
+    await sepay.handle_sepay_webhook(payload)
+    # Fake world creates the Transactions schema first; there must be no data row.
+    assert len(sh._sheet(S.TRANSACTIONS).get_all_values()) == 1
+
+
 # ── Idempotency: ledger write is itself idempotent (per-row apply) ─
 
 

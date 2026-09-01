@@ -118,7 +118,8 @@ def test_durable_claim_blocks_fresh_processing_and_reclaims_stale_claim(fake_ss)
     sh._processed_refs.clear()
 
     assert sh.tx_exists("exclusive-claim") is False
-    assert sh.tx_exists("exclusive-claim") is True
+    with pytest.raises(sh.TransactionClaimInProgressError):
+        sh.tx_exists("exclusive-claim")
 
     processed = sh._ensure_processed_refs_tab()
     stale = (datetime.now(timezone.utc) - timedelta(
@@ -148,8 +149,34 @@ def test_calendar_month_cap_period_ignores_statement_day(fake_ss):
         "tcb", cashback_rate=0.01, min_eligible_spend=0,
         cap_period="calendar_month", alert_pct=0.8, active=True,
     )
-    assert sh.cashback_cycle_id("tcb", "2026-06-20") == "tcb_2026-06"
-    assert sh.cashback_cycle_id("tcb", "2026-07-01") == "tcb_2026-07"
+    assert sh.cashback_cycle_id("tcb", "2026-06-20") == "tcb_calendar_2026-06"
+    assert sh.cashback_cycle_id("tcb", "2026-07-01") == "tcb_calendar_2026-07"
+    assert sh.normalize_cashback_cycle_id("tcb", "2026-06") == "tcb_calendar_2026-06"
+    assert sh.normalize_cashback_cycle_id("tcb", "tcb_2026-06") == "tcb_calendar_2026-06"
+
+
+def test_calendar_month_versioning_isolates_legacy_statement_cycle_rows(fake_ss):
+    _setup_tx_tab()
+    _seed_credit(account_id="tcb", statement_day=15)
+    _seed_tiers()
+    _seed_rules(account_id="tcb")
+    _seed_mcc()
+
+    june = _add_tx("tcb", "WCM_WINMART June", 300_000, "2026-06-20T09:00:00")
+    # Simulate the old statement-cycle writer before calendar-month support.
+    sh.compute_and_record_cashback(june)
+    assert sh.get_cashback_ledger("tcb")[0]["cycle"] == "tcb_2026-07"
+
+    sh.upsert_card_config("tcb", cap_period="calendar_month")
+    july = _add_tx("tcb", "WCM_WINMART July", 300_000, "2026-07-01T09:00:00")
+    result = sh.compute_and_record_cashback(july)
+
+    assert result["cycle"] == "tcb_calendar_2026-07"
+    july_lines = [line for line in sh.get_cashback_ledger("tcb", result["cycle"])
+                  if line["status"] != "void"]
+    assert len(july_lines) == 1
+    assert july_lines[0]["tx_row_num"] == july
+    assert july_lines[0]["cashback_amount"] == 50_000
 
 
 def test_soft_delete_cashback_rule(fake_ss):
