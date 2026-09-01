@@ -1,5 +1,8 @@
+import json
 import os
+from pathlib import Path
 from dotenv import load_dotenv
+from google.oauth2.service_account import Credentials
 
 load_dotenv()
 
@@ -43,6 +46,30 @@ if _missing and not BOT_TOKEN.startswith("test:"):
 GOOGLE_CREDS_JSON = os.environ.get("GOOGLE_CREDS_JSON", "").strip()  # JSON string
 GOOGLE_CREDS_PATH = os.environ.get("GOOGLE_CREDS", "").strip()
 CREDS_FILE        = GOOGLE_CREDS_PATH or "credentials.json"  # local file fallback
+
+
+def _validate_google_credentials() -> None:
+    """Fail startup before financial webhooks accept data with bad Google auth.
+
+    This only parses service-account credentials locally; it does not make a
+    network request.  A non-empty but unreadable file or malformed JSON is not
+    a usable production configuration.
+    """
+    try:
+        if GOOGLE_CREDS_JSON:
+            info = json.loads(GOOGLE_CREDS_JSON)
+            Credentials.from_service_account_info(info)
+            return
+        credential_path = Path(GOOGLE_CREDS_PATH)
+        if not credential_path.is_file():
+            raise FileNotFoundError(f"credential file not found: {credential_path}")
+        Credentials.from_service_account_file(str(credential_path))
+    except (OSError, TypeError, ValueError) as exc:
+        raise RuntimeError(
+            "Invalid Google credentials: set GOOGLE_CREDS_JSON to a valid "
+            "service-account JSON document or GOOGLE_CREDS to a readable "
+            "service-account JSON file."
+        ) from exc
 
 # Required in production: SePay webhook secret. The bot rejects requests that
 # do not match this token.
@@ -105,6 +132,7 @@ if not BOT_TOKEN.startswith("test:"):
         _missing.append("GOOGLE_CREDS_JSON or GOOGLE_CREDS")
     if _missing:
         raise RuntimeError("Missing required production environment variables: " + ", ".join(_missing))
+    _validate_google_credentials()
 
 # Sheet tab names
 class SHEETS:

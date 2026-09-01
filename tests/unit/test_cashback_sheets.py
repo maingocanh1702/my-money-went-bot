@@ -179,6 +179,32 @@ def test_calendar_month_versioning_isolates_legacy_statement_cycle_rows(fake_ss)
     assert july_lines[0]["cashback_amount"] == 50_000
 
 
+def test_invalid_calendar_date_preserves_existing_cashback_until_repaired(fake_ss):
+    _setup_tx_tab()
+    _seed_credit(account_id="tcb", statement_day=15)
+    _seed_tiers()
+    _seed_rules(account_id="tcb")
+    _seed_mcc()
+    sh.upsert_card_config("tcb", cap_period="calendar_month")
+
+    row_num = _add_tx("tcb", "WCM_WINMART June", 300_000, "2026-06-20T09:00:00")
+    computed = sh.compute_and_record_cashback(row_num)
+    assert computed["lines"][0]["cashback_amount"] == 50_000
+
+    # A manual Sheet edit can make the date unparsable after cashback has been
+    # recorded. Derived money must stay intact until the source date is fixed.
+    tx_ws = sh._sheet(S.TRANSACTIONS)
+    tx_ws.update_cell(row_num, 2, "not-a-date")
+    sh._invalidate_tx_rows_cache()
+
+    assert sh.recompute_cashback_for_tx(row_num)["lines"] == []
+    assert sh.compute_and_record_cashback(row_num)["lines"] == []
+    active = [line for line in sh.get_cashback_ledger("tcb") if line["status"] != "void"]
+    assert len(active) == 1
+    assert active[0]["tx_row_num"] == row_num
+    assert active[0]["cashback_amount"] == 50_000
+
+
 def test_soft_delete_cashback_rule(fake_ss):
     rid = sh.add_cashback_rule("cake", "Siêu thị", "mcc", "5411")
     assert sh.soft_delete_cashback_rule(rid) is True
