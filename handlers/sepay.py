@@ -48,10 +48,19 @@ async def _ensure_buckets(month_key: str) -> tuple[list[dict], int]:
 
 
 async def _append_claimed_transaction(ref_code: str, *args, **kwargs) -> int:
-    """Write one transaction and atomically advance its durable claim state."""
+    """Write one transaction and settle its durable claim state.
+
+    A timeout after Google Sheets commits is ambiguous. Re-read the exact
+    reference before releasing the claim so a delivery retry cannot append a
+    duplicate row during the transaction-cache TTL.
+    """
     try:
         row_num = sh.append_transaction(*args, **kwargs)
     except Exception:
+        committed_row = sh.find_transaction_row_by_ref(ref_code, force_refresh=True)
+        if committed_row is not None:
+            sh.mark_ref_committed(ref_code)
+            return committed_row
         sh.mark_ref_failed(ref_code)
         raise
     sh.mark_ref_committed(ref_code)

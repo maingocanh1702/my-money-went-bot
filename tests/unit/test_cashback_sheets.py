@@ -131,6 +131,22 @@ def test_durable_claim_blocks_fresh_processing_and_reclaims_stale_claim(fake_ss)
     assert sh.tx_exists("exclusive-claim") is False
 
 
+def test_durable_claim_expands_processed_refs_past_initial_sheet_capacity(fake_ss, monkeypatch):
+    _setup_tx_tab()
+    processed = sh._ensure_processed_refs_tab()
+    processed._row_count = 500
+    processed.update(
+        "A2:C500",
+        [[f"old-{index}", "committed", "2026-09-01T00:00:00+00:00"] for index in range(499)],
+    )
+    sh._processed_refs.clear()
+    monkeypatch.setattr(sh, "_ref_in_sheet", lambda _ref_code: False)
+
+    assert sh.tx_exists("claim-after-capacity") is False
+    assert processed.row_count >= 501
+    assert processed.row_values(501)[0] == "claim-after-capacity"
+
+
 def test_fuzzy_dedup_reads_canonical_datetime_written_to_transactions(fake_ss):
     _setup_tx_tab()
     tx_date = datetime(2026, 9, 1, 14, 0, tzinfo=timezone(timedelta(hours=7)))
