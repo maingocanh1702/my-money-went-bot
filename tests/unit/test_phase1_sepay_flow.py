@@ -190,6 +190,33 @@ async def test_sepay_claim_store_failure_is_retryable(fake_world, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_claimed_append_recovers_remote_commit_after_timeout(fake_world, monkeypatch):
+    """A Sheets timeout after a remote write must not release a duplicate claim."""
+    ref_code = "COMMIT_THEN_TIMEOUT"
+    original_append = sh.append_transaction
+
+    def remote_commit_then_timeout(*args, **kwargs):
+        original_append(*args, **kwargs)
+        # Model the client not reaching its normal post-write cache invalidation.
+        import time
+        sh._tx_rows_cache.update({"ts": time.time(), "rows": []})
+        raise TimeoutError("connection closed after write")
+
+    monkeypatch.setattr(sh, "append_transaction", remote_commit_then_timeout)
+    assert sh.tx_exists(ref_code) is False
+
+    row_num = await sepay._append_claimed_transaction(
+        ref_code,
+        "2026-09-01T10:00:00+07:00", "merchant", 50_000, ref_code, "2026-09",
+    )
+
+    assert row_num == 2
+    rows = sh._sheet(S.TRANSACTIONS).get_all_values()
+    assert [row[8] for row in rows[1:]].count(ref_code) == 1
+    assert sh.tx_exists(ref_code) is True
+
+
+@pytest.mark.asyncio
 async def test_sepay_rejects_non_finite_amount_without_writing(fake_world):
     payload = _basic_payload(amount="NaN", ref="NAN_AMOUNT")
     await sepay.handle_sepay_webhook(payload)

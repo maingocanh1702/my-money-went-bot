@@ -763,7 +763,7 @@ def tx_exists(ref_code: str) -> bool:
             # A transaction write can succeed while its subsequent marker update
             # times out. Confirm the source-of-truth row before asking SePay to
             # retry, so a locally cached processing claim never masks a commit.
-            if _ref_in_sheet(ref_code):
+            if _ref_in_sheet(ref_code, force_refresh=True):
                 _processed_refs[ref_code] = ("committed", now)
                 return True
             raise TransactionClaimInProgressError("transaction claim is still processing")
@@ -783,6 +783,7 @@ def tx_exists(ref_code: str) -> bool:
             stamp = datetime.now(timezone.utc).isoformat()
             if row_num is None:
                 row_num = _next_row(ws, col=1)
+                _auto_expand(ws, row_num)
                 ws.update(f"A{row_num}:C{row_num}", [[ref_code, "processing", stamp]])
             else:
                 ws.update(f"B{row_num}:C{row_num}", [["processing", stamp]])
@@ -803,6 +804,7 @@ def mark_ref_committed(ref_code: str):
         stamp = datetime.now(timezone.utc).isoformat()
         if row_num is None:
             row_num = _next_row(ws, col=1)
+            _auto_expand(ws, row_num)
             ws.update(f"A{row_num}:C{row_num}", [[ref_code, "committed", stamp]])
         else:
             ws.update(f"B{row_num}:C{row_num}", [["committed", stamp]])
@@ -822,6 +824,7 @@ def mark_ref_failed(ref_code: str):
         stamp = datetime.now(timezone.utc).isoformat()
         if row_num is None:
             row_num = _next_row(ws, col=1)
+            _auto_expand(ws, row_num)
             ws.update(f"A{row_num}:C{row_num}", [[ref_code, "failed", stamp]])
         else:
             ws.update(f"B{row_num}:C{row_num}", [["failed", stamp]])
@@ -829,22 +832,31 @@ def mark_ref_failed(ref_code: str):
         print(f"[dedup] failure marker error: {e}")
 
 
-def _ref_in_sheet(ref_code: str) -> bool:
-    """Check if ref_code exists in column I of "Đầu ra" sheet.
-    Dùng cache TTL 30s để tránh đọc sheet nhiều lần khi xử lý burst email.
-    Fail-closed: an unknown ledger state must not permit a duplicate."""
+def find_transaction_row_by_ref(ref_code: str, *, force_refresh: bool = False) -> int | None:
+    """Return the source transaction row for an exact reference, if present.
+
+    The optional fresh read resolves the ambiguous outcome where a Sheets write
+    committed remotely but its client call timed out before cache invalidation.
+    """
     if not ref_code:
-        return False
+        return None
     try:
-        rows = _get_tx_rows()
-        # col I = index 8 (0-based) trong row
-        for r in rows:
-            if len(r) > 8 and r[8] == ref_code:
-                return True
-        return False
+        rows = _get_tx_rows(force_refresh=force_refresh)
+        # col I = index 8 (0-based) in a Transactions row.
+        for index, row in enumerate(rows, start=2):
+            if len(row) > 8 and row[8] == ref_code:
+                return index
+        return None
     except Exception as e:
         print(f"[tx_exists] sheet lookup error (FAIL-CLOSED): {e}")
         raise RetryableTransactionClaimError("transaction lookup failed") from e
+
+
+def _ref_in_sheet(ref_code: str, *, force_refresh: bool = False) -> bool:
+    """Check if ref_code exists in column I of "Đầu ra" sheet.
+    Dùng cache TTL 30s để tránh đọc sheet nhiều lần khi xử lý burst email.
+    Fail-closed: an unknown ledger state must not permit a duplicate."""
+    return find_transaction_row_by_ref(ref_code, force_refresh=force_refresh) is not None
 
 
 def append_transaction(
