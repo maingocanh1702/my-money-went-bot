@@ -4,6 +4,7 @@ Triggered when a bank transaction arrives.
 """
 import hashlib
 import hmac
+import math
 from datetime import datetime
 import pytz
 
@@ -102,13 +103,21 @@ async def _handle_transaction(payload: dict, *, trusted_email: bool):
     if raw_amount is None:
         print("[sepay] skipping: no amount field found")
         return
-    amount = abs(float(raw_amount))
+    try:
+        raw_amount_number = float(raw_amount)
+    except (TypeError, ValueError):
+        print(f"[sepay] skipping invalid amount={raw_amount!r}")
+        return
+    if not math.isfinite(raw_amount_number):
+        print(f"[sepay] skipping non-finite amount={raw_amount!r}")
+        return
+    amount = abs(raw_amount_number)
 
     tx_type_raw = str(data.get("transferType") or data.get("transfer_type") or data.get("type") or "").lower()
 
     # Determine direction: outgoing (debit) vs incoming (credit)
-    is_outgoing = "out" in tx_type_raw or "debit" in tx_type_raw or float(raw_amount) < 0
-    is_incoming = "in" in tx_type_raw or "credit" in tx_type_raw or (not is_outgoing and float(raw_amount) > 0)
+    is_outgoing = "out" in tx_type_raw or "debit" in tx_type_raw or raw_amount_number < 0
+    is_incoming = "in" in tx_type_raw or "credit" in tx_type_raw or (not is_outgoing and raw_amount_number > 0)
 
     if not is_outgoing and not is_incoming:
         print(f"[sepay] skipping unknown tx type={tx_type_raw!r}")
@@ -170,10 +179,10 @@ async def _handle_transaction(payload: dict, *, trusted_email: bool):
     resolved = resolve_account(data)
     resolved_account_id = resolved.account_id or ""
 
-    # Claim immediately before a financial write. A trusted email delivery can
-    # return HTTP 503 when this state cannot be made durable; untrusted SePay
-    # still fails closed to avoid duplicate money/cashback entries.
-    if sh.tx_exists(ref_code, retry_on_failure=trusted_email):
+    # Claim immediately before a financial write. Every authenticated source
+    # must retry if this state cannot be made durable; acknowledging a SePay
+    # failure here would lose a real transaction just as surely as email would.
+    if sh.tx_exists(ref_code):
         print(f"DEBUG: duplicate webhook ignored, ref_code={ref_code!r}")
         return
 

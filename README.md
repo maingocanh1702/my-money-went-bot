@@ -179,7 +179,8 @@ git clone https://github.com/maingocanh1702/my-money-went-bot.git
 cd my-money-went-bot
 cp .env.example .env
 # Fill the required values in .env: BOT_TOKEN, CHAT_ID, SHEET_ID,
-# GOOGLE_CREDS_JSON, SEPAY_SECRET, TELEGRAM_WEBHOOK_SECRET, CRON_SECRET, EMAIL_SECRET
+# GOOGLE_CREDS_JSON (or GOOGLE_CREDS=credentials.json), SEPAY_SECRET,
+# TELEGRAM_WEBHOOK_SECRET, CRON_SECRET, EMAIL_SECRET
 # (plus ZALO_SECRET_TOKEN when ZALO_ENABLED=true)
 ```
 
