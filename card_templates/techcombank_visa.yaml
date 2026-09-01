@@ -1,0 +1,102 @@
+# Techcombank Visa — Cashback Template
+# Source: Techcombank website, chương trình 2026.
+# Rate 1-5% tùy danh mục, cap theo calendar month.
+# ⚠️ Chương trình thay đổi theo giai đoạn — verify trên app Techcombank.
+
+card_id: techcombank_visa
+card_name: "Techcombank Visa"
+bank: "Techcombank"
+version: "2026.08"
+description: "Hoàn 1-5% theo danh mục MCC, cap theo tháng dương lịch"
+
+config:
+  cashback_rate: 0.01           # base rate 1% cho MCC match nhưng rule rate trống
+  min_eligible_spend: 0         # không cổng kích hoạt
+  cap_period: calendar_month
+  alert_pct: 0.80
+
+tier_set: ""                    # không per-tx cap tiers
+tiers: []
+
+rules:
+  - mcc: "5811"
+    name: "Quán ăn nhỏ"
+    emoji: "🍜"
+    monthly_cap: 500000
+    rate: 0.03
+    daily_limit: 0
+
+  - mcc: "5812"
+    name: "Nhà hàng"
+    emoji: "🍽️"
+    monthly_cap: 500000
+    rate: 0.03
+    daily_limit: 0
+
+  - mcc: "5813"
+    name: "Bar / Lounge"
+    emoji: "🍸"
+    monthly_cap: 500000
+    rate: 0.03
+    daily_limit: 0
+
+  - mcc: "5814"
+    name: "Fast food"
+    emoji: "🍔"
+    monthly_cap: 500000
+    rate: 0.03
+    daily_limit: 0
+
+  - mcc: "5411"
+    name: "Siêu thị"
+    emoji: "🛒"
+    monthly_cap: 300000
+    rate: 0.02
+    daily_limit: 0
+
+  - mcc: "5499"
+    name: "Cửa hàng tiện lợi"
+    emoji: "🏪"
+    monthly_cap: 300000
+    rate: 0.02
+    daily_limit: 0
+
+  - mcc: "5262"
+    name: "Mua sắm online"
+    emoji: "🛍"
+    monthly_cap: 300000
+    rate: 0.02
+    daily_limit: 0
+
+  - mcc: "4899"
+    name: "Giải trí"
+    emoji: "🎬"
+    monthly_cap: 200000
+    rate: 0.05
+    daily_limit: 0
+
+  - mcc: "5815"
+    name: "Digital media"
+    emoji: "📱"
+    monthly_cap: 200000
+    rate: 0.05
+    daily_limit: 0
+
+  - mcc: "4722"
+    name: "Du lịch"
+    emoji: "✈️"
+    monthly_cap: 500000
+    rate: 0.05
+    daily_limit: 0
+
+patterns:
+  "5811": ["PHUC LONG", "HIGHLANDS", "STARBUCKS", "CAFE", "TRA SUA", "KATINAT"]
+  "5812": ["KICHI", "GOGI", "GOLDEN GATE", "LOTTERIA", "KFC", "PIZZA", "JOLLIBEE"]
+  "5813": ["BAR", "LOUNGE", "PUB"]
+  "5814": ["MCDONALDS", "BURGER KING", "DOMINOS"]
+  "5411": ["WINMART", "BACHHOAXANH", "BHX", "LOTTE", "COOPMART", "EMART"]
+  "5499": ["CIRCLE K", "GS25", "MINISTOP", "FAMILY MART", "7ELEVEN"]
+  "5262": ["SHOPEE", "LAZADA", "TIKI", "SENDO"]
+  "4899": ["CGV", "GALAXY", "LOTTE CINEMA"]
+  "5815": ["NETFLIX", "SPOTIFY", "YOUTUBE", "APPLE"]
+  "4722": ["TRAVELOKA", "BOOKING", "AGODA", "VNTRIP", "KLOOK"]

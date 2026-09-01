@@ -10,6 +10,74 @@ import telegram_api as tg
 _LARGE_TX = 100_000  # alert threshold in VND
 
 
+def _get_cashback_line(row_num: int) -> str:
+    """Build a compact cashback line for the budget message (U2+U3).
+
+    Reads the cashback ledger for this tx row and returns:
+    - Empty string if no cashback
+    - "💳 +3.800đ hoàn tiền (Di chuyển)" if known MCC
+    - "💳 +3.800đ hoàn tiền (pending) · Cổng: 2.5M/5M" with gate progress (U3)
+    """
+    try:
+        row = sh.get_transaction_row(row_num)
+        account_id = (row[16] if row and len(row) > 16 else "").strip()
+        if not account_id:
+            return ""
+        acc = sh.find_account_by_id(account_id)
+        if not acc or acc.get("type") != "credit":
+            return ""
+
+        # Read cashback ledger for this specific tx
+        ledger = sh.get_cashback_ledger(account_id)
+        tx_lines = [
+            l for l in ledger
+            if l["tx_row_num"] == row_num and l["status"] != "void"
+        ]
+        if not tx_lines:
+            return ""
+
+        cb_total = sum(l["cashback_amount"] for l in tx_lines)
+        if cb_total <= 0:
+            # Check for reason-based messages
+            reasons = {l.get("reason", "") for l in tx_lines}
+            if "daily_limit" in reasons:
+                return "💳 Đã hết lượt hoàn hôm nay — giao dịch này 0đ hoàn tiền."
+            if "mcc_cap_full" in reasons:
+                return "💳 Đã đạt cap kỳ này — giao dịch này 0đ hoàn tiền."
+            return ""
+
+        # Get MCC label
+        mcc_code = tx_lines[0].get("mcc_code", "")
+        mcc_label = ""
+        if mcc_code:
+            rules = sh.get_cashback_rules(account_id)
+            rule = next((r for r in rules if r["match_value"] == mcc_code), None)
+            mcc_label = f" ({rule['rule_name']})" if rule else f" (MCC {mcc_code})"
+
+        # Status
+        status = tx_lines[0].get("status", "")
+        status_tag = " · pending" if status == "pending" else ""
+
+        line = f"💳 +{sh.fmt_amount(cb_total)} hoàn tiền{mcc_label}{status_tag}"
+
+        # Gate progress (U3)
+        cfg = sh.get_card_config(account_id)
+        gate = float((cfg or {}).get("min_eligible_spend") or 0)
+        if gate > 0 and cfg:
+            cycle = tx_lines[0].get("cycle", "")
+            if cycle:
+                spent = sh.eligible_spend_in_cycle(account_id, cycle)
+                if spent < gate:
+                    pct = min(100, round(spent / gate * 100))
+                    line += f"\n⏳ Cổng: {sh.fmt_amount(spent)}/{sh.fmt_amount(gate)} {sh.make_bar(pct, 6)} {pct}%"
+                else:
+                    line += " ✅"
+
+        return line
+    except Exception as e:
+        print(f"[cashback] _get_cashback_line error row={row_num}: {e}")
+        return ""
+
 def _apply_ledger_for_row(row_num: int):
     """Write a single ledger entry for a finalized expense/income row.
 
@@ -220,6 +288,12 @@ async def handle_recategorize(parts: list[str], message_id: int):
     # Reset finalized columns so the transaction isn't double-counted
     sh.reset_transaction_row(row_num)
 
+    # Cashback: void this tx's lines now so /report doesn't count a tx that's
+    # being edited; flag state so _finalize recomputes once a bucket is chosen.
+    try:
+        sh.void_cashback_for_tx(row_num)
+    except Exception as e:
+        print(f"[cashback] void on recat failed row={row_num}: {e}")
 
     tz = pytz.timezone(TIMEZONE)
     # Historical tx keep their own month — cross-month recat must not use "now".
@@ -233,6 +307,7 @@ async def handle_recategorize(parts: list[str], message_id: int):
         "amount": amount, "currency": currency, "description": description,
         "month_key": month_key,
         "tx_date": row[1] if len(row) > 1 else "",
+        "cashback_recompute_after_finalize": True,
         "pending_tx_queue": prev_pending,
     })
 
@@ -278,6 +353,15 @@ async def _finalize(
         pending = state.get("pending_tx_queue") or []
         sh.clear_state(CHAT_ID)
 
+    # Cashback recompute only when this finalize follows a recat (flag set in
+    # handle_recategorize). A brand-new tx was already computed at the webhook,
+    # so we must NOT recompute here by default. MCC comes from the description
+    # (unchanged by recat), but recompute also reshuffles daily-limit standing.
+    if state.get("cashback_recompute_after_finalize"):
+        try:
+            sh.recompute_cashback_for_tx(row_num)
+        except Exception as e:
+            print(f"[cashback] recompute on finalize failed row={row_num}: {e}")
 
     # Delete sub-category picker message if present
     sub_msg_id = state.get("sub_msg_id")
@@ -385,10 +469,13 @@ async def _finalize(
         # Tracking-only: chỉ show tổng tháng, không judge
         msg += f"📊 {parent_name}: tổng tháng này *{sh.fmt_amount(bkt['spent'])}*"
 
+    # ── Compact cashback line (U2) ────────────────────────────
+    cb_line = _get_cashback_line(row_num)
     if cb_line:
         msg += f"\n\n{cb_line}"
 
     recat_buttons = [{"text": "🔄 Sai mục?", "callback_data": f"recat_{row_num}"}]
+    # Add "Sai CB" button if this tx has cashback (U2)
     if cb_line and "hoàn tiền" in cb_line:
         recat_buttons.append({"text": "❌ Sai CB", "callback_data": f"cb_learn_wrong_{row_num}"})
     await tg.send_with_buttons(msg, [recat_buttons])
@@ -397,6 +484,7 @@ async def _finalize(
     desc = state.get("description", "")
     if desc:
         existing_rule = sh.match_keyword_rule(desc)
+        is_recat = bool(state.get("cashback_recompute_after_finalize"))
 
         if is_recat and existing_rule and existing_rule["bucket_id"] != parent_category:
             # Recat: old rule pointed to wrong category → offer to UPDATE

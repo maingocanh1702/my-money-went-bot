@@ -128,7 +128,7 @@ async def test_credit_flow_statement_skip_leaves_calendar_month(
     fake_ss, bot_state_tab, monkeypatch,
 ):
     """'skip' at the statement step → statement_day unset (calendar-month
-    fallback), settable later."""
+    fallback), settable later via /cashback."""
     async def _noop(*a, **k):
         return None
     monkeypatch.setattr(accounts.tg, "send_text", _noop)

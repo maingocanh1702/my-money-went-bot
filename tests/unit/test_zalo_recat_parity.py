@@ -116,6 +116,7 @@ async def test_zalo_recat_pick_starts_recat_flow(recat_world):
     state = sh.get_state(ZALO_KEY) or {}
     assert state.get("step") == "await_zalo_parent"
     assert state.get("row_num") == 2
+    assert state.get("cashback_recompute_after_finalize") is True
     assert state.get("tx_date"), "recat state must carry the tx's own date"
 
 

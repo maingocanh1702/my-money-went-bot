@@ -29,12 +29,12 @@
  */
 
 // ─── Config — SỬA 2 DÒNG NÀY ────────────────────────────────────────────────
-const WEBHOOK_URL = "https://financial-tracking-production-740d.up.railway.app/webhook/email";
-const WEBHOOK_SECRET = "REDACTED-retired-email-webhook-secret";  // phải khớp với EMAIL_SECRET trong Railway
+const WEBHOOK_URL = "https://YOUR-APP.up.railway.app/webhook/email";  // ← thay bằng URL Railway của bạn
+const WEBHOOK_SECRET = "YOUR_EMAIL_SECRET_HERE";  // phải khớp với EMAIL_SECRET trong Railway
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Danh sách sender email ngân hàng cần theo dõi.
-// Forwarders: nếu email được auto-forward (vd REDACTED-maintainers-forwarder-local-part → maingocanh1702),
+// Forwarders: nếu email được auto-forward từ Gmail khác,
 // header `From:` của email forward thường là forwarder, không phải sender gốc
 // → phải thêm địa chỉ forwarder vào đây.
 // Python parser sẽ scan body để detect bank gốc từ "Forwarded message" block.
@@ -47,8 +47,8 @@ const BANK_SENDERS = [
   "notification@cake.vn",
   "noreply@cake.vn",
   "hangseng@infoservices.hangseng.com",
-  // Forwarders — Gmail accounts auto-forward bank email vào account này:
-  "REDACTED-maintainers-forwarder-mailbox",  // forward Hang Seng từ REDACTED-maintainers-forwarder-local-part
+  // Forwarders — nếu bạn auto-forward bank email từ Gmail khác:
+  // "your-forwarder@gmail.com",
 ];
 
 // Key lưu tập message ID đã xử lý trong Script Properties.
