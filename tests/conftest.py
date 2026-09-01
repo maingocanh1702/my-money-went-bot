@@ -165,6 +165,7 @@ def fake_ss(monkeypatch):
     sh._processed_refs.clear()
     sh._keyword_rules_cache = None
     sh._state_cache.clear()
+    sh._state_row_cache.clear()
     sh._accounts_cache = None
     sh._mcc_exclusion_cache = None
     sh._mcc_map_cache = None
