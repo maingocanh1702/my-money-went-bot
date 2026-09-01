@@ -1,0 +1,70 @@
+{
+  "_role": "RUNTIME manifest shape. Copy this to .autopilot/state/<FEATURE_ID>/manifest.json at register time. It is NOT the schema of the tracked authored contract under docs/autopilot-manifests/<task-slug>.json — that file is a different artifact with a different lifetime and carries NO manifest_schema_version. autopilot-review-readiness.mjs fail-closes with HALT CONTRACT_INVALID unless the manifest it is handed sits at exactly .autopilot/state/<FEATURE_ID>/manifest.json, so adding manifest_schema_version to a tracked contract does not upgrade it — it breaks register. A repo whose tracked manifests lack that string is not on an older workflow; do not open a task to migrate them. See level3-workflow.md section 11.",
+  "manifest_schema_version": "level3-operational-v2",
+  "review_gate_version": "level3-readiness-v2",
+  "task_id": "repo-id:task-slug",
+  "feature": "task-slug--slice-slug",
+  "branch": "feat/task-slug--slice-slug",
+  "base_ref": "origin/main",
+  "base_sha": "0000000000000000000000000000000000000000",
+  "risk": "P2",
+  "autonomy_mode": "supervised",
+  "writer_processes_max": 1,
+  "depends_on": [],
+  "dep_checks": [],
+  "invariants": [
+    "test-chain"
+  ],
+  "scope": [
+    "src/path/to/file.ext"
+  ],
+  "negative_scope": [
+    "no adjacent subsystem or undeclared file"
+  ],
+  "context_sources": [
+    "README.md"
+  ],
+  "applicable_skills": [],
+  "model_policy": {
+    "planner": "primary-agent",
+    "worker": "assigned-agent",
+    "independent_reviewer": "scripts/codex-review-pin.sh",
+    "fallback": "HALT_TOOL_UNAVAILABLE"
+  },
+  "sandbox_and_permissions": {
+    "network": "restricted",
+    "secrets": "none",
+    "external_side_effects": "approval_required"
+  },
+  "verification": {
+    "focused": [],
+    "canonical": [],
+    "e2e": []
+  },
+  "code_review": {
+    "required": true,
+    "tool": "scripts/codex-review-pin.sh",
+    "clean_rounds": 1
+  },
+  "security_review": {
+    "required": false,
+    "reason": "not_applicable",
+    "tool": "scripts/codex-review-pin.sh"
+  },
+  "budgets": {
+    "wall_time_minutes": 120,
+    "fix_rounds_max": 5,
+    "token_budget": null,
+    "cost_budget": null
+  },
+  "stop_conditions": [
+    "MAX_ROUNDS",
+    "REGION_THRASH",
+    "SCOPE_OR_BASE_DRIFT",
+    "MATERIAL_CONTEXT_OR_DECISION_MISSING",
+    "REQUIRED_TOOL_UNAVAILABLE"
+  ],
+  "readiness_evidence_path": ".autopilot/state/task-slug--slice-slug/readiness.json",
+  "_verification_rule": "Every command in `verification` must assert a PROPERTY, never a pinned literal. A literal is false the moment anything moves, and because this manifest is hash-locked after `register`, a stale literal cannot be corrected in place — it forces a full close-and-re-register cycle. EVERY ENTRY IS EXECUTED, NOT READ. runVerificationGroup() spawns each string as a shell command and gates on its exit status. An English sentence is not a command: it fails on the first attempt, every attempt. This rule used to say 'command' and then illustrate it with prose sentences, and the examples taught louder than the wording — an author copied their shape and the gate rejected all of them at register time (Plexco, 2026-07-30). So: WRITE an executable assertion of a property. \"osv-scanner --format json ... | jq -e '.results | length == 0'\" / \"test $(jq -r '.version' <pkg-meta>) = $(npm view <pkg> version)\" / \"git diff --quiet <base> -- <file>\" (identity to base IS the property here) / \"grep -qF 'case 2b' path/to/test.ts\". DO NOT WRITE prose: \"osv-scanner reports zero findings\" / \"the diff contains no new migration\". DO NOT WRITE a literal: \"<pkg> == 1.2.3\" / \"test count == 561\" / \"migration tail == 0024\". A 'no new migration' rule is no longer enforceable by declaring `scope` narrowly (kit v34: the diff is certified as whatever it actually is, not checked against declared scope) — assert it as an executable command instead: \"git diff --name-only --no-renames \\\"$AUTOPILOT_DIFF_BASE_SHA\\\"...HEAD | grep -qE '^(migrations|db/migrate)/' && exit 1 || exit 0\" (AUTOPILOT_DIFF_BASE_SHA is exported into every verification command's environment for exactly this kind of check). Observed cost: a slice that pinned `postcss == 8.5.18` in `verification.focused` needed a third registration when the owner narrowed its scope (Plexco, 2026-07-30); a sibling manifest that pinned a test-count baseline went stale within hours of being authored and HALTed its slice at MAX_ROUNDS.",
+  "_scope_rule": "`scope` must list EXACT worktree-relative file paths — not directories, no duplicates. The gate rejects a directory entry. Include every file the slice will touch, including this manifest's own authored counterpart under docs/autopilot-manifests/ if the slice amends its contract."
+}
