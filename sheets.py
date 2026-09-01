@@ -1,6 +1,8 @@
 import asyncio
 import json
+import math
 import time
+import threading
 import gspread
 from gspread.exceptions import APIError
 from gspread.http_client import HTTPClient
@@ -84,7 +86,6 @@ bootstrap_lock = asyncio.Lock()
 # Threading lock because append_transaction is sync (called from async context
 # but the GIL can release during the blocking gspread I/O, allowing another
 # thread to interleave).
-import threading
 # Reentrant: recompute_cashback_for_tx holds this across a whole void+rebuild
 # sequence while the per-row compute_and_record_cashback re-acquires it on the
 # same thread. A plain Lock would self-deadlock there; RLock keeps cross-thread
@@ -627,23 +628,8 @@ def _normalize_type(tx_type: str) -> str:
 
 
 def _parse_dt(date_str: str):
-    """Parse ISO hoặc DD/MM/YYYY HH:MM:SS → datetime timezone-aware (UTC)."""
-    if not date_str:
-        return None
-    s = date_str.strip()
-    for fmt in (
-        "%Y-%m-%dT%H:%M:%S",
-        "%Y-%m-%dT%H:%M:%S.%f",
-        "%Y-%m-%dT%H:%M:%S%z",
-        "%d/%m/%Y %H:%M:%S",
-        "%d/%m/%Y %H:%M",
-    ):
-        try:
-            dt = datetime.strptime(s[:26], fmt)
-            return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
-        except ValueError:
-            continue
-    return None
+    """Normalize every transaction timestamp through the canonical parser."""
+    return _parse_local_datetime(date_str)
 
 
 def find_recent_duplicate(amount: float, tx_type: str, tx_date: str, currency: str = "VND") -> bool:
@@ -696,46 +682,142 @@ def find_recent_duplicate(amount: float, tx_type: str, tx_date: str, currency: s
 
 
 # -----------------------------------------------------
-# Transaction Write
+# Transaction Write — durable idempotency
 # -----------------------------------------------------
-_processed_refs: dict[str, float] = {}  # ref_code → timestamp
+_processed_refs: dict[str, float] = {}  # active or committed ref_code → timestamp
+PROCESSED_REF_CLAIM_TTL_SECONDS = 5 * 60
 
-def tx_exists(ref_code: str) -> bool:
-    """Dedup transaction by ref_code.
 
-    Layered check:
-    1. In-memory cache (5-min TTL) — fast path cho SePay retry burst
-    2. Sheet lookup — bắt cả case re-process email cũ (vd Apps Script
-       bootstrap re-trigger), dùng cột I trong "Đầu ra"
+def _ensure_processed_refs_tab():
+    """Return the durable transaction reservation ledger, creating it once."""
+    return _ensure_tab_with_header(
+        S.PROCESSED_REFS,
+        ["ref_code", "status", "updated_at"],
+        rows=500,
+    )
 
-    Trả về True nếu ref_code đã tồn tại → caller sẽ skip ghi.
-    Fail-open: nếu sheet không đọc được, fallback về cache only.
+
+class RetryableTransactionClaimError(RuntimeError):
+    """The idempotency state could not be durably read or reserved."""
+
+
+def _get_processed_ref(ref_code: str, *, retry_on_failure: bool = False) -> tuple[str | None, int | None, str]:
+    """Return durable status, row number, and timestamp; lookup errors fail closed."""
+    if not ref_code:
+        return None, None, ""
+    try:
+        rows = _ensure_processed_refs_tab().get_all_values()[1:]
+        for row_num, row in enumerate(rows, start=2):
+            if row and row[0] == ref_code:
+                status = row[1].strip().lower() if len(row) > 1 and row[1] else "processing"
+                updated_at = row[2].strip() if len(row) > 2 and row[2] else ""
+                return status, row_num, updated_at
+        return None, None, ""
+    except Exception as e:
+        print(f"[dedup] processed-ref lookup error (FAIL-CLOSED): {e}")
+        if retry_on_failure:
+            raise RetryableTransactionClaimError("processed-ref lookup failed") from e
+        return "committed", None, ""
+
+
+def _processing_claim_is_fresh(updated_at: str) -> bool:
+    """Treat malformed reservation times as active so idempotency fails closed."""
+    try:
+        stamped = datetime.fromisoformat(updated_at)
+        if stamped.tzinfo is None:
+            # Old rows used utcnow().isoformat(); retain their UTC meaning.
+            stamped = stamped.replace(tzinfo=timezone.utc)
+        else:
+            stamped = stamped.astimezone(timezone.utc)
+    except (TypeError, ValueError):
+        return True
+    age = (datetime.now(timezone.utc) - stamped).total_seconds()
+    return age <= PROCESSED_REF_CLAIM_TTL_SECONDS
+
+def tx_exists(ref_code: str, *, retry_on_failure: bool = False) -> bool:
+    """Claim a transaction reference or return True when it must not be written.
+
+    A successful claim is committed only after ``append_transaction`` writes.
+    All lookup/reservation failures are fail-closed: a webhook can retry a
+    missing transaction, while a duplicate corrupts balances and cashback.
     """
-    import time
-    now = time.time()
-    # Prune entries older than 5 minutes
-    expired = [k for k, v in _processed_refs.items() if now - v > 300]
-    for k in expired:
-        del _processed_refs[k]
+    if not ref_code:
+        return False
+    # The same lock also protects append_transaction, so a locally concurrent
+    # webhook cannot overwrite an active reservation before its append commits.
+    with tx_write_lock:
+        now = time.time()
+        expired = [k for k, v in _processed_refs.items() if now - v > PROCESSED_REF_CLAIM_TTL_SECONDS]
+        for k in expired:
+            del _processed_refs[k]
 
-    # Layer 1: in-memory cache
-    if ref_code in _processed_refs:
-        return True
+        if ref_code in _processed_refs:
+            return True
 
-    # Layer 2: sheet lookup — cột I (index 8 = position 9 in 1-based)
-    if _ref_in_sheet(ref_code):
-        # Cache để lần sau nhanh hơn
-        _processed_refs[ref_code] = now
-        return True
+        if _ref_in_sheet(ref_code, retry_on_failure=retry_on_failure):
+            _processed_refs[ref_code] = now
+            return True
 
-    _processed_refs[ref_code] = now
-    return False
+        status, row_num, updated_at = _get_processed_ref(ref_code, retry_on_failure=retry_on_failure)
+        if status == "committed" or (status == "processing" and _processing_claim_is_fresh(updated_at)):
+            _processed_refs[ref_code] = now
+            return True
+        try:
+            ws = _ensure_processed_refs_tab()
+            stamp = datetime.now(timezone.utc).isoformat()
+            if row_num is None:
+                row_num = _next_row(ws, col=1)
+                ws.update(f"A{row_num}:C{row_num}", [[ref_code, "processing", stamp]])
+            else:
+                ws.update(f"B{row_num}:C{row_num}", [["processing", stamp]])
+        except Exception as e:
+            print(f"[dedup] reservation write error (FAIL-CLOSED): {e}")
+            if retry_on_failure:
+                raise RetryableTransactionClaimError("processed-ref reservation failed") from e
+            return True
+        return False
 
 
-def _ref_in_sheet(ref_code: str) -> bool:
+def mark_ref_committed(ref_code: str):
+    """Commit a claimed reference after its transaction row was written."""
+    if not ref_code:
+        return
+    try:
+        _status, row_num, _updated_at = _get_processed_ref(ref_code)
+        ws = _ensure_processed_refs_tab()
+        stamp = datetime.now(timezone.utc).isoformat()
+        if row_num is None:
+            row_num = _next_row(ws, col=1)
+            ws.update(f"A{row_num}:C{row_num}", [[ref_code, "committed", stamp]])
+        else:
+            ws.update(f"B{row_num}:C{row_num}", [["committed", stamp]])
+        _processed_refs[ref_code] = time.time()
+    except Exception as e:
+        print(f"[dedup] commit marker error (FAIL-CLOSED): {e}")
+
+
+def mark_ref_failed(ref_code: str):
+    """Mark a pre-append failure retryable and clear only the fast-path cache."""
+    if not ref_code:
+        return
+    _processed_refs.pop(ref_code, None)
+    try:
+        _status, row_num, _updated_at = _get_processed_ref(ref_code)
+        ws = _ensure_processed_refs_tab()
+        stamp = datetime.now(timezone.utc).isoformat()
+        if row_num is None:
+            row_num = _next_row(ws, col=1)
+            ws.update(f"A{row_num}:C{row_num}", [[ref_code, "failed", stamp]])
+        else:
+            ws.update(f"B{row_num}:C{row_num}", [["failed", stamp]])
+    except Exception as e:
+        print(f"[dedup] failure marker error: {e}")
+
+
+def _ref_in_sheet(ref_code: str, *, retry_on_failure: bool = False) -> bool:
     """Check if ref_code exists in column I of "Đầu ra" sheet.
     Dùng cache TTL 30s để tránh đọc sheet nhiều lần khi xử lý burst email.
-    Fail-open: trả False nếu có exception (thà ghi trùng còn hơn miss GD)."""
+    Fail-closed: an unknown ledger state must not permit a duplicate."""
     if not ref_code:
         return False
     try:
@@ -746,8 +828,10 @@ def _ref_in_sheet(ref_code: str) -> bool:
                 return True
         return False
     except Exception as e:
-        print(f"[tx_exists] sheet lookup error (fail-open): {e}")
-        return False
+        print(f"[tx_exists] sheet lookup error (FAIL-CLOSED): {e}")
+        if retry_on_failure:
+            raise RetryableTransactionClaimError("transaction lookup failed") from e
+        return True
 
 
 def append_transaction(
@@ -794,9 +878,12 @@ def append_transaction(
 
     src_key = (account_source_key or "").strip().lower()
 
+    normalized_tx_date = _parse_local_datetime(tx_date)
+    stored_tx_date = normalized_tx_date.isoformat() if normalized_tx_date else str(tx_date)
+
     row_data = [
         "",                          # A: ID
-        str(tx_date),                # B: Ngày giao dịch
+        stored_tx_date,               # B: Ngày giao dịch (canonical local instant)
         "", "", "",                  # C, D, E
         description,                 # F: Nội dung
         tx_type,                     # G: Loại ("Tiền ra" or "Tiền vào")
@@ -1200,22 +1287,41 @@ def _to_num(val):
         return None
 
 
-def _parse_tx_date(val):
-    """ISO datetime/date string (or datetime/date) → date. Day-level only."""
+def _parse_local_datetime(val) -> datetime | None:
+    """Parse a transaction instant and normalize it to the configured timezone."""
+    tz = pytz.timezone(TIMEZONE)
     if isinstance(val, datetime):
-        return val.date()
-    if isinstance(val, date):
-        return val
-    s = str(val).strip()
-    if not s:
-        return None
-    try:
-        return datetime.fromisoformat(s).date()
-    except ValueError:
-        try:
-            return date.fromisoformat(s[:10])
-        except ValueError:
+        dt = val
+    elif isinstance(val, date):
+        dt = datetime.combine(val, datetime.min.time())
+    else:
+        s = str(val).strip()
+        if not s:
             return None
+        try:
+            dt = datetime.fromisoformat(s)
+        except ValueError:
+            dt = None
+            for fmt in ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%d/%m/%Y"):
+                try:
+                    dt = datetime.strptime(s, fmt)
+                    break
+                except ValueError:
+                    continue
+            if dt is None:
+                try:
+                    dt = datetime.combine(date.fromisoformat(s[:10]), datetime.min.time())
+                except ValueError:
+                    return None
+    if dt.tzinfo is None:
+        return tz.localize(dt)
+    return dt.astimezone(tz)
+
+
+def _parse_tx_date(val):
+    """ISO datetime/date string (or datetime/date) → configured local date."""
+    local = _parse_local_datetime(val)
+    return local.date() if local is not None else None
 
 
 # ── Rules ──────────────────────────────────────────────────────
@@ -1259,6 +1365,26 @@ def get_cashback_rules(account_id: str | None = None, force_refresh: bool = Fals
     return list(_cashback_rules_cache)
 
 
+def _validate_cashback_rule_values(rate, monthly_cap, min_tx_amount,
+                                   max_eligible_tx_per_day) -> None:
+    """Reject non-finite/invalid financial rule values before persistence."""
+    def finite_nonnegative(value, field: str) -> float:
+        try:
+            number = float(value)
+        except (TypeError, ValueError) as e:
+            raise ValueError(f"{field} must be finite and non-negative") from e
+        if not math.isfinite(number) or number < 0:
+            raise ValueError(f"{field} must be finite and non-negative")
+        return number
+
+    if rate not in (None, "") and finite_nonnegative(rate, "rate") > 1:
+        raise ValueError("rate must be between 0 and 1")
+    finite_nonnegative(monthly_cap, "monthly_cap")
+    finite_nonnegative(min_tx_amount, "min_tx_amount")
+    if int(max_eligible_tx_per_day) < 0:
+        raise ValueError("max_eligible_tx_per_day cannot be negative")
+
+
 def add_cashback_rule(account_id: str, rule_name: str, match_type: str,
                       match_value: str, *, rate=0.20, monthly_cap=200000.0,
                       per_tx_cap_tier: str = "", max_eligible_tx_per_day: int = 0,
@@ -1273,6 +1399,8 @@ def add_cashback_rule(account_id: str, rule_name: str, match_type: str,
     otherwise update/soft_delete (which target the first id match) would hit the
     stale row and leave the active duplicate untouched (Codex round 04).
     """
+    _validate_cashback_rule_values(rate, monthly_cap, min_tx_amount,
+                                   max_eligible_tx_per_day)
     rid = rule_id or f"{account_id}_{str(match_value).strip() or match_type}"
     ws = _ensure_cashback_rules_tab()
     rows = ws.get_all_values()[1:]
@@ -1396,6 +1524,17 @@ def upsert_card_config(account_id: str, **fields) -> None:
         "active":             (current or {}).get("active", True),
     }
     merged.update({k: v for k, v in fields.items() if k in merged})
+    for field in ("cashback_rate", "min_eligible_spend", "alert_pct"):
+        try:
+            number = float(merged[field])
+        except (TypeError, ValueError) as e:
+            raise ValueError(f"{field} must be finite") from e
+        if not math.isfinite(number):
+            raise ValueError(f"{field} must be finite")
+        if number < 0 or (field in ("cashback_rate", "alert_pct") and number > 1):
+            raise ValueError(f"{field} is outside its allowed range")
+    if merged["cap_period"] not in ("statement_cycle", "calendar_month"):
+        raise ValueError("cap_period must be statement_cycle or calendar_month")
     row = [
         account_id, merged["cashback_rate"], merged["min_eligible_spend"],
         merged["cap_period"], merged["alert_pct"],
@@ -1473,6 +1612,10 @@ def add_cashback_rules_bulk(specs: list[dict]) -> int:
     appends: list = []        # new rows, in order
     seen_new: dict = {}       # rid → index into `appends` (within-batch dedupe)
     for s in specs:
+        _validate_cashback_rule_values(
+            s.get("rate", 0.20), s.get("monthly_cap", 200000.0),
+            s.get("min_tx_amount", 0.0), s.get("max_eligible_tx_per_day", 0),
+        )
         account_id = s["account_id"]
         match_value = s.get("match_value", "")
         rid = s.get("rule_id") or f"{account_id}_{str(match_value).strip() or s['match_type']}"
@@ -1778,6 +1921,16 @@ def cycle_id(account_id: str, tx_date, statement_day) -> str:
     return f"{account_id}_{y:04d}-{m:02d}"
 
 
+def cashback_cycle_id(account_id: str, tx_date, account: dict | None = None,
+                      config: dict | None = None) -> str:
+    """Return the configured cap period for a card from one canonical helper."""
+    account = account or find_account_by_id(account_id) or {}
+    config = config or get_card_config(account_id) or {}
+    if config.get("cap_period") == "calendar_month":
+        return cycle_id(account_id, tx_date, None)
+    return cycle_id(account_id, tx_date, account.get("statement_day"))
+
+
 def eligible_spend_in_cycle(account_id: str, cycle: str, exclude_tx_row: int | None = None) -> float:
     """Σ eligible-MCC spend in a cycle. Excludes void lines and lines whose MCC
     wasn't eligible (mcc_unknown / mcc_not_eligible). `exclude_tx_row` drops a
@@ -1927,7 +2080,7 @@ def compute_and_record_cashback(tx_row_num: int) -> dict:
         tier_set = matched_rule["per_tx_cap_tier"] if matched_rule else ""
         tiers = get_cashback_tiers(tier_set) if tier_set else []
 
-        cycle = cycle_id(account_id, tx_date, account.get("statement_day"))
+        cycle = cashback_cycle_id(account_id, tx_date, account, config)
         mcc_cycle_used = _mcc_cashback_used(account_id, cycle, mcc, exclude_tx_row=tx_row_num)
         daily_count = daily_eligible_count(account_id, mcc, tx_date, exclude_tx_row=tx_row_num)
         eligible_before = eligible_spend_in_cycle(account_id, cycle, exclude_tx_row=tx_row_num)
@@ -1999,7 +2152,8 @@ def recompute_cashback_for_tx(tx_row_num: int) -> dict:
     if not account or account.get("type") != "credit":
         return compute_and_record_cashback(tx_row_num)  # non-credit → per-tx (voids + empty)
     statement_day = account.get("statement_day")
-    cycle = cycle_id(account_id, tx_date, statement_day)
+    config = get_card_config(account_id)
+    cycle = cashback_cycle_id(account_id, tx_date, account, config)
     # Read-once rebuild (Sheets 429 fix): read Transactions + ledger ONCE and
     # replay the cycle in memory instead of O(N) per-row ledger reads. Holds the
     # reentrant write lock across the whole void+append so concurrent webhooks
@@ -2037,12 +2191,13 @@ def _recompute_cycle_in_memory(account_id: str, account: dict, statement_day,
         if ((r[17] if len(r) > 17 else "").strip() or "expense") != "expense":
             continue
         ts = r[1] if len(r) > 1 else ""
-        if cycle_id(account_id, ts, statement_day) != cycle:
+        if cashback_cycle_id(account_id, ts, account, config) != cycle:
             continue
         amount = _parse_amount(r[7]) if len(r) > 7 and r[7] else 0.0
         cycle_items.append((ts, row_num, amount,
                             r[5] if len(r) > 5 else "", row_currency(r)))
-    cycle_items.sort(key=lambda x: x[0])
+    cycle_items.sort(key=lambda x: (_parse_local_datetime(x[0]) or datetime.max.replace(
+        tzinfo=pytz.timezone(TIMEZONE)), x[1]))
 
     void_targets = {it[1] for it in cycle_items}
     void_targets.add(target_tx_row)  # void target even if now non-expense (parity)
@@ -2122,9 +2277,9 @@ def _recompute_cycle_in_memory(account_id: str, account: dict, statement_day,
             if l.get("status") == "pending":
                 l["status"] = "eligible"
 
-    # 4. Write: void old (batch) then append rebuilt rows (batch).
-    if void_updates:
-        ledger_ws.batch_update(void_updates)
+    # 4. Replace the cycle in ONE Sheets batch request. Never leave old rows
+    # voided if appending the rebuilt ledger fails halfway through.
+    write_updates = list(void_updates)
     if new_rows:
         now = datetime.utcnow().isoformat()
         last = _last_col_letter(len(CASHBACK_LEDGER_HEADER))
@@ -2136,7 +2291,12 @@ def _recompute_cycle_in_memory(account_id: str, account: dict, statement_day,
             now, l.get("reason", ""),
         ] for cid, l in new_rows]
         _auto_expand(ledger_ws, append_start + len(payload) - 1)
-        ledger_ws.update(f"A{append_start}:{last}{append_start + len(payload) - 1}", payload)
+        write_updates.append({
+            "range": f"A{append_start}:{last}{append_start + len(payload) - 1}",
+            "values": payload,
+        })
+    if write_updates:
+        ledger_ws.batch_update(write_updates)
 
     return target_result
 

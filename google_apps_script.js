@@ -29,8 +29,11 @@
  */
 
 // ─── Config — SỬA 2 DÒNG NÀY ────────────────────────────────────────────────
-const WEBHOOK_URL = "https://YOUR-APP.up.railway.app/webhook/email";  // ← thay bằng URL Railway của bạn
-const WEBHOOK_SECRET = "YOUR_EMAIL_SECRET_HERE";  // phải khớp với EMAIL_SECRET trong Railway
+// This placeholder is deliberately non-routable. Never send bank-email data
+// until it is replaced with the /webhook/email URL of YOUR Railway service.
+const WEBHOOK_URL = "SET_YOUR_RAILWAY_WEBHOOK_EMAIL_URL";
+// Set this manually in Apps Script and Railway; never commit a real secret.
+const WEBHOOK_SECRET = "SET_EMAIL_SECRET_IN_APPS_SCRIPT";
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Danh sách sender email ngân hàng cần theo dõi.
@@ -55,6 +58,7 @@ const BANK_SENDERS = [
 // Cấu trúc: { "<gmailMessageId>": <epochMillisKhiXuLy>, ... }
 // Tự prune entry cũ hơn LOOKBACK_DAYS để không phình vô hạn.
 const PROCESSED_PROP_KEY = "processed_msg_ids";
+const SCAN_OFFSET_PROP_KEY = "bank_email_scan_offset";
 
 // Số ngày giữ lại message ID trong tập processed (đủ rộng để cover bot down).
 const LOOKBACK_DAYS = 7;
@@ -82,12 +86,15 @@ function checkBankEmails() {
     const query = buildGmailQuery();
     console.log(`[checkBankEmails] query: ${query}`);
 
-    const threads = GmailApp.search(query, 0, 30);  // tối đa 30 thread mỗi lần
+    const props = PropertiesService.getScriptProperties();
+    const offset = Math.max(0, Number(props.getProperty(SCAN_OFFSET_PROP_KEY) || "0"));
+    const threads = GmailApp.search(query, offset, 30);
     if (threads.length === 0) {
+      props.setProperty(SCAN_OFFSET_PROP_KEY, "0");
       console.log(`[checkBankEmails] 0 threads matched query`);
       return;
     }
-    console.log(`[checkBankEmails] found ${threads.length} thread(s)`);
+    console.log(`[checkBankEmails] found ${threads.length} thread(s) at offset=${offset}`);
 
     const processed = _loadProcessed();
     const label = VISUAL_LABEL ? _getOrCreateLabel(VISUAL_LABEL) : null;
@@ -138,6 +145,13 @@ function checkBankEmails() {
 
     // Lưu lại tập processed (kèm prune entry cũ).
     _saveProcessed(processed);
+    // Advance over a full page so an outage/backlog cannot strand older
+    // unprocessed messages behind the newest 30 threads. Reset after the tail.
+    // Do not skip a page that had an unacknowledged message.
+    props.setProperty(
+      SCAN_OFFSET_PROP_KEY,
+      errorCount === 0 && threads.length === 30 ? String(offset + 30) : "0"
+    );
 
     console.log(`[checkBankEmails] done — processed=${processedCount} ` +
                 `skipped=${skippedCount} errors=${errorCount}`);
@@ -148,9 +162,11 @@ function checkBankEmails() {
 
 /**
  * Xử lý 1 email — extract data và gọi bot webhook.
- * Throw nếu bot trả non-200 → caller sẽ KHÔNG đánh dấu processed (để retry).
+ * Throw nếu bot không trả exact JSON acknowledgment → caller sẽ KHÔNG đánh
+ * dấu processed (để retry). A generic 200 page is never durable success.
  */
 function processMessage(msg) {
+  _requireWebhookConfig();
   const from = msg.getFrom();
   const subject = msg.getSubject();
   const body = msg.getPlainBody();
@@ -183,6 +199,24 @@ function processMessage(msg) {
   if (code !== 200) {
     // Throw để caller không đánh dấu processed → retry lần sau.
     throw new Error(`non-200 from bot: ${code} ${respBody}`);
+  }
+  let acknowledgment;
+  try {
+    acknowledgment = JSON.parse(respBody);
+  } catch (err) {
+    throw new Error(`invalid JSON acknowledgment from bot: ${respBody}`);
+  }
+  if (!acknowledgment || acknowledgment.ok !== true) {
+    throw new Error(`negative acknowledgment from bot: ${respBody}`);
+  }
+}
+
+function _requireWebhookConfig() {
+  if (!WEBHOOK_URL.startsWith("https://") || WEBHOOK_URL.includes("SET_YOUR_")) {
+    throw new Error("Set WEBHOOK_URL to your own Railway /webhook/email URL before enabling this trigger.");
+  }
+  if (!WEBHOOK_SECRET || WEBHOOK_SECRET.startsWith("SET_")) {
+    throw new Error("Set WEBHOOK_SECRET to the EMAIL_SECRET configured in your Railway service.");
   }
 }
 

@@ -178,19 +178,22 @@ A subset (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) use **direct API in
 git clone https://github.com/maingocanh1702/my-money-went-bot.git
 cd my-money-went-bot
 cp .env.example .env
-# Edit .env: BOT_TOKEN, CHAT_ID, SHEET_ID, GOOGLE_CREDS_JSON (or GOOGLE_CREDS)
+# Fill the required values in .env: BOT_TOKEN, CHAT_ID, SHEET_ID,
+# GOOGLE_CREDS_JSON, SEPAY_SECRET, TELEGRAM_WEBHOOK_SECRET, CRON_SECRET, EMAIL_SECRET
+# (plus ZALO_SECRET_TOKEN when ZALO_ENABLED=true)
 ```
 
 **Railway** (recommended):
 
 1. Push your fork to GitHub.
 2. [railway.app](https://railway.app) → New Project → Deploy from GitHub repo.
-3. Add env vars in Railway dashboard. For `GOOGLE_CREDS_JSON`, paste the full JSON as one line.
+3. Add every required env var in the Railway dashboard. For `GOOGLE_CREDS_JSON`, paste the full JSON as one line; generate a distinct long random value for each `*_SECRET` variable. If Zalo is enabled, set `ZALO_SECRET_TOKEN` too.
 4. Railway gives you a `*.up.railway.app` URL — use that as your SePay webhook URL.
 5. Register the Telegram webhook:
    ```bash
    curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
-     -d "url=https://<your-app>.up.railway.app/webhook"
+     -d "url=https://<your-app>.up.railway.app/webhook" \
+     -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>"
    ```
 
 **VPS** (Ubuntu 22.04):
@@ -329,16 +332,16 @@ chmod 600 .env credentials.json
 
 Never commit either to GitHub — `.gitignore` already blocks them.
 
-**2. Webhook auth is opt-in — turn it ALL on.** Every inbound surface has an optional secret; unset means that endpoint accepts unauthenticated requests (the app logs a startup warning listing what's open):
+**2. Webhook authentication is mandatory in production.** The app refuses to start until every secret below is configured. This prevents an accidentally public financial webhook.
 
 | Env var | Protects | Without it |
 |---|---|---|
-| `SEPAY_SECRET` | `/webhook` (SePay payloads) | Anyone can log fake transactions |
-| `TELEGRAM_WEBHOOK_SECRET` | `/webhook` (Telegram updates) | Anyone who knows the URL can drive the bot (send `/manage`, delete categories, ...) |
-| `CRON_SECRET` | `/trigger/*` | Anyone can spam reports / clobber wizard state |
-| `EMAIL_SECRET` | `/webhook/email` | Anyone can inject fake email transactions |
+| `SEPAY_SECRET` | `/webhook` (SePay payloads) | App will not start |
+| `TELEGRAM_WEBHOOK_SECRET` | `/webhook` (Telegram updates) | App will not start |
+| `CRON_SECRET` | `/trigger/*` | App will not start |
+| `EMAIL_SECRET` | `/webhook/email` | App will not start |
 
-For `TELEGRAM_WEBHOOK_SECRET`, re-register the webhook with the same value (`setWebhook` + `secret_token` — see `.env.example`). For `CRON_SECRET`, append `?secret=<value>` to the URLs in `crontab.txt`. **Recommended:** set all four and put Cloudflare (or another WAF) in front of your Railway app.
+For `TELEGRAM_WEBHOOK_SECRET`, re-register the webhook with the same value (`setWebhook` + `secret_token` — see `.env.example`). For `CRON_SECRET`, append `?secret=<value>` to the URLs in `crontab.txt`. Keep a WAF such as Cloudflare in front of your Railway app as an additional network layer.
 
 **3. Use SSH keys, not passwords.** If you VPS-deploy, password SSH is brute-forceable:
 

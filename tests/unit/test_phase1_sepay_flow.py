@@ -40,6 +40,11 @@ def fake_world(monkeypatch, fake_ss):
     # Stub all telegram async calls (we just want to check sheet state)
     import telegram_api as tg
 
+    # These tests exercise the post-auth transaction flow. Authentication has
+    # its own boundary tests, and a developer's local .env must not alter this
+    # fake Sheets contract.
+    monkeypatch.setattr(sepay, "SEPAY_SECRET", "")
+
     async def _noop(*a, **k):
         return {"ok": True, "result": {"message_id": 1}}
 
@@ -69,7 +74,7 @@ def _basic_payload(amount=50000, ref="REFX", account="1903999888",
     from datetime import datetime
     import pytz
     tz = pytz.timezone("Asia/Ho_Chi_Minh")
-    return {
+    payload = {
         "transferType": tx_type,
         "transferAmount": amount,
         "description": desc,
@@ -78,6 +83,12 @@ def _basic_payload(amount=50000, ref="REFX", account="1903999888",
         "referenceCode": ref,
         "accountNumber": account,
     }
+    # Keep these contract tests hermetic when a developer's shell has a real
+    # SePay secret configured.
+    from config import SEPAY_SECRET
+    if SEPAY_SECRET:
+        payload["apikey"] = SEPAY_SECRET
+    return payload
 
 
 # ── Resolver wiring ────────────────────────────────────────────

@@ -45,16 +45,11 @@ def parse_email(from_addr: str, subject: str, body: str, date: str) -> dict | No
     # Normalize sender (lấy phần email trong "Name <email>")
     sender = _extract_email_addr(from_addr).lower()
 
-    bank = _route_by_sender(sender)
-
-    # Nếu sender không match bank trực tiếp, thử detect forwarded email
-    if bank is None:
+    bank = _bank_for_email(from_addr, body)
+    if bank and not _route_by_sender(sender):
         original_sender = _extract_forwarded_sender(body)
-        if original_sender:
-            bank = _route_by_sender(original_sender.lower())
-            if bank:
-                print(f"[email_parser] detected forwarded mail: "
-                      f"{sender!r} → original sender {original_sender!r} → bank={bank!r}")
+        print(f"[email_parser] detected forwarded mail: "
+              f"{sender!r} → original sender {original_sender!r} → bank={bank!r}")
 
     if bank is None:
         print(f"[email_parser] unknown sender: {sender!r}")
@@ -87,6 +82,44 @@ def _route_by_sender(sender: str) -> str | None:
     if "hangseng" in domain or "infoservices.hangseng" in domain:
         return "hangseng"
     return None
+
+
+def _bank_for_email(from_addr: str, body: str) -> str | None:
+    """Resolve a supported bank from the sender or a forwarded-message body."""
+    sender = _extract_email_addr(from_addr).lower()
+    bank = _route_by_sender(sender)
+    if bank:
+        return bank
+    forwarded = _extract_forwarded_sender(body)
+    return _route_by_sender(forwarded.lower()) if forwarded else None
+
+
+def is_transaction_shaped_bank_email(from_addr: str, subject: str, body: str) -> bool:
+    """Whether a supported email claims to be a transaction notification.
+
+    Statements and newsletters can safely be acknowledged. A message with the
+    narrow markers that a parser uses, but an unfamiliar format, remains
+    retryable rather than silently discarding a possible financial event.
+    """
+    bank = _bank_for_email(from_addr, body)
+    clean_subject = re.sub(r'^\s*(?:Fwd?:?\s*)+', '', subject, flags=re.IGNORECASE).lower()
+    if bank == "tcb":
+        return any(marker in clean_subject for marker in (
+            "biến động", "bien dong", "giao dịch", "giao dich", "số dư", "so du", "thông báo tài khoản",
+        ))
+    if bank == "cake":
+        if any(marker in clean_subject for marker in (
+            "biến động", "bien dong", "giao dịch", "giao dich", "thông báo", "thong bao",
+        )):
+            return True
+        return bool(re.search(
+            r'(?:số tiền|giá trị|giao dịch)[:\s]|^[+-][\d,.]+\s*(?:đ|d|vnd)',
+            body.strip(), re.IGNORECASE | re.MULTILINE,
+        ))
+    if bank == "hangseng":
+        blob = f"{subject}\n{body}".lower()
+        return any(marker.lower() in blob for marker in _HANGSENG_TX_MARKERS)
+    return False
 
 
 def _extract_forwarded_sender(body: str) -> str | None:
