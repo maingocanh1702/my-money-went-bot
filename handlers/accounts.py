@@ -289,6 +289,7 @@ def _parse_money(text: str) -> float | None:
 # Credit cards are one shared entity (the Accounts tab); the Telegram and Zalo
 # wizards differ only in state store + messenger. The field rules and prompt
 # copy live here so both channels collect statement/due identically and stay in
+# lockstep — same pattern as the cashback channel-agnostic core. Prompts are
 # plain text (no markdown) so they render cleanly on either channel.
 
 CREDIT_STATEMENT_PROMPT = None  # computed dynamically via t()
@@ -378,8 +379,8 @@ async def handle_credit_outstanding(text: str, state: dict):
 
 
 async def handle_credit_statement(text: str, state: dict):
-    """Statement day (drives the report cycle). 'skip' -> unset
-    (calendar-month fallback), settable later."""
+    """Statement day (drives the cashback/report cycle). 'skip' → unset
+    (calendar-month fallback), settable later via /cashback."""
     day, ok, err = parse_billing_day(text)
     if not ok:
         await tg.send_text(err)

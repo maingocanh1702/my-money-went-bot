@@ -1,0 +1,63 @@
+# Scheduled triggers for the production bot on Railway.
+# This is the CANONICAL cron for production (crontab.txt is the VPS reference).
+#
+# Times are UTC (ICT = UTC+7). CRON_SECRET lives in GitHub repo secrets and
+# must match the Railway env var of the same name.
+#
+# NOTE: GitHub pauses scheduled workflows after ~60 days without repo
+# activity — any push re-enables them.
+
+name: Scheduled triggers
+
+on:
+  schedule:
+    - cron: "0 2 1 * *"      # monthly-allocation  — 09:00 ICT ngày 1
+    - cron: "0 3 1 * *"      # auto-alloc-fallback — 10:00 ICT ngày 1
+    - cron: "0 13 * * 0"     # weekly              — 20:00 ICT Chủ nhật
+    - cron: "0 14 28-31 * *" # monthly-report      — 21:00 ICT (handler tự check ngày cuối tháng)
+  workflow_dispatch:
+    inputs:
+      endpoint:
+        description: "Trigger endpoint to fire"
+        required: true
+        default: weekly
+        type: choice
+        options:
+          - weekly
+          - monthly-report
+          - monthly-allocation
+          - auto-alloc-fallback
+          - daily-recap
+
+env:
+  BOT_URL: https://YOUR-APP.up.railway.app
+
+jobs:
+  fire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Resolve endpoint
+        id: ep
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ep="${{ inputs.endpoint }}"
+          else
+            case "${{ github.event.schedule }}" in
+              "0 2 1 * *")      ep="monthly-allocation" ;;
+              "0 3 1 * *")      ep="auto-alloc-fallback" ;;
+              "0 13 * * 0")     ep="weekly" ;;
+              "0 14 28-31 * *") ep="monthly-report" ;;
+              *) echo "unknown schedule: ${{ github.event.schedule }}"; exit 1 ;;
+            esac
+          fi
+          echo "endpoint=$ep" >> "$GITHUB_OUTPUT"
+          echo "Firing: $ep"
+
+      - name: Fire trigger
+        run: |
+          code=$(curl -s -o /tmp/resp.txt -w "%{http_code}" -X POST \
+            "$BOT_URL/trigger/${{ steps.ep.outputs.endpoint }}?secret=${{ secrets.CRON_SECRET }}")
+          echo "HTTP $code"
+          cat /tmp/resp.txt
+          [ "$code" = "200" ]

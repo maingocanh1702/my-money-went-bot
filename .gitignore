@@ -9,9 +9,7 @@ PRIVATE_SETUP.md
 __pycache__/
 *.py[cod]
 *.pyo
-# .venv pattern without trailing slash to match BOTH directory AND symlink
-# (worktrees often symlink `.venv -> ../main-repo/.venv` for shared deps)
-.venv
+.venv/
 venv/
 env/
 *.egg-info/
@@ -19,41 +17,12 @@ dist/
 build/
 
 # OS
-**/.DS_Store
+.DS_Store
 Thumbs.db
-
-# Office lock/temp files (Word/Excel save in same dir)
-~$*
-*.tmp
-
-# IDE / Tooling
-.claude/
-.vscode/
-.idea/
-
-# Linter & type-checker caches
-.import_linter_cache/
-.mypy_cache/
-.ruff_cache/
-.pytest_cache/
 
 # Logs
 *.log
 HOW_IT_WORKS.md
-docs/tasks/
 
-# Autopilot orchestrator state (per-feature checkpoints + Codex artifacts)
+# Autopilot transient state / Codex review artifacts
 .autopilot/
-.linear-cache.json
-
-# Autopilot batch runner state files (never commit — local-only)
-scripts/.autopilot_runner_state.json
-scripts/.linear_migrate_state.json
-scripts/.dryrun-ok
-
-# Temporary recovery workspace (not tracked)
-.recovery-stash-conflicts/
-
-# Work-state engine runtime state (per dashboard-plan-state-split.md §7.3)
-.dashboard/
-tools/dashboard-engine/.state/

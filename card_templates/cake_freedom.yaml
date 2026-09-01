@@ -1,0 +1,62 @@
+# Cake by VPBank Freedom — Cashback Template
+# Source: App Cake, BRD §4.4 (2026-06)
+# Rate 20% cho 5 danh mục MCC, cap 200k/MCC/kỳ, cổng kích hoạt 5tr.
+
+card_id: cake_freedom
+card_name: "Cake by VPBank Freedom"
+bank: "VPBank"
+version: "2026.06"
+description: "Hoàn 20% cho 5 danh mục MCC, cap 200k/MCC/kỳ, cổng kích hoạt 5tr"
+
+config:
+  cashback_rate: 0.20
+  min_eligible_spend: 5000000
+  cap_period: statement_cycle
+  alert_pct: 0.80
+
+tier_set: cakefreedom
+tiers:
+  - tx_min: 0
+    tx_max: 199999
+    per_tx_cap: 10000
+  - tx_min: 200000
+    tx_max: null
+    per_tx_cap: 50000
+
+rules:
+  - mcc: "5262"
+    name: "Sàn TMĐT"
+    emoji: "🛍"
+    monthly_cap: 200000
+    daily_limit: 0
+
+  - mcc: "4722"
+    name: "Du lịch"
+    emoji: "✈️"
+    monthly_cap: 200000
+    daily_limit: 0
+
+  - mcc: "5611"
+    name: "Thời trang"
+    emoji: "👗"
+    monthly_cap: 200000
+    daily_limit: 0
+
+  - mcc: "5411"
+    name: "Siêu thị"
+    emoji: "🛒"
+    monthly_cap: 200000
+    daily_limit: 1
+
+  - mcc: "4121"
+    name: "Di chuyển"
+    emoji: "🚗"
+    monthly_cap: 200000
+    daily_limit: 0
+
+patterns:
+  "5262": ["SHOPEE", "LAZADA", "TIKI", "SENDO"]
+  "4722": ["TRAVELOKA", "BOOKING", "AGODA", "VNTRIP"]
+  "5611": ["UNIQLO", "ZARA", "CANIFA", "ROUTINE"]
+  "5411": ["WINMART", "BACHHOAXANH", "BHX", "LOTTE", "COOPMART", "EMART"]
+  "4121": ["GRAB", "XANHSM", "MAILINH", "VINASUN", "TAXI"]

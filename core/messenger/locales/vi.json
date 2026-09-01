@@ -1,8 +1,0 @@
-{
-  "greeting": "Xin chào, {name}!",
-  "tx_recorded": "Đã ghi nhận giao dịch {amount} VND.",
-  "btn_confirm": "✅ Xác nhận",
-  "btn_cancel": "❌ Huỷ",
-  "btn_pick_category": "📂 Chọn nhóm chi tiêu",
-  "error_generic": "Có lỗi xảy ra. Vui lòng thử lại."
-}

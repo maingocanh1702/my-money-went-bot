@@ -39,6 +39,28 @@ TYPE_EMOJI = {"bank": "🏦", "debit": "💳", "credit": "🧾", "cash": "💵"}
 BUDGET_WARN_PCT = 0.80
 BUDGET_CRIT_PCT = 1.00
 
+# Legacy fallback emoji for cards that don't have emoji in their rule notes.
+# Dynamic emoji is preferred — loaded via _get_emoji_map_for_report().
+_FALLBACK_MCC_EMOJI: dict[str, str] = {
+    "5262": "🛍️", "4722": "✈️", "5611": "👕", "5411": "🛒", "4121": "🚕",
+    "5811": "🍜", "5812": "🍽️", "5813": "🍸", "5814": "🍔",
+    "5499": "🏪", "4899": "🎬", "5815": "📱",
+}
+
+
+def _get_emoji_map_for_report(account_id: str | None = None) -> dict[str, str]:
+    """Build MCC → emoji map: prefer dynamic from rules, fallback to static."""
+    from handlers.cashback import _get_emoji_map
+    dynamic = _get_emoji_map(account_id)
+    # Merge: dynamic wins, static fills gaps
+    merged = dict(_FALLBACK_MCC_EMOJI)
+    merged.update(dynamic)
+    return merged
+
+
+# Backward compat: export the old name for any external imports
+CASHBACK_MCC_EMOJI = _FALLBACK_MCC_EMOJI
+
 
 # ─── Period math ────────────────────────────────────────────────
 
@@ -426,6 +448,175 @@ def _render_category_lens(data: dict) -> str:
     return "\n".join(lines).rstrip()
 
 
+def _cashback_category_label(name: str, mcc: str, account_id: str | None = None) -> str:
+    emoji_map = _get_emoji_map_for_report(account_id)
+    emoji = emoji_map.get(str(mcc).strip(), "")
+    return f"{emoji} {name}" if emoji and not str(name).startswith(emoji) else name
+
+
+def render_cashback_section(period_code: str = "m") -> str:
+    """Global cashback summary appended to /report on BOTH lenses.
+
+    Per configured credit card (current statement cycle): activation-gate
+    progress, per-MCC accrued/cap bars, and pending/eligible totals. Returns ""
+    when no credit card has cashback configured — keeps /report uncluttered.
+    """
+    cards = [a for a in sh.get_active_accounts() if a.get("type") == "credit"]
+    blocks: list[str] = []
+    now = datetime.now(pytz.timezone(TIMEZONE))
+    for card in cards:
+        cfg = sh.get_card_config(card["id"])
+        if not cfg or not cfg.get("active"):
+            continue
+        cycle = sh.cycle_id(card["id"], now, card.get("statement_day"))
+        ledger = [l for l in sh.get_cashback_ledger(card["id"], cycle) if l["status"] != "void"]
+        rules = {r["match_value"]: r for r in sh.get_cashback_rules(card["id"])}
+
+        block = [t("rpt.cb_card_header", name=card['name'], cycle=cycle.split('_')[-1])]
+        gate = cfg.get("min_eligible_spend") or 0
+        if gate > 0:
+            spent = sh.eligible_spend_in_cycle(card["id"], cycle)
+            pct = min(100, round(spent / gate * 100))
+            block.append(t("rpt.cb_gate", spent=sh.fmt_amount(spent),
+                           gate=sh.fmt_amount(gate), bar=sh.make_bar(pct, 8), pct=pct))
+            if spent < gate:
+                block.append(t("rpt.cb_gate_need", amount=sh.fmt_amount(gate - spent)))
+
+        by_mcc: dict[str, float] = {}
+        for l in ledger:
+            if l["mcc_code"]:
+                by_mcc[l["mcc_code"]] = by_mcc.get(l["mcc_code"], 0) + l["cashback_amount"]
+        for mcc, accrued in sorted(by_mcc.items()):
+            rule = rules.get(mcc)
+            name = rule["rule_name"] if rule else f"MCC {mcc}"
+            name = _cashback_category_label(name, mcc, card["id"])
+            cap = (rule["monthly_cap"] if rule else 0) or 0
+            if cap > 0:
+                pct = min(100, round(accrued / cap * 100))
+                block.append(f"{name}: {sh.fmt_amount(accrued)}/{sh.fmt_amount(cap)} "
+                             f"{sh.make_bar(pct, 8)} {pct}%")
+            elif accrued > 0:
+                block.append(f"{name}: {sh.fmt_amount(accrued)}")
+
+        pending = sum(l["cashback_amount"] for l in ledger if l["status"] == "pending")
+        eligible = sum(l["cashback_amount"] for l in ledger if l["status"] == "eligible")
+        total_cb = pending + eligible
+        if total_cb > 0:
+            block.append(t("rpt.cb_total", amount=sh.fmt_amount(total_cb)))
+        if pending > 0:
+            block.append(t("rpt.cb_pending", amount=sh.fmt_amount(pending)))
+        if eligible > 0:
+            block.append(t("rpt.cb_eligible", amount=sh.fmt_amount(eligible)))
+        blocks.append("\n".join(block))
+
+    if not blocks:
+        return ""
+    return f"\n\n{t('rpt.cb_section')}\n" + "\n\n".join(blocks)
+
+
+def render_cashback_tx_detail(account_id: str, cycle: str, mcc: str = "") -> str:
+    """Cashback snapshot for a card's statement cycle.
+
+    Two callers, one format:
+      - tx notice (FR-2.5): pass the triggering tx's `mcc` → section 1 shows
+        just that category's accrued/cap bar;
+      - on-demand /cashback view: pass mcc="" → section 1 lists EVERY configured
+        category's accrued/cap bar (the full per-category breakdown).
+
+    Always shown:
+      2. cycle cashback total to date (= pending + eligible), then the activated
+         (credited) portion — pending is accrued but not credited until the gate;
+      3. cycle eligible-spend + bar vs the activation gate (5tr) + a short
+         "Cần chi tiêu thêm X" reminder while still below it.
+
+    Scope is the statement cycle (same scope as the 200k cap and 5tr gate).
+    Returns "" when the card has no active cashback config.
+    """
+    acc = sh.find_account_by_id(account_id)
+    cfg = sh.get_card_config(account_id)
+    if not acc or not cfg or not cfg.get("active") or not cycle:
+        return ""
+
+    ledger = [l for l in sh.get_cashback_ledger(account_id, cycle) if l["status"] != "void"]
+    rules = {r["match_value"]: r for r in sh.get_cashback_rules(account_id)}
+
+    out = [f"💳 {acc.get('name', account_id)} · kỳ {cycle.split('_')[-1]}"]
+
+    # 1. Per-category accrued vs per-cycle cap. A specific mcc (tx notice) → just
+    #    that category; mcc="" (on-demand view) → every configured rule category.
+    accrued_by_mcc: dict[str, float] = {}
+    for l in ledger:
+        if l["mcc_code"]:
+            accrued_by_mcc[l["mcc_code"]] = accrued_by_mcc.get(l["mcc_code"], 0) + l["cashback_amount"]
+    mccs_to_show = [mcc] if mcc else sorted(rules.keys())
+    for m in mccs_to_show:
+        rule = rules.get(m)
+        name = _cashback_category_label(rule["rule_name"] if rule else f"MCC {m}", m, account_id)
+        accrued = accrued_by_mcc.get(m, 0)
+        cap = (rule["monthly_cap"] if rule else 0) or 0
+        if cap > 0:
+            pct = min(100, round(accrued / cap * 100))
+            out.append(f"{name}: {sh.fmt_amount(accrued)}/{sh.fmt_amount(cap)} "
+                       f"{sh.make_bar(pct, 8)} {pct}%")
+        elif accrued > 0:
+            out.append(f"{name}: {sh.fmt_amount(accrued)}")
+
+    # 2. Cycle cashback total to date = pending + eligible; show total first,
+    #    then the activated (credited) portion. (pending = total − activated.)
+    eligible = sum(l["cashback_amount"] for l in ledger if l["status"] == "eligible")
+    pending = sum(l["cashback_amount"] for l in ledger if l["status"] == "pending")
+    total = eligible + pending
+    out.append(f"Σ hoàn kỳ này: {sh.fmt_amount(total)} · "
+               f"✅ đã kích hoạt {sh.fmt_amount(eligible)}")
+
+    # 3. Activation gate: cycle eligible-spend vs threshold + remaining reminder.
+    gate = cfg.get("min_eligible_spend") or 0
+    if gate > 0:
+        spent = sh.eligible_spend_in_cycle(account_id, cycle)
+        pct = min(100, round(spent / gate * 100))
+        out.append(f"Tổng chi tiêu hợp lệ: {sh.fmt_amount(spent)}/{sh.fmt_amount(gate)} "
+                   f"{sh.make_bar(pct, 8)} {pct}%")
+        if spent < gate:
+            out.append(f"⏳ Cần chi tiêu thêm {sh.fmt_amount(gate - spent)} "
+                       f"để đủ điều kiện hoàn tiền")
+        else:
+            out.append("✅ Đã đủ điều kiện hoàn tiền kỳ này")
+
+    return "\n".join(out)
+
+
+def _buttons(period_code: str, lens_code: str) -> list:
+    def period_label(c: str) -> str:
+        name = PERIOD_LABEL[c]
+        return f"✅ {name}" if c == period_code else name
+    def lens_label(c: str, lbl: str) -> str:
+        return f"✅ {lbl}" if c == lens_code else lbl
+
+    row_period = [
+        {"text": period_label("w"), "callback_data": f"rpt_w_{lens_code}"},
+        {"text": period_label("m"), "callback_data": f"rpt_m_{lens_code}"},
+        {"text": period_label("q"), "callback_data": f"rpt_q_{lens_code}"},
+        {"text": period_label("y"), "callback_data": f"rpt_y_{lens_code}"},
+    ]
+    # Category first (left) because it's the default lens — reading left→right
+    # the user lands on the active selection first, account is the secondary
+    # toggle on the right.
+    row_lens = [
+        {"text": lens_label("c", "📂 Category"), "callback_data": f"rpt_{period_code}_c"},
+        {"text": lens_label("a", "🏦 Account"),  "callback_data": f"rpt_{period_code}_a"},
+    ]
+    return [row_period, row_lens]
+
+
+# ─── Public entry points ────────────────────────────────────────
+
+
+_PERIOD_ALIASES = {
+    "tuần": "w", "tuan": "w", "week": "w", "w": "w",
+    "tháng": "m", "thang": "m", "month": "m", "m": "m",
+    "quý": "q", "quy": "q", "quarter": "q", "q": "q",
+    "năm": "y", "nam": "y", "year": "y", "y": "y",
+}
 
 
 async def cmd_report(text: str = ""):
@@ -446,6 +637,7 @@ async def cmd_report(text: str = ""):
 
     data = _scan_period(period_code)
     msg = _render_account_lens(data) if lens_code == "a" else _render_category_lens(data)
+    msg += render_cashback_section(period_code)  # global, both lenses
     buttons = _buttons(period_code, lens_code)
     await tg.send_with_buttons(msg, buttons)
 
@@ -461,5 +653,6 @@ async def handle_report_callback(parts: list[str], message_id: int):
 
     data = _scan_period(period_code)
     msg = _render_account_lens(data) if lens_code == "a" else _render_category_lens(data)
+    msg += render_cashback_section(period_code)  # global, both lenses
     buttons = _buttons(period_code, lens_code)
     await tg.edit_message(message_id, msg, inline_keyboard=buttons)

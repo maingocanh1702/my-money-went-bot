@@ -217,10 +217,14 @@ async def handle_sepay_webhook(payload: dict):
         account_source_key=resolved.source_key or "",
     )
 
+    # ── Cashback (credit cards only) ──────────────────────────
     # Computed here — right after the outgoing append + account resolve, BEFORE
     # the auto-categorize branch returns early — so it runs exactly once for
     # every credit expense regardless of the picker/auto-cat path. MCC-only, no
+    # budget-category dependency. compute_and_record_cashback self-guards
     # (credit + active config + VND + amount>0); a non-credit/unconfigured
+    # account yields no note. Never let a cashback error block the tx write.
+    await _maybe_notify_cashback(resolved_account_id, row_num)
 
     buckets, created = await _ensure_buckets(month_key)
 
@@ -400,6 +404,154 @@ async def handle_sepay_webhook(payload: dict):
     if resolved.status == "new_identifier":
         await prompt_new_account(resolved.source_key, resolved.identifier, row_num)
         await prompt_zalo_new_account(resolved.source_key, resolved.identifier, row_num)
+
+
+async def _maybe_notify_cashback(account_id: str, row_num: int):
+    """Compute + record cashback for a credit-card expense. Best-effort:
+    any failure is logged and swallowed so the transaction itself is never affected.
+
+    Known MCC: cashback is computed silently — the compact line will be
+    appended to the budget feedback message by transaction._finalize.
+    Unknown MCC: asks user to pick via inline keyboard (learn flow).
+    Gate activation: sends a standalone celebration message.
+    """
+    if not account_id:
+        return
+    acc = sh.find_account_by_id(account_id)
+    if not acc or acc.get("type") != "credit":
+        return
+    try:
+        result = sh.recompute_cashback_for_tx(row_num)
+    except Exception:
+        import logging
+        logging.exception("[cashback] compute failed for row %s", row_num)
+        return
+
+    lines = result.get("lines", [])
+
+    # Check if ALL lines are unknown/not-eligible (no real cashback computed)
+    only_unknown = all(
+        l.get("reason") in ("mcc_unknown", "mcc_not_eligible")
+        for l in lines
+    ) if lines else False
+
+    if only_unknown:
+        # Ask user instead of silently skipping
+        await _ask_cashback_learn(account_id, row_num)
+        return
+
+    # Gate activation: standalone celebration (only fires once per cycle)
+    if result.get("gate_just_opened"):
+        gate_msg = "🎉 Đã đạt mốc chi tiêu — hoàn tiền kỳ này đã được kích hoạt!"
+        await tg.send_text(gate_msg)
+        if ZALO_ENABLED and ZALO_CHAT_ID:
+            try:
+                await messenger.send_text(gate_msg, channel="zalo", recipient_id=ZALO_CHAT_ID)
+            except Exception as e:
+                print(f"[zalo] gate note error: {e}")
+
+    # Known MCC: cashback data is in the ledger. The compact line will be
+    # appended to the budget message by _finalize → _get_cashback_line().
+    # No separate message needed.
+
+
+async def _ask_cashback_learn(account_id: str, row_num: int):
+    """Ask user to classify an unknown-MCC transaction directly with MCC picker.
+
+    Builds MCC buttons DYNAMICALLY from cashback rules for the card (U4),
+    so adding a new rule auto-appears here.
+    Shows buttons + 'Không hoàn' in ONE set (1 tap).
+    Checks exclusion list first to avoid re-asking patterns already declined.
+    """
+    try:
+        tx_row = sh.get_transaction_row(row_num)
+        description = tx_row[5] if len(tx_row) > 5 else ""
+        amount = sh._parse_amount(tx_row[7]) if len(tx_row) > 7 else 0
+
+        if not description:
+            return
+
+        # Check exclusion list — user previously said "no" for this pattern
+        if sh.is_mcc_excluded(description):
+            print(f"[cashback] excluded pattern match for row {row_num}: {description}")
+            return
+
+        # Also check if MCC map already covers this (race condition guard)
+        if sh.match_mcc(description):
+            return
+
+        acc = sh.find_account_by_id(account_id)
+        card_name = acc.get("name", account_id) if acc else account_id
+        desc_short = description[:35] + ("…" if len(description) > 35 else "")
+
+        msg = (
+            f"💳 *{card_name}* · {desc_short}\n"
+            f"{sh.fmt_amount(amount)} — chưa nhận diện MCC\n\n"
+            f"Chọn nhóm hoàn tiền:"
+        )
+
+        # Build MCC buttons dynamically from this card's cashback rules
+        from handlers.cashback import _get_mcc_choices
+        choices = _get_mcc_choices(account_id)
+        if not choices:
+            # No rules configured yet — nothing to show
+            return
+        # Build 2 buttons per row + "Không hoàn" at the end
+        buttons = []
+        row_buf = []
+        for mcc, label in choices:
+            row_buf.append({
+                "text": label,
+                "callback_data": f"cb_learn_mcc_{row_num}_{mcc}",
+            })
+            if len(row_buf) == 2:
+                buttons.append(row_buf)
+                row_buf = []
+        if row_buf:
+            buttons.append(row_buf)
+        buttons.append([{"text": "❌ Không hoàn", "callback_data": f"cb_learn_no_{row_num}"}])
+
+        await tg.send_with_buttons(msg, buttons)
+
+        # ── Zalo: numbered MCC learn picker ──
+        # Skipped when the Zalo user is mid-flow — setting the learn state
+        # would clobber whatever they're typing. The Telegram picker (inline
+        # buttons, stateless) still asks, and the MCC stays learnable later.
+        if ZALO_ENABLED and ZALO_CHAT_ID:
+            try:
+                zalo_state_key = f"zalo:{ZALO_CHAT_ID}"
+                if (sh.get_state(zalo_state_key) or {}).get("step"):
+                    print("[zalo] cashback learn picker skipped (user mid-flow)")
+                else:
+                    zalo_lines = [
+                        f"{card_name} · {desc_short}",
+                        f"{sh.fmt_amount(amount)} — chưa nhận diện MCC",
+                        "",
+                        "Chọn nhóm hoàn tiền:",
+                    ]
+                    rule_list = []
+                    for i, r in enumerate(rules, 1):
+                        emoji = CASHBACK_MCC_EMOJI.get(r["match_value"], "")
+                        zalo_lines.append(f"{i}. {emoji} {r['rule_name']}")
+                        rule_list.append({"mcc": r["match_value"], "name": r["rule_name"]})
+                    zalo_lines.append("0. Không hoàn")
+                    zalo_lines.append("\nReply số để chọn")
+
+                    await messenger.send_text(
+                        "\n".join(zalo_lines),
+                        channel="zalo", recipient_id=ZALO_CHAT_ID,
+                    )
+                    sh.set_state(zalo_state_key, {
+                        "step": "await_zalo_cb_learn_mcc",
+                        "row_num": row_num,
+                        "account_id": account_id,
+                        "rules": rule_list,
+                    })
+            except Exception as e:
+                print(f"[zalo] cashback learn picker error: {e}")
+    except Exception as e:
+        print(f"[cashback] ask_learn error row={row_num}: {e}")
+
 
 
 async def _auto_categorize(

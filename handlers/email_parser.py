@@ -38,7 +38,7 @@ def parse_email(from_addr: str, subject: str, body: str, date: str) -> dict | No
 
     Hỗ trợ 2 trường hợp:
     1. Email gốc từ bank → match qua sender header
-    2. Email forward từ Gmail account khác (vd habt04 → maingocanh1702):
+    2. Email forward từ Gmail account khác (vd forwarder-account → your-account):
        header `From:` lúc này là forwarder, sender thật chỉ nằm trong body
        sau dòng "Forwarded message". Hàm sẽ scan body để extract sender gốc.
     """

@@ -129,7 +129,7 @@ def test_hangseng_marketing_email_skipped():
     assert result is None, "should skip non-transaction email"
 
 
-# ─── Forwarded email tests (real-world: habt04 → maingocanh1702) ─────────────
+# ─── Forwarded email tests (real-world: forwarder → your-account) ─────────────
 
 # Body khi Gmail auto-forward: header "Forwarded message" + From line + body gốc
 HANGSENG_FORWARDED_BODY = """\
@@ -137,7 +137,7 @@ HANGSENG_FORWARDED_BODY = """\
 From: Hang Seng <hangseng@infoservices.hangseng.com>
 Date: Fri, 1 May 2026 at 20:31
 Subject: 你已成功轉賬(未登記收款人) Your transfer is successful (Non-registered payee) Ref: [C5152043931]
-To: <habt04.eacc@gmail.com>
+To: <your-forwarder@gmail.com>
 
 
 如未能正常顯示電郵內容，請你設定電郵瀏覽程式至支援 HTML 格式的電郵。
@@ -181,9 +181,9 @@ Thank you for using our service
 
 
 def test_forwarded_hangseng_routed_correctly():
-    """Email forward từ habt04 → parser phải detect sender gốc trong body."""
+    """Email forward từ forwarder → parser phải detect sender gốc trong body."""
     result = parse_email(
-        from_addr="Hà Bùi <habt04.eacc@gmail.com>",
+        from_addr="Forwarder Name <your-forwarder@gmail.com>",
         subject="Fwd: 你已成功轉賬(未登記收款人) Your transfer is successful (Non-registered payee) Ref: [C5152043931]",
         body=HANGSENG_FORWARDED_BODY,
         date="2026-05-01T20:31:00+08:00",
@@ -194,7 +194,7 @@ def test_forwarded_hangseng_routed_correctly():
 
 def test_forwarded_hangseng_amount_correct():
     result = parse_email(
-        from_addr="Hà Bùi <habt04.eacc@gmail.com>",
+        from_addr="Forwarder Name <your-forwarder@gmail.com>",
         subject="Fwd: 你已成功轉賬",
         body=HANGSENG_FORWARDED_BODY,
         date="2026-05-01T20:31:00+08:00",
@@ -206,7 +206,7 @@ def test_forwarded_hangseng_amount_correct():
 def test_forwarded_hangseng_phone_payee():
     """'+852-6655****' (HK mobile FPS) phải được capture vào description."""
     result = parse_email(
-        from_addr="habt04.eacc@gmail.com",
+        from_addr="your-forwarder@gmail.com",
         subject="Fwd: 你已成功轉賬",
         body=HANGSENG_FORWARDED_BODY,
         date="2026-05-01T20:31:00+08:00",
@@ -224,7 +224,7 @@ def test_forwarded_hangseng_subject_ref_fallback():
     body_no_txid = body_no_txid.replace("參考編號", "")
 
     result = parse_email(
-        from_addr="habt04.eacc@gmail.com",
+        from_addr="your-forwarder@gmail.com",
         subject="Fwd: 你已成功轉賬 Your transfer is successful Ref: [C5152043931]",
         body=body_no_txid,
         date="2026-05-01T20:31:00+08:00",
@@ -246,7 +246,7 @@ def test_forwarded_non_bank_email_returns_none():
         "Hi, want to grab lunch?"
     )
     result = parse_email(
-        from_addr="habt04.eacc@gmail.com",
+        from_addr="your-forwarder@gmail.com",
         subject="Fwd: hello",
         body=body,
         date="2026-05-01T12:00:00+08:00",

@@ -3,20 +3,12 @@ main.py — FastAPI entry point
 Receives SePay webhooks, Telegram updates, and Zalo Bot events.
 """
 import hmac as hmac_mod
-import os
 import re
-from contextlib import asynccontextmanager
-from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, Request, BackgroundTasks, Query
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse
 import asyncio
-
-ROOT = Path(__file__).resolve().parent
-DASHBOARD_HTML = ROOT / "docs" / "dashboard.html"
-DASHBOARD_MD = ROOT / "docs" / "dashboard.md"
-
 
 from config import (
     CHAT_ID,
@@ -53,6 +45,18 @@ from handlers.keywords    import (
     start_keywords, handle_keywords_callback,
     handle_keyword_input, handle_edit_keyword_input,
 )
+from handlers.cashback    import (
+    start_cashback, handle_cashback_callback,
+    handle_cashback_config_input, handle_cashback_mcc_input, handle_cashback_add_input,
+    handle_cashback_cycle_input, handle_cashback_rule_edit_input,
+    handle_cashback_setup_input,
+    zalo_start_cashback, zalo_handle_pick as zalo_cashback_pick,
+    zalo_handle_menu as zalo_cashback_menu,
+    zalo_handle_rule_pick as zalo_cashback_rule_pick,
+    zalo_handle_rule_menu as zalo_cashback_rule_menu,
+    zalo_handle_rule_edit as zalo_cashback_rule_edit,
+    zalo_handle_rule_delconfirm as zalo_cashback_rule_delconfirm,
+)
 from handlers.accounts    import (
     handle_accounts_callback, handle_assign_callback,
     handle_new_account_name, handle_new_account_balance,
@@ -66,43 +70,22 @@ from handlers.lang        import cmd_lang, handle_lang_callback
 from handlers.zalo_render import render_zalo_logged_summary
 from handlers import zalo_queue as zq
 
-# SaaS layer (MyMoneyWent additions) — optional, graceful degradation
-try:
-    from core import db
-    from core.logging import configure_logging, get_logger
-    from core.observability import init_sentry, request_id_middleware
-    from markets.vn.capture.sepay_webhook import handle_sepay_webhook as handle_sepay_v2
-    _SAAS_AVAILABLE = True
-except ImportError:
-    _SAAS_AVAILABLE = False
-
-_PROD_ENVS = {"prod", "production", "staging"}
+app = FastAPI(title="Financial Tracking Bot")
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Startup/shutdown wiring."""
-    app_env = os.environ.get("APP_ENV", "dev")
+async def _set_telegram_commands_safe():
+    try:
+        await tg.set_my_commands()
+    except Exception as e:
+        print(f"[startup] set_my_commands failed (no internet?): {e}")
 
-    if _SAAS_AVAILABLE:
-        configure_logging(env=app_env)
-        log = get_logger("main", component="startup")
-        init_sentry(os.environ.get("SENTRY_DSN"), environment=app_env)
-        dsn = os.environ.get("DATABASE_URL", "")
-        if dsn:
-            await db.create_pool(dsn)
-            log.info("startup.db_pool_ready")
-        elif app_env.lower() in _PROD_ENVS:
-            raise RuntimeError("DATABASE_URL is required in prod/staging")
-        else:
-            log.warning("startup.db_pool_skipped", reason="DATABASE_URL not set (legacy mode)")
-    else:
-        log = None
 
-    port = os.environ.get("PORT", 8000)
-    print(f"[startup] running on port {port}")
-
-    # Security posture nudge
+@app.on_event("startup")
+async def on_startup():
+    import os
+    print(f"[startup] running on port {os.environ.get('PORT', 8000)}")
+    # Security posture nudge — every webhook secret is optional (so existing
+    # deployments keep working), but running open on a public URL is risky.
     _unset = [name for name, val in (
         ("SEPAY_SECRET", SEPAY_SECRET),
         ("TELEGRAM_WEBHOOK_SECRET", TELEGRAM_WEBHOOK_SECRET),
@@ -113,26 +96,7 @@ async def lifespan(app: FastAPI):
         print(f"[startup] ⚠️ SECURITY: unset secrets: {', '.join(_unset)} — "
               f"the matching endpoints accept unauthenticated requests. "
               f"See .env.example for how to enable them.")
-
-    try:
-        await tg.set_my_commands()
-    except Exception as exc:
-        print(f"[startup] set_my_commands failed (no internet?): {exc}")
-
-    if _SAAS_AVAILABLE and log:
-        log.info("startup.ready", port=port)
-
-    yield
-
-    if _SAAS_AVAILABLE:
-        await db.close_pool()
-        if log:
-            log.info("shutdown.db_pool_closed")
-
-
-app = FastAPI(title="Financial Tracking Bot", lifespan=lifespan)
-if _SAAS_AVAILABLE:
-    app.middleware("http")(request_id_middleware)
+    asyncio.create_task(_set_telegram_commands_safe())
 
 
 # ─── Webhook endpoint ─────────────────────────────────────────
@@ -310,6 +274,7 @@ async def _handle_zalo_text(body: dict):
                 "- /manage — Quản lý category\n"
                 "- /allocate — Đặt budget\n"
                 "- /keywords — Quản lý keyword auto-category\n"
+                "- /cashback — Cashback thẻ tín dụng\n"
                 "- /recat — Phân loại lại giao dịch\n"
                 "- /pending — Phân loại giao dịch đang chờ\n"
                 "- /lang — Đổi ngôn ngữ vi/en\n"
@@ -401,6 +366,9 @@ async def _handle_zalo_text(body: dict):
             await _zalo_kw_show_list(chat_id, zalo_state_key)
             return
 
+        # /cashback command
+        if cmd == "/cashback":
+            await zalo_start_cashback(chat_id, text, zalo_state_key)
             return
 
         # /lang command
@@ -523,7 +491,28 @@ async def _handle_zalo_text(body: dict):
         if step == "zalo_kw_confirm_delete":
             await _zalo_kw_handle_confirm_delete(chat_id, text, state, zalo_state_key)
             return
+        if step == "zalo_cashback_pick":
+            await zalo_cashback_pick(chat_id, text, state, zalo_state_key)
+            return
+        if step == "zalo_cashback_menu":
+            await zalo_cashback_menu(chat_id, text, state, zalo_state_key)
+            return
+        if step == "zalo_cashback_rule_pick":
+            await zalo_cashback_rule_pick(chat_id, text, state, zalo_state_key)
+            return
+        if step == "zalo_cashback_rule_menu":
+            await zalo_cashback_rule_menu(chat_id, text, state, zalo_state_key)
+            return
+        if step == "zalo_cashback_rule_edit":
+            await zalo_cashback_rule_edit(chat_id, text, state, zalo_state_key)
+            return
+        if step == "zalo_cashback_rule_delconfirm":
+            await zalo_cashback_rule_delconfirm(chat_id, text, state, zalo_state_key)
+            return
 
+        # ── Cashback MCC learn (from SePay unknown-MCC prompt) ──
+        if step == "await_zalo_cb_learn_mcc":
+            await _zalo_handle_cb_learn_mcc(chat_id, text, state, zalo_state_key)
             return
 
         # ── Keyword learn suggestion (from manual category pick) ──
@@ -617,6 +606,8 @@ async def _handle_zalo_callback(cb: dict):
             await handle_manage_callback(parts, message_id)
         elif prefix == "kw":
             await handle_keywords_callback(parts, message_id)
+        elif prefix == "cb":
+            await handle_cashback_callback(parts, message_id)
         elif prefix == "acc":
             await handle_accounts_callback(parts, message_id)
         elif prefix == "asg":
@@ -904,7 +895,13 @@ async def _zalo_finalize_transaction(
     except Exception as e:
         print(f"[zalo] ledger error: {e}")
 
+    # Cashback recompute only when this finalize follows a recat (flag set in
     # the zalo /recat path) — mirrors transaction._finalize.
+    if state.get("cashback_recompute_after_finalize"):
+        try:
+            sh.recompute_cashback_for_tx(row_num)
+        except Exception as e:
+            print(f"[zalo] cashback recompute error row={row_num}: {e}")
 
     tx_direction = state.get("tx_direction", "out")
     summary = render_zalo_logged_summary(
@@ -939,6 +936,7 @@ async def _zalo_finalize_transaction(
     # ── Keyword learn suggestion (mirrors Telegram transaction._finalize) ──
     # Only for manual category picks (not recat, not auto-cat).
     description = state.get("description", "")
+    is_recat = bool(state.get("cashback_recompute_after_finalize"))
     if description and tx_direction == "out":
         try:
             from handlers.transaction import _extract_keyword
@@ -1036,6 +1034,83 @@ def _format_zalo_bucket_options(buckets: list[dict]) -> str:
     lines = [f"{i + 1}. {b['name']}" for i, b in enumerate(buckets)]
     lines.append("0. Tạo mục mới")
     return "\n".join(lines)
+
+# ─── Zalo: cashback MCC learn ────────────────────────────────
+
+
+async def _zalo_handle_cb_learn_mcc(chat_id: str, text: str, state: dict, state_key: str):
+    """Handle numbered reply for unknown-MCC cashback classification.
+
+    State contains: row_num, account_id, rules (list of {mcc, name}).
+    User replies: 0 = exclude (no cashback), 1..N = pick MCC.
+    """
+    row_num = state.get("row_num")
+    rules = state.get("rules") or []
+
+    if not text.isdigit():
+        await _zalo_send(chat_id, "Reply bằng số (0 = không hoàn, 1-N = chọn nhóm).")
+        return
+
+    choice = int(text)
+
+    # 0 = exclude
+    if choice == 0:
+        sh.clear_state(state_key)
+        try:
+            tx_row = sh.get_transaction_row(row_num)
+            description = tx_row[5] if len(tx_row) > 5 else ""
+            keyword = sh.extract_keyword_from_description(description)
+            if keyword:
+                sh.add_mcc_exclusion(keyword, notes=f"declined from tx row {row_num}")
+                await _zalo_send(chat_id, f"OK, '{keyword}' sẽ không hỏi lại.")
+            else:
+                await _zalo_send(chat_id, "OK, đã bỏ qua.")
+        except Exception as e:
+            print(f"[zalo] cb learn exclude error: {e}")
+            await _zalo_send(chat_id, "OK, đã bỏ qua.")
+        return
+
+    # 1..N = pick MCC
+    if choice < 1 or choice > len(rules):
+        await _zalo_send(chat_id, f"Số không hợp lệ. Chọn 0-{len(rules)}.")
+        return
+
+    picked = rules[choice - 1]
+    mcc_code = picked["mcc"]
+    mcc_name = picked["name"]
+    sh.clear_state(state_key)
+
+    try:
+        tx_row = sh.get_transaction_row(row_num)
+        description = tx_row[5] if len(tx_row) > 5 else ""
+        keyword = sh.extract_keyword_from_description(description)
+        if not keyword:
+            await _zalo_send(chat_id, "Không tìm được keyword để lưu. Đã bỏ qua.")
+            return
+
+        added = sh.add_mcc_map(
+            pattern=keyword, mcc_code=mcc_code,
+            mcc_label=mcc_name, notes=f"learned from tx row {row_num}",
+        )
+
+        try:
+            result = sh.recompute_cashback_for_tx(row_num)
+            cb_lines = [l for l in result.get("lines", []) if l.get("cashback_amount", 0) > 0]
+            cb_total = sum(l.get("cashback_amount", 0) for l in cb_lines)
+        except Exception:
+            cb_total = 0
+
+        status = "Đã có" if not added else "Đã lưu"
+        msg = f"{status} '{keyword}' → {mcc_name} ({mcc_code})"
+        if cb_total > 0:
+            msg += f"\n+{sh.fmt_amount(cb_total)} hoàn tiền"
+        else:
+            msg += "\nLần sau tự nhận diện."
+        await _zalo_send(chat_id, msg)
+    except Exception as e:
+        print(f"[zalo] cb learn apply error: {e}")
+        await _zalo_send(chat_id, f"Lỗi: {e}")
+
 
 # ─── Zalo: keyword learn suggestion ──────────────────────────
 
@@ -1154,7 +1229,7 @@ async def _zalo_cmd_report(chat_id: str, text: str, state_key: str):
     """Send spending report via Zalo with period selection menu."""
     from handlers.report import (
         _scan_period, _render_account_lens, _render_category_lens,
-        _PERIOD_ALIASES,
+        _PERIOD_ALIASES, render_cashback_section,
     )
 
     parts = text.strip().split()
@@ -1163,8 +1238,9 @@ async def _zalo_cmd_report(chat_id: str, text: str, state_key: str):
         period_code = _PERIOD_ALIASES.get(parts[1].lower(), "m")
 
     data = _scan_period(period_code)
-    # Default: category lens (both-channel parity)
+    # Default: category lens + global cashback section (both-channel parity)
     msg = messenger._strip_markdown(_render_category_lens(data))
+    msg += messenger._strip_markdown(render_cashback_section(period_code))
 
     msg += (
         "\n\nĐổi kỳ: reply số\n"
@@ -1184,7 +1260,7 @@ async def _zalo_report_handle_menu(chat_id: str, text: str, state: dict, state_k
     """Handle report period/lens switching."""
     from handlers.report import (
         _scan_period, _render_account_lens, _render_category_lens,
-
+        render_cashback_section,
     )
 
     period_map = {"1": "w", "2": "m", "3": "q", "4": "y"}
@@ -1205,6 +1281,7 @@ async def _zalo_report_handle_menu(chat_id: str, text: str, state: dict, state_k
         msg = messenger._strip_markdown(_render_account_lens(data))
     else:
         msg = messenger._strip_markdown(_render_category_lens(data))
+    msg += messenger._strip_markdown(render_cashback_section(current_period))  # both lenses
 
     lens_label = "Account" if current_lens == "a" else "Category"
     toggle_label = "Category" if current_lens == "a" else "Account"
@@ -1863,6 +1940,11 @@ async def _zalo_recat_row(chat_id: str, row_num: int, state_key: str):
         return
 
     sh.reset_transaction_row(row_num)
+    # Mirror handle_recategorize: void cashback now, recompute after finalize.
+    try:
+        sh.void_cashback_for_tx(row_num)
+    except Exception as e:
+        print(f"[cashback] void on zalo /recat failed row={row_num}: {e}")
 
     bucket_map = [{"id": b["id"], "name": b["name"]} for b in buckets]
     sh.set_state(state_key, {
@@ -1875,6 +1957,7 @@ async def _zalo_recat_row(chat_id: str, row_num: int, state_key: str):
         "tx_date": row[1] if len(row) > 1 else "",
         "buckets": bucket_map,
         "queue": [],
+        "cashback_recompute_after_finalize": True,
     })
     await _zalo_send(
         chat_id,
@@ -3032,40 +3115,6 @@ async def health():
     return {"status": "ok", "bot": "Financial Tracking Bot"}
 
 
-# ─── SePay webhook v2 (per-tenant via URL token) ─────────────
-if _SAAS_AVAILABLE:
-    @app.post("/webhooks/sepay/{token}")
-    async def webhook_sepay_v2(token: str, request: Request):
-        try:
-            body = await request.json()
-        except Exception:
-            return JSONResponse({"ok": True})
-        return JSONResponse(await handle_sepay_v2(token, body))
-
-
-# ─── Dashboard serve ─────────────────────────────────────────
-@app.get("/dashboard", include_in_schema=False)
-async def serve_dashboard():
-    if not DASHBOARD_HTML.exists():
-        return JSONResponse({"error": "dashboard.html not found"}, status_code=404)
-    return FileResponse(
-        DASHBOARD_HTML,
-        media_type="text/html",
-        headers={"Cache-Control": "public, max-age=30"},
-    )
-
-
-@app.get("/dashboard.md", include_in_schema=False)
-async def serve_dashboard_md():
-    if not DASHBOARD_MD.exists():
-        return JSONResponse({"error": "dashboard.md not found"}, status_code=404)
-    return FileResponse(
-        DASHBOARD_MD,
-        media_type="text/markdown; charset=utf-8",
-        headers={"Cache-Control": "public, max-age=30"},
-    )
-
-
 # ─── Main dispatcher ──────────────────────────────────────────
 async def _process(body: dict):
     try:
@@ -3137,6 +3186,8 @@ async def _handle_callback(cb: dict):
         await handle_manage_callback(parts, message_id)
     elif prefix == "kw":
         await handle_keywords_callback(parts, message_id)
+    elif prefix == "cb":
+        await handle_cashback_callback(parts, message_id)
     elif prefix == "acc":
         await handle_accounts_callback(parts, message_id)
     elif prefix == "asg":
@@ -3206,6 +3257,18 @@ async def _handle_message(message: dict):
         await handle_keyword_input(text, state)
     elif step == "await_edit_keyword":
         await handle_edit_keyword_input(text, state)
+    elif step == "cb_cfg":
+        await handle_cashback_config_input(text, state)
+    elif step == "cb_mcc":
+        await handle_cashback_mcc_input(text, state)
+    elif step == "cb_addr":
+        await handle_cashback_add_input(text, state)
+    elif step == "cb_cycle":
+        await handle_cashback_cycle_input(text, state)
+    elif step == "cb_redit":
+        await handle_cashback_rule_edit_input(text, state)
+    elif step and step.startswith("cb_setup_"):
+        await handle_cashback_setup_input(text, state)
     elif step == "await_new_account_name":
         await handle_new_account_name(text, state)
     elif step == "await_new_account_balance":
@@ -3431,6 +3494,11 @@ async def _tg_recat_by_row(row_num: int):
         return
 
     sh.reset_transaction_row(row_num)
+    # Mirror handle_recategorize: void cashback now, recompute after finalize.
+    try:
+        sh.void_cashback_for_tx(row_num)
+    except Exception as e:
+        print(f"[cashback] void on /recat failed row={row_num}: {e}")
 
     prev_pending = (sh.get_state(CHAT_ID) or {}).get("pending_tx_queue") or []
     sh.set_state(CHAT_ID, {
@@ -3440,6 +3508,7 @@ async def _tg_recat_by_row(row_num: int):
         # use the tx's month, not "now" (cross-month recat fix).
         "month_key": month_key,
         "tx_date": row[1] if len(row) > 1 else "",
+        "cashback_recompute_after_finalize": True,
         "pending_tx_queue": prev_pending,
     })
 
@@ -3459,6 +3528,7 @@ async def _handle_command(text: str):
     elif cmd == "/accounts":  await cmd_accounts(text)
     elif cmd == "/manage":    await start_manage()
     elif cmd == "/keywords":  await start_keywords()
+    elif cmd == "/cashback":  await start_cashback(text)
     elif cmd == "/allocate":  await start_monthly_allocation()
     elif cmd == "/transfer":  await _tg_cmd_transfer(text)
     elif cmd == "/cc":        await _tg_cmd_cc_pay(text)

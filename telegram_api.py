@@ -102,6 +102,7 @@ async def set_my_commands():
         {"command": "manage",   "description": "⚙️ Sửa/xóa categories"},
         {"command": "keywords", "description": "🔑 Auto-phân loại theo keyword"},
         {"command": "allocate", "description": "💰 (Optional) đặt budget"},
+        {"command": "cashback", "description": "💳 Cashback thẻ tín dụng (rule, MCC, kỳ TT)"},
         {"command": "recat",    "description": "↩️ Sửa phân loại giao dịch cũ"},
         {"command": "pending",  "description": "📌 Phân loại giao dịch đang chờ"},
         {"command": "transfer", "description": "🔁 Chuyển tiền giữa các account"},

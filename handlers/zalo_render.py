@@ -97,5 +97,16 @@ def render_zalo_logged_summary(
     else:
         msg += f"{parent_name}: tổng tháng này {sh.fmt_amount(bkt['spent'])}"
 
+    # ── Cashback line (mirrors Telegram's _get_cashback_line) ──
+    if tx_direction == "out":
+        try:
+            from handlers.transaction import _get_cashback_line
+            cb_line = _get_cashback_line(row_num)
+            if cb_line:
+                # Strip emoji-heavy Markdown — Zalo is plain text
+                plain_cb = cb_line.replace("*", "")
+                msg += f"\n\n{plain_cb}"
+        except Exception as e:
+            print(f"[zalo] cashback line render error row={row_num}: {e}")
 
     return f"{msg}\nSai mục? gửi /recat {row_num}"

@@ -13,6 +13,8 @@ def test_accounts_tab_created_with_correct_header(fake_ss):
     rows = ws.get_all_values()
     assert rows[0] == sh.ACCOUNTS_HEADER
     # 15 cols per plan §2.1 + col P starting_outstanding (credit opening debt)
+    # + cols Q/R linked_credit_id, redeem_only (cashback wallet, BRD §6.6,
+    # declared in cashback Phase A so the header isn't changed twice).
     assert len(sh.ACCOUNTS_HEADER) == 18
     assert sh.ACCOUNTS_HEADER[15] == "starting_outstanding"
     assert sh.ACCOUNTS_HEADER[-1] == "redeem_only"

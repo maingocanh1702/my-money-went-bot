@@ -1,8 +1,0 @@
-{
-  "greeting": "Hello, {name}!",
-  "tx_recorded": "Transaction recorded: {amount}.",
-  "btn_confirm": "✅ Confirm",
-  "btn_cancel": "❌ Cancel",
-  "btn_pick_category": "📂 Pick a category",
-  "error_generic": "Something went wrong. Please try again."
-}

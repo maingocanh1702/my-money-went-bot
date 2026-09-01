@@ -6,6 +6,7 @@ from datetime import datetime, date, timezone
 import pytz
 from config import SHEET_ID, CREDS_FILE, GOOGLE_CREDS_JSON, TIMEZONE, DAILY_BUCKET_ID
 from config import SHEETS as S
+from handlers.cashback_engine import compute_cashback
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -56,6 +57,8 @@ bootstrap_lock = asyncio.Lock()
 # but the GIL can release during the blocking gspread I/O, allowing another
 # thread to interleave).
 import threading
+# Reentrant: recompute_cashback_for_tx holds this across a whole void+rebuild
+# sequence while the per-row compute_and_record_cashback re-acquires it on the
 # same thread. A plain Lock would self-deadlock there; RLock keeps cross-thread
 # serialization (concurrent webhooks block) while allowing the re-entry.
 tx_write_lock = threading.RLock()
@@ -834,8 +837,48 @@ def backfill_account_id_by_source_key(account_id: str, source_key: str) -> int:
         _invalidate_tx_rows_cache()
         print(f"[backfill] {len(updates)} tx → account_id={account_id!r} "
               f"(source={src_key!r})")
+    # If the linked account is a configured credit card, compute cashback for
+    # the rows it now owns. Runs even when `updates` is empty: the wizard's
+    # trigger tx is stamped with account_id by an earlier path, so it's absent
+    # from `updates` yet still needs cashback. Best-effort — never break onboarding.
+    try:
+        _recompute_cashback_after_backfill(account_id)
+    except Exception:
+        import logging
+        logging.exception("[cashback] backfill recompute failed for %s", account_id)
     return len(updates)
 
+
+def _recompute_cashback_after_backfill(account_id: str):
+    """Recompute cashback for a newly-onboarded credit card's transactions.
+
+    No-op unless the account is `type=credit` with an active config. Recomputes
+    once per unique statement-cycle the account has expense tx in (covers both
+    backfilled rows and the wizard trigger row stamped earlier). recompute_*
+    rebuilds the whole cycle from one representative row.
+    """
+    acc = find_account_by_id(account_id)
+    if not acc or acc.get("type") != "credit":
+        return
+    cfg = get_card_config(account_id)
+    if not cfg or not cfg.get("active"):
+        return
+    statement_day = acc.get("statement_day")
+    try:
+        ws = _sheet(S.TRANSACTIONS)
+    except gspread.WorksheetNotFound:
+        return
+    seen_cycles: set[str] = set()
+    for i, r in enumerate(ws.get_all_values()[1:]):
+        if (r[16] if len(r) > 16 else "").strip() != account_id:
+            continue
+        if ((r[17] if len(r) > 17 else "").strip() or "expense") != "expense":
+            continue
+        cyc = cycle_id(account_id, r[1] if len(r) > 1 else "", statement_day)
+        if cyc in seen_cycles:
+            continue
+        seen_cycles.add(cyc)
+        recompute_cashback_for_tx(i + 2)
 
 
 def finalize_transaction(row_num: int, parent_category: str, sub_label: str):
@@ -950,7 +993,9 @@ ACCOUNTS_HEADER = [
     "statement_day", "due_day",
     "last_tx_at", "active", "created_at", "notes",
     "starting_outstanding",  # col P — credit: prior-cycle debt declared at setup
+    # Cashback (BRD §6.6) — declared in Phase A, used by the cashback wallet in
     # Phase B. Append-only at the tail so existing column indices never shift.
+    "linked_credit_id",      # col Q — cashback wallet → the credit card it pays
     "redeem_only",           # col R — wallet can only pay its linked card
 ]
 
@@ -977,7 +1022,7 @@ def _ensure_accounts_tab():
 
     Bank/debit/cash use F+G (starting + running), credit uses H+I (limit +
     outstanding); J+K (statement/due day) credit-only. Cols extend to R
-    (linked_credit_id, redeem_only) for credit card tracking.
+    (linked_credit_id, redeem_only) for the Phase B cashback wallet.
 
     Range is built from len(ACCOUNTS_HEADER) — the old hardcoded `A1:O1`
     truncated the header (stopped at col O while the header already had col P+),
@@ -1024,6 +1069,1048 @@ def _ensure_pending_accounts_tab():
         ws.update("A1:G1", [PENDING_ACCOUNTS_HEADER])
         print(f"[pending] created tab {S.PENDING_ACCOUNTS!r}")
     return ws
+
+
+# ─── Cashback tabs (BRD §6) ───────────────────────────────────
+# 5 additive tabs. All header ranges built from len(*_HEADER) via
+# _last_col_letter so adding a column never truncates the written range.
+
+CASHBACK_RULES_HEADER = [           # §6.1 — cols A–R
+    "rule_id", "account_id", "rule_name", "match_type", "match_value",
+    "rate", "monthly_cap", "per_tx_cap_tier", "max_eligible_tx_per_day",
+    "min_tx_amount", "stackable", "priority", "cap_period",
+    "effective_from", "effective_to", "active", "created_at", "notes",
+]
+
+CASHBACK_TIERS_HEADER = [           # §6.2 — cols A–D (per-tx cap by amount band)
+    "tier_set", "tx_min", "tx_max", "per_tx_cap",
+]
+
+CASHBACK_CONFIG_HEADER = [          # §6.3 — cols A–F (card-level config)
+    "account_id", "cashback_rate", "min_eligible_spend",
+    "cap_period", "alert_pct", "active",
+]
+
+CASHBACK_LEDGER_HEADER = [          # §6.4 — cols A–M (reason = 0đ audit cause)
+    "cashback_id", "tx_row_num", "account_id", "rule_id", "mcc_code",
+    "eligible_amount", "rate", "cashback_amount", "cycle", "capped_flag",
+    "status", "created_at", "reason",
+]
+
+MCC_MAP_HEADER = [                  # §6.5 — cols A–G (description → MCC lookup)
+    "pattern", "mcc_code", "mcc_label", "default_category",
+    "priority", "active", "notes",
+]
+
+
+def _ensure_tab_with_header(name: str, header: list[str], rows: int = 200):
+    """Create `name` with `header` (dynamic range) if missing. Idempotent.
+
+    Shared by every cashback _ensure_*_tab — the range is always
+    `A1:{last}1` where last = _last_col_letter(len(header)), so the full
+    header is written regardless of how many columns it has.
+    """
+    ss = _get_spreadsheet()
+    try:
+        return ss.worksheet(name)
+    except gspread.WorksheetNotFound:
+        ws = ss.add_worksheet(title=name, rows=rows, cols=len(header))
+        last = _last_col_letter(len(header))
+        ws.update(f"A1:{last}1", [header])
+        print(f"[cashback] created tab {name!r}")
+        return ws
+
+
+def _ensure_cashback_rules_tab():
+    return _ensure_tab_with_header(S.CASHBACK_RULES, CASHBACK_RULES_HEADER)
+
+
+def _ensure_cashback_tiers_tab():
+    return _ensure_tab_with_header(S.CASHBACK_TIERS, CASHBACK_TIERS_HEADER, rows=50)
+
+
+def _ensure_cashback_config_tab():
+    return _ensure_tab_with_header(S.CASHBACK_CONFIG, CASHBACK_CONFIG_HEADER, rows=50)
+
+
+def _ensure_cashback_ledger_tab():
+    return _ensure_tab_with_header(S.CASHBACK_LEDGER, CASHBACK_LEDGER_HEADER, rows=1000)
+
+
+def _ensure_mcc_map_tab():
+    return _ensure_tab_with_header(S.MCC_MAP, MCC_MAP_HEADER)
+
+
+# ─── Cashback CRUD + cycle helpers + orchestrator ─────────────
+# Rules / tiers / config / mcc_map are cached (read-mostly, small) like
+# _accounts_cache. The ledger is never cached — it's write-heavy and stale
+# reads would corrupt idempotency / cycle sums.
+
+_cashback_rules_cache: list | None = None
+_cashback_tiers_cache: list | None = None
+_card_config_cache: dict | None = None
+_mcc_map_cache: list | None = None
+
+
+def invalidate_cashback_caches():
+    global _cashback_rules_cache, _cashback_tiers_cache, _card_config_cache, _mcc_map_cache, _mcc_exclusion_cache
+    _cashback_rules_cache = None
+    _cashback_tiers_cache = None
+    _card_config_cache = None
+    _mcc_map_cache = None
+    _mcc_exclusion_cache = None
+
+
+def _to_num(val):
+    """Parse a numeric cell → float, or None when blank (rate inherit etc.)."""
+    s = str(val).strip()
+    if s == "":
+        return None
+    try:
+        return _parse_amount(s)
+    except (ValueError, TypeError):
+        return None
+
+
+def _parse_tx_date(val):
+    """ISO datetime/date string (or datetime/date) → date. Day-level only."""
+    if isinstance(val, datetime):
+        return val.date()
+    if isinstance(val, date):
+        return val
+    s = str(val).strip()
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(s).date()
+    except ValueError:
+        try:
+            return date.fromisoformat(s[:10])
+        except ValueError:
+            return None
+
+
+# ── Rules ──────────────────────────────────────────────────────
+
+def _rule_from_row(r: list, row_num: int) -> dict:
+    return {
+        "row_num":                 row_num,
+        "rule_id":                 r[0],
+        "account_id":              r[1] if len(r) > 1 else "",
+        "rule_name":               r[2] if len(r) > 2 else "",
+        "match_type":              (r[3] if len(r) > 3 else "").strip(),
+        "match_value":             str(r[4]).strip() if len(r) > 4 else "",
+        "rate":                    _to_num(r[5]) if len(r) > 5 else None,
+        "monthly_cap":             (_to_num(r[6]) or 0.0) if len(r) > 6 else 0.0,
+        "per_tx_cap_tier":         (r[7] if len(r) > 7 else "").strip(),
+        "max_eligible_tx_per_day": int(_to_num(r[8]) or 0) if len(r) > 8 else 0,
+        "min_tx_amount":           (_to_num(r[9]) or 0.0) if len(r) > 9 else 0.0,
+        "stackable":               str(r[10]).upper() == "TRUE" if len(r) > 10 else False,
+        "priority":                int(_to_num(r[11]) or 0) if len(r) > 11 else 0,
+        "cap_period":              r[12] if len(r) > 12 else "",
+        "active":                  str(r[15]).upper() == "TRUE" if len(r) > 15 else False,
+    }
+
+
+def get_cashback_rules(account_id: str | None = None, force_refresh: bool = False) -> list[dict]:
+    """Active cashback rules. Filter by account_id when given."""
+    global _cashback_rules_cache
+    if force_refresh or _cashback_rules_cache is None:
+        ws = _ensure_cashback_rules_tab()
+        rows = ws.get_all_values()[1:]
+        out = []
+        for i, r in enumerate(rows):
+            if not r or not r[0]:
+                continue
+            if len(r) > 15 and str(r[15]).upper() != "TRUE":
+                continue
+            out.append(_rule_from_row(r, i + 2))
+        _cashback_rules_cache = out
+    if account_id:
+        return [r for r in _cashback_rules_cache if r["account_id"] == account_id]
+    return list(_cashback_rules_cache)
+
+
+def add_cashback_rule(account_id: str, rule_name: str, match_type: str,
+                      match_value: str, *, rate=0.20, monthly_cap=200000.0,
+                      per_tx_cap_tier: str = "", max_eligible_tx_per_day: int = 0,
+                      min_tx_amount: float = 0.0, stackable: bool = False,
+                      priority: int = 1, cap_period: str = "statement_cycle",
+                      effective_from: str = "", effective_to: str = "",
+                      notes: str = "", rule_id: str | None = None) -> str:
+    """Add an active cashback rule, return its rule_id.
+
+    rule_id is unique: re-adding an existing id (active OR soft-deleted)
+    reactivates and refreshes that one row instead of appending a duplicate —
+    otherwise update/soft_delete (which target the first id match) would hit the
+    stale row and leave the active duplicate untouched (Codex round 04).
+    """
+    rid = rule_id or f"{account_id}_{str(match_value).strip() or match_type}"
+    ws = _ensure_cashback_rules_tab()
+    rows = ws.get_all_values()[1:]
+    existing_idx = next((i for i, r in enumerate(rows) if r and r[0] == rid), None)
+    now = datetime.utcnow().isoformat()
+    # Preserve original created_at when reactivating.
+    created = (rows[existing_idx][16]
+               if existing_idx is not None and len(rows[existing_idx]) > 16
+               and rows[existing_idx][16] else now)
+    row = [
+        rid, account_id, rule_name, match_type, str(match_value),
+        rate, monthly_cap, per_tx_cap_tier, max_eligible_tx_per_day,
+        min_tx_amount, "TRUE" if stackable else "FALSE", priority,
+        cap_period, effective_from, effective_to, "TRUE", created, notes,
+    ]
+    target_row = (existing_idx + 2) if existing_idx is not None else _next_row(ws, col=1)
+    last = _last_col_letter(len(CASHBACK_RULES_HEADER))
+    ws.update(f"A{target_row}:{last}{target_row}", [row])
+    invalidate_cashback_caches()
+    print(f"[cashback] rule {'reactivated' if existing_idx is not None else 'added'}: {rid!r}")
+    return rid
+
+
+# field → 1-based column for update_cashback_rule
+_RULE_UPDATE_COL = {
+    "account_id": 2, "rule_name": 3, "match_type": 4, "match_value": 5,
+    "rate": 6, "monthly_cap": 7, "per_tx_cap_tier": 8,
+    "max_eligible_tx_per_day": 9, "min_tx_amount": 10, "stackable": 11,
+    "priority": 12, "cap_period": 13, "effective_from": 14,
+    "effective_to": 15, "active": 16, "notes": 18,
+}
+
+
+def update_cashback_rule(rule_id: str, **fields) -> bool:
+    """Update one or more columns on a rule (by rule_id). Returns False if not found."""
+    ws = _ensure_cashback_rules_tab()
+    rows = ws.get_all_values()[1:]
+    row_num = next((i + 2 for i, r in enumerate(rows) if r and r[0] == rule_id), None)
+    if row_num is None:
+        return False
+    for k, v in fields.items():
+        col = _RULE_UPDATE_COL.get(k)
+        if not col:
+            continue
+        if k in ("stackable", "active"):
+            v = "TRUE" if v else "FALSE"
+        ws.update_cell(row_num, col, v)
+    invalidate_cashback_caches()
+    return True
+
+
+def soft_delete_cashback_rule(rule_id: str) -> bool:
+    """Set active=FALSE (col P) for the rule. Returns False if not found."""
+    ws = _ensure_cashback_rules_tab()
+    rows = ws.get_all_values()[1:]
+    for i, r in enumerate(rows):
+        if r and r[0] == rule_id:
+            ws.update_cell(i + 2, 16, "FALSE")
+            invalidate_cashback_caches()
+            return True
+    return False
+
+
+# ── Tiers ──────────────────────────────────────────────────────
+
+def get_cashback_tiers(tier_set: str, force_refresh: bool = False) -> list[dict]:
+    """Per-tx cap tiers for a tier set, sorted ascending by tx_min."""
+    global _cashback_tiers_cache
+    if force_refresh or _cashback_tiers_cache is None:
+        ws = _ensure_cashback_tiers_tab()
+        rows = ws.get_all_values()[1:]
+        out = []
+        for r in rows:
+            if not r or not r[0]:
+                continue
+            tx_max = r[2] if len(r) > 2 else ""
+            out.append({
+                "tier_set":   r[0],
+                "tx_min":     _to_num(r[1]) or 0.0 if len(r) > 1 else 0.0,
+                "tx_max":     (_to_num(tx_max) if str(tx_max).strip() else None),
+                "per_tx_cap": _to_num(r[3]) or 0.0 if len(r) > 3 else 0.0,
+            })
+        _cashback_tiers_cache = out
+    res = [t for t in _cashback_tiers_cache if t["tier_set"] == tier_set]
+    return sorted(res, key=lambda t: t["tx_min"])
+
+
+# ── Card config ────────────────────────────────────────────────
+
+def get_card_config(account_id: str, force_refresh: bool = False) -> dict | None:
+    global _card_config_cache
+    if force_refresh or _card_config_cache is None:
+        ws = _ensure_cashback_config_tab()
+        rows = ws.get_all_values()[1:]
+        d: dict = {}
+        for i, r in enumerate(rows):
+            if not r or not r[0]:
+                continue
+            d[r[0]] = {
+                "row_num":            i + 2,
+                "account_id":         r[0],
+                "cashback_rate":      _to_num(r[1]) or 0.0 if len(r) > 1 else 0.0,
+                "min_eligible_spend": _to_num(r[2]) or 0.0 if len(r) > 2 else 0.0,
+                "cap_period":         r[3] if len(r) > 3 else "statement_cycle",
+                "alert_pct":          _to_num(r[4]) or 0.0 if len(r) > 4 else 0.0,
+                "active":             str(r[5]).upper() == "TRUE" if len(r) > 5 else True,
+            }
+        _card_config_cache = d
+    return _card_config_cache.get(account_id)
+
+
+def upsert_card_config(account_id: str, **fields) -> None:
+    """Create or update the card config row, merging `fields` over current values."""
+    ws = _ensure_cashback_config_tab()
+    current = get_card_config(account_id, force_refresh=True)
+    merged = {
+        "cashback_rate":      (current or {}).get("cashback_rate", 0.0),
+        "min_eligible_spend": (current or {}).get("min_eligible_spend", 0.0),
+        "cap_period":         (current or {}).get("cap_period", "statement_cycle"),
+        "alert_pct":          (current or {}).get("alert_pct", 0.0),
+        "active":             (current or {}).get("active", True),
+    }
+    merged.update({k: v for k, v in fields.items() if k in merged})
+    row = [
+        account_id, merged["cashback_rate"], merged["min_eligible_spend"],
+        merged["cap_period"], merged["alert_pct"],
+        "TRUE" if merged["active"] else "FALSE",
+    ]
+    rn = current["row_num"] if current else _next_row(ws, col=1)
+    ws.update(f"A{rn}:F{rn}", [row])
+    invalidate_cashback_caches()
+
+
+# ── MCC Map ────────────────────────────────────────────────────
+
+def get_mcc_map(force_refresh: bool = False) -> list[dict]:
+    """Active MCC patterns. `pattern` is normalized for substring matching."""
+    global _mcc_map_cache
+    if force_refresh or _mcc_map_cache is None:
+        ws = _ensure_mcc_map_tab()
+        rows = ws.get_all_values()[1:]
+        out = []
+        for i, r in enumerate(rows):
+            if not r or not r[0]:
+                continue
+            if len(r) > 5 and str(r[5]).upper() != "TRUE":
+                continue
+            out.append({
+                "row_num":          i + 2,
+                "pattern":          _normalize_for_match(r[0]),
+                "mcc_code":         str(r[1]).strip() if len(r) > 1 else "",
+                "mcc_label":        r[2] if len(r) > 2 else "",
+                "default_category": r[3] if len(r) > 3 else "",
+                "priority":         int(_to_num(r[4]) or 0) if len(r) > 4 else 0,
+                "active":           True,
+            })
+        _mcc_map_cache = out
+    return list(_mcc_map_cache)
+
+
+def add_mcc_map(pattern: str, mcc_code: str, mcc_label: str = "",
+                default_category: str = "", priority: int = 0, notes: str = "") -> bool:
+    """Add an active MCC pattern (stored normalized). Idempotent on (pattern, mcc)."""
+    pat = _normalize_for_match(pattern)
+    if not pat or not str(mcc_code).strip():
+        return False
+    ws = _ensure_mcc_map_tab()
+    rows = ws.get_all_values()[1:]
+    for r in rows:
+        if (len(r) > 5 and _normalize_for_match(r[0]) == pat
+                and str(r[1]).strip() == str(mcc_code).strip()
+                and str(r[5]).upper() == "TRUE"):
+            return False
+    next_row = _next_row(ws, col=1)
+    row = [pat, str(mcc_code).strip(), mcc_label, default_category, priority, "TRUE", notes]
+    _auto_expand(ws, next_row)
+    ws.update(f"A{next_row}:G{next_row}", [row])
+    invalidate_cashback_caches()
+    return True
+
+
+def add_cashback_rules_bulk(specs: list[dict]) -> int:
+    """Batch add_cashback_rule — ONE read + ONE write for many rules (seed 429 fix).
+
+    Each spec mirrors add_cashback_rule kwargs (account_id, rule_name, match_type,
+    match_value required; the rest default identically). Reactivates an existing
+    rule_id in place (preserving created_at) and appends new ones — rows are
+    byte-identical to add_cashback_rule. Returns the count processed.
+    """
+    if not specs:
+        return 0
+    ws = _ensure_cashback_rules_tab()
+    rows = ws.get_all_values()[1:]   # single read
+    idx_by_rid = {r[0]: i for i, r in enumerate(rows) if r and r[0]}  # existing sheet rows
+    now = datetime.utcnow().isoformat()
+    last = _last_col_letter(len(CASHBACK_RULES_HEADER))
+    updates: dict = {}        # sheet row_num → row (last-wins per rid)
+    appends: list = []        # new rows, in order
+    seen_new: dict = {}       # rid → index into `appends` (within-batch dedupe)
+    for s in specs:
+        account_id = s["account_id"]
+        match_value = s.get("match_value", "")
+        rid = s.get("rule_id") or f"{account_id}_{str(match_value).strip() or s['match_type']}"
+        row = [
+            rid, account_id, s["rule_name"], s["match_type"], str(match_value),
+            s.get("rate", 0.20), s.get("monthly_cap", 200000.0), s.get("per_tx_cap_tier", ""),
+            s.get("max_eligible_tx_per_day", 0), s.get("min_tx_amount", 0.0),
+            "TRUE" if s.get("stackable") else "FALSE", s.get("priority", 1),
+            s.get("cap_period", "statement_cycle"), s.get("effective_from", ""),
+            s.get("effective_to", ""), "TRUE", now, s.get("notes", ""),
+        ]
+        if rid in idx_by_rid:        # reactivate an existing sheet row (preserve created_at)
+            existing = rows[idx_by_rid[rid]]
+            row[16] = existing[16] if len(existing) > 16 and existing[16] else now
+            updates[idx_by_rid[rid] + 2] = row
+        elif rid in seen_new:        # duplicate new rid within this batch → last-wins
+            appends[seen_new[rid]] = row
+        else:
+            seen_new[rid] = len(appends)
+            appends.append(row)
+    if updates:
+        ws.batch_update([{"range": f"A{rn}:{last}{rn}", "values": [row]}
+                         for rn, row in updates.items()])
+    if appends:
+        start = len(rows) + 2     # header (row 1) + data rows → next empty
+        ws.update(f"A{start}:{last}{start + len(appends) - 1}", appends)
+    invalidate_cashback_caches()
+    return len(updates) + len(appends)   # distinct rules written
+
+
+def add_mcc_maps_bulk(specs: list[dict]) -> int:
+    """Batch add_mcc_map — ONE read + ONE write (seed 429 fix). Skips
+    (normalized pattern, mcc) already active (like add_mcc_map) and dedupes
+    within the batch. Rows byte-identical to add_mcc_map. Returns # appended.
+    """
+    if not specs:
+        return 0
+    ws = _ensure_mcc_map_tab()
+    rows = ws.get_all_values()[1:]   # single read
+    seen = {
+        (_normalize_for_match(r[0]), str(r[1]).strip())
+        for r in rows if len(r) > 5 and str(r[5]).upper() == "TRUE"
+    }
+    appends = []
+    for s in specs:
+        pat = _normalize_for_match(s["pattern"])
+        mcc = str(s["mcc_code"]).strip()
+        if not pat or not mcc or (pat, mcc) in seen:
+            continue
+        seen.add((pat, mcc))
+        appends.append([pat, mcc, s.get("mcc_label", ""), s.get("default_category", ""),
+                        s.get("priority", 0), "TRUE", s.get("notes", "")])
+    if appends:
+        start = len(rows) + 2
+        last = _last_col_letter(len(MCC_MAP_HEADER))
+        ws.update(f"A{start}:{last}{start + len(appends) - 1}", appends)
+        invalidate_cashback_caches()
+    return len(appends)
+
+
+def match_mcc(description: str) -> dict | None:
+    """Infer MCC from a transaction description. Longest matching pattern wins
+    (more specific), mirroring match_keyword_rule. Case/diacritics-insensitive."""
+    desc = _normalize_for_match(description)
+    if not desc:
+        return None
+    best, best_len = None, 0
+    for m in get_mcc_map():
+        p = m["pattern"]
+        if p and p in desc and len(p) > best_len:
+            best, best_len = m, len(p)
+    return best
+
+def extract_keyword_from_description(description: str, specific: bool = False) -> str:
+    """Extract keyword from a tx description for MCC pattern matching.
+
+    Args:
+      specific: If True, return a multi-word keyword (first 2 alpha tokens)
+                for more precise exclusion patterns. If False (default),
+                return the first alpha token only (broad matching).
+    Examples (specific=False):
+      "SHOPEE 2024123456 VN" → "shopee"
+      "GRAB*SERVICE 123"     → "grab"
+    Examples (specific=True):
+      "SHOPEE FOOD ORDER 456" → "shopee food"
+      "GRAB FOOD MERCHANT"    → "grab food"
+      "SHOPEE 2024123456 VN"  → "shopee" (only 1 alpha token)
+    """
+    import re
+    desc = description.strip()
+    if not desc:
+        return ""
+    tokens = re.split(r'[\s*/\-_.,;:!@#$%^\&()+=]+', desc)
+    alpha_tokens = []
+    for tok in tokens:
+        cleaned = re.sub(r'[^a-zA-Z\u00C0-\u024F]', '', tok)
+        if len(cleaned) >= 3:
+            alpha_tokens.append(_normalize_for_match(cleaned))
+            if not specific and len(alpha_tokens) == 1:
+                return alpha_tokens[0]
+            if specific and len(alpha_tokens) == 2:
+                return " ".join(alpha_tokens)
+    if alpha_tokens:
+        return " ".join(alpha_tokens[:2]) if specific else alpha_tokens[0]
+    return _normalize_for_match(desc.split()[0]) if desc.split() else ""
+
+
+def resolve_mcc_or_exclusion(description: str) -> dict | None:
+    """Resolve whether a description maps to an MCC or an exclusion.
+
+    Checks both the MCC Map and the Exclusion list. Longest matching
+    pattern wins (more specific = more accurate). Returns the MCC match
+    dict if MCC wins, or None if exclusion wins or no match.
+
+    This implements the self-learning priority matching system:
+      - "shopee" (6 chars) in MCC Map → 5262
+      - "shopee food" (11 chars) in Exclusion → SKIP
+      - For "SHOPEE FOOD ORDER": exclusion wins (11 > 6)
+      - For "SHOPEE ELECTRONICS": MCC wins (no exclusion match)
+    """
+    desc = _normalize_for_match(description)
+    if not desc:
+        return None
+
+    # MCC match — longest pattern
+    mcc_match = match_mcc(description)
+    mcc_len = len(mcc_match["pattern"]) if mcc_match else 0
+
+    # Exclusion match — longest pattern
+    excl_len = 0
+    for pat in get_mcc_exclusions():
+        if pat and pat in desc and len(pat) > excl_len:
+            excl_len = len(pat)
+
+    # Longest wins: exclusion beats MCC if its pattern is longer (more specific)
+    if excl_len > 0 and excl_len >= mcc_len:
+        return None  # exclusion wins → treat as "no MCC"
+
+    return mcc_match  # MCC wins (or both None → returns None)
+
+
+# ── MCC Exclusion (learned "no cashback" decisions) ────────────
+
+MCC_EXCLUSION_HEADER = ["pattern", "created_at", "notes"]
+
+_mcc_exclusion_cache: list[str] | None = None
+
+
+def _ensure_mcc_exclusion_tab():
+    return _ensure_tab_with_header("MCC Exclusions", MCC_EXCLUSION_HEADER, rows=200)
+
+
+def get_mcc_exclusions(force_refresh: bool = False) -> list[str]:
+    """Return normalized excluded patterns (learned 'no cashback')."""
+    global _mcc_exclusion_cache
+    if force_refresh or _mcc_exclusion_cache is None:
+        ws = _ensure_mcc_exclusion_tab()
+        rows = ws.get_all_values()[1:]
+        _mcc_exclusion_cache = [
+            _normalize_for_match(r[0]) for r in rows if r and r[0]
+        ]
+    return list(_mcc_exclusion_cache)
+
+
+def is_mcc_excluded(description: str) -> bool:
+    """True if any excluded pattern is a substring of description."""
+    desc = _normalize_for_match(description)
+    if not desc:
+        return False
+    return any(pat and pat in desc for pat in get_mcc_exclusions())
+
+
+def add_mcc_exclusion(pattern: str, notes: str = "") -> bool:
+    """Add a 'no cashback' exclusion pattern. Idempotent on pattern."""
+    global _mcc_exclusion_cache
+    pat = _normalize_for_match(pattern)
+    if not pat:
+        return False
+    if pat in get_mcc_exclusions():
+        return False
+    ws = _ensure_mcc_exclusion_tab()
+    next_row = _next_row(ws, col=1)
+    _auto_expand(ws, next_row)
+    ws.update(f"A{next_row}:C{next_row}", [
+        [pat, datetime.utcnow().isoformat(), notes]
+    ])
+    _mcc_exclusion_cache = None  # bust cache
+    return True
+
+
+
+# ── Cashback Ledger ────────────────────────────────────────────
+
+
+
+def _ledger_from_row(r: list, row_num: int) -> dict:
+    def g(idx):
+        return r[idx] if len(r) > idx else ""
+    return {
+        "row_num":         row_num,
+        "cashback_id":     g(0),
+        "tx_row_num":      int(_to_num(g(1))) if str(g(1)).strip() else None,
+        "account_id":      g(2),
+        "rule_id":         g(3),
+        "mcc_code":        str(g(4)).strip(),
+        "eligible_amount": _to_num(g(5)) or 0.0,
+        "rate":            _to_num(g(6)) or 0.0,
+        "cashback_amount": _to_num(g(7)) or 0.0,
+        "cycle":           g(8),
+        "capped_flag":     str(g(9)).upper() == "TRUE",
+        "status":          str(g(10)).strip().lower(),
+        "created_at":      g(11),
+        "reason":          g(12),
+    }
+
+
+def append_cashback_rows(rows: list[dict]) -> None:
+    """Append cashback ledger lines. Generates cashback_id + created_at."""
+    if not rows:
+        return
+    ws = _ensure_cashback_ledger_tab()
+    next_row = _next_row(ws, col=1)
+    now = datetime.utcnow().isoformat()
+    payload = []
+    for j, line in enumerate(rows):
+        txn = line.get("tx_row_num")
+        payload.append([
+            f"CB{txn}_{j + 1}", txn, line.get("account_id", ""),
+            line.get("rule_id", ""), line.get("mcc_code", ""),
+            line.get("eligible_amount", 0), line.get("rate", 0),
+            line.get("cashback_amount", 0), line.get("cycle", ""),
+            "TRUE" if line.get("capped_flag") else "FALSE",
+            line.get("status", ""), now, line.get("reason", ""),
+        ])
+    last = _last_col_letter(len(CASHBACK_LEDGER_HEADER))
+    _auto_expand(ws, next_row + len(payload) - 1)
+    ws.update(f"A{next_row}:{last}{next_row + len(payload) - 1}", payload)
+
+
+def get_cashback_ledger(account_id: str | None = None, cycle: str | None = None) -> list[dict]:
+    """All ledger lines (incl void), optionally filtered by account_id / cycle."""
+    ws = _ensure_cashback_ledger_tab()
+    rows = ws.get_all_values()[1:]
+    out = []
+    for i, r in enumerate(rows):
+        if not r or not r[0]:
+            continue
+        rec = _ledger_from_row(r, i + 2)
+        if account_id and rec["account_id"] != account_id:
+            continue
+        if cycle and rec["cycle"] != cycle:
+            continue
+        out.append(rec)
+    return out
+
+
+def void_cashback_for_tx(tx_row_num: int) -> int:
+    """Mark all non-void ledger lines of a tx as `void` (kept for audit)."""
+    ws = _ensure_cashback_ledger_tab()
+    rows = ws.get_all_values()[1:]
+    voided = 0
+    for i, r in enumerate(rows):
+        if len(r) < 11 or str(r[1]).strip() != str(tx_row_num):
+            continue
+        if str(r[10]).strip().lower() == "void":
+            continue
+        ws.update_cell(i + 2, 11, "void")  # col K = status
+        voided += 1
+    return voided
+
+
+def promote_pending_to_eligible(account_id: str, cycle: str) -> int:
+    """Flip all `pending` lines of an account/cycle to `eligible` (gate opened)."""
+    ws = _ensure_cashback_ledger_tab()
+    rows = ws.get_all_values()[1:]
+    n = 0
+    for i, r in enumerate(rows):
+        if len(r) < 11 or r[2] != account_id or (r[8] if len(r) > 8 else "") != cycle:
+            continue
+        if str(r[10]).strip().lower() == "pending":
+            ws.update_cell(i + 2, 11, "eligible")
+            n += 1
+    return n
+
+
+# ── Cycle / eligible-spend / daily helpers ─────────────────────
+
+def cycle_id(account_id: str, tx_date, statement_day) -> str:
+    """Statement-cycle label, e.g. `cake_2026-06`.
+
+    A cycle is `[statement_day prev+1 … statement_day this]`; it is labeled by
+    the month it CLOSES in. The statement_day date itself belongs to the cycle
+    closing on it (BRD edge case 7). No statement_day → calendar month.
+    """
+    d = _parse_tx_date(tx_date)
+    if d is None:
+        return f"{account_id}_unknown"
+    if not statement_day:
+        return f"{account_id}_{d.strftime('%Y-%m')}"
+    if d.day <= int(statement_day):
+        return f"{account_id}_{d.strftime('%Y-%m')}"
+    y, m = (d.year + 1, 1) if d.month == 12 else (d.year, d.month + 1)
+    return f"{account_id}_{y:04d}-{m:02d}"
+
+
+def eligible_spend_in_cycle(account_id: str, cycle: str, exclude_tx_row: int | None = None) -> float:
+    """Σ eligible-MCC spend in a cycle. Excludes void lines and lines whose MCC
+    wasn't eligible (mcc_unknown / mcc_not_eligible). `exclude_tx_row` drops a
+    given tx so callers can compute the "before this tx" total for recompute."""
+    total = 0.0
+    for rec in get_cashback_ledger(account_id, cycle):
+        if rec["status"] == "void":
+            continue
+        if rec["reason"] in ("mcc_unknown", "mcc_not_eligible"):
+            continue
+        if exclude_tx_row is not None and rec["tx_row_num"] == exclude_tx_row:
+            continue
+        total += rec["eligible_amount"]
+    return total
+
+
+def _tx_date_for_row(row_num: int):
+    """Read a Transactions row's date (col B) → date. None if missing."""
+    if not row_num:
+        return None
+    try:
+        ws = _sheet(S.TRANSACTIONS)
+    except gspread.WorksheetNotFound:
+        return None
+    row = ws.row_values(row_num)
+    return _parse_tx_date(row[1]) if len(row) > 1 else None
+
+
+def daily_eligible_count(account_id: str, mcc: str, tx_date,
+                         exclude_tx_row: int | None = None) -> int:
+    """Count cashback>0 lines of this account+MCC on the same calendar day as
+    `tx_date` (by the transaction's own date). `exclude_tx_row` skips a tx so a
+    recompute doesn't count itself."""
+    target = _parse_tx_date(tx_date)
+    if target is None or not mcc:
+        return 0
+    count = 0
+    for rec in get_cashback_ledger(account_id):
+        if rec["status"] == "void" or rec["mcc_code"] != str(mcc).strip():
+            continue
+        if rec["cashback_amount"] <= 0:
+            continue
+        if exclude_tx_row is not None and rec["tx_row_num"] == exclude_tx_row:
+            continue
+        if _tx_date_for_row(rec["tx_row_num"]) == target:
+            count += 1
+    return count
+
+
+def _mcc_cashback_used(account_id: str, cycle: str, mcc: str,
+                       exclude_tx_row: int | None = None) -> float:
+    """Cashback already accrued for an MCC this cycle (for per-MCC cap)."""
+    if not mcc:
+        return 0.0
+    total = 0.0
+    for rec in get_cashback_ledger(account_id, cycle):
+        if rec["status"] == "void" or rec["mcc_code"] != str(mcc).strip():
+            continue
+        if exclude_tx_row is not None and rec["tx_row_num"] == exclude_tx_row:
+            continue
+        total += rec["cashback_amount"]
+    return total
+
+
+def _cashback_summary(lines: list[dict], first: bool, blocked: bool, rule: dict | None) -> str:
+    """Short note for the transaction reply (FR-2.5 / FR-2.7)."""
+    if not lines:
+        return ""
+    line = lines[0]
+    reason = line.get("reason", "")
+    if reason in ("mcc_unknown", "mcc_not_eligible"):
+        return ""
+    name = (rule or {}).get("rule_name", "")
+    if reason == "daily_limit":
+        return f"🛒 {name} đã hết lượt hoàn hôm nay → giao dịch này 0đ hoàn tiền."
+    if reason == "mcc_cap_full":
+        return f"{name} đã đạt cap kỳ này — giao dịch này 0đ hoàn tiền."
+    txt = f"+{fmt_amount(line['cashback_amount'])} hoàn tiền"
+    if first and name:
+        txt += f" — {name} đầu tiên hôm nay được hoàn."
+    return txt
+
+
+# ── Orchestrator ───────────────────────────────────────────────
+
+def _empty_cashback_result() -> dict:
+    return {"lines": [], "gate_just_opened": False, "daily_limit_first": False,
+            "daily_limit_blocked": False, "summary_text": ""}
+
+
+def compute_and_record_cashback(tx_row_num: int) -> dict:
+    """Read a tx → infer MCC → gather cycle state → run the pure engine → write
+    Cashback Ledger lines. Idempotent on (tx_row_num, rule): voids prior lines
+    before writing. Only `expense` on an active `type=credit` card with config.
+
+    Returns {lines, gate_just_opened, daily_limit_first, daily_limit_blocked,
+    summary_text}. Does NOT touch the live tx flow — Phase B wires the hook.
+    """
+    with tx_write_lock:
+        row = get_transaction_row(tx_row_num)
+        if not row or len(row) < 8:
+            return _empty_cashback_result()
+        # Idempotent: void any prior lines for this tx up front, so every early
+        # return below (now non-expense / non-VND / no config) also clears stale
+        # cashback rows instead of leaving them active. The state reads below all
+        # exclude this tx anyway, so voiding early doesn't change their results.
+        void_cashback_for_tx(tx_row_num)
+        description = row[5] if len(row) > 5 else ""
+        amount = _parse_amount(row[7]) if len(row) > 7 and row[7] else 0.0
+        tx_date = row[1] if len(row) > 1 else ""
+        account_id = (row[16] if len(row) > 16 else "").strip()
+        ledger_tx_type = (row[17] if len(row) > 17 else "expense").strip() or "expense"
+
+        if not account_id:
+            return _empty_cashback_result()
+        account = find_account_by_id(account_id)
+        if not account or account.get("type") != "credit":
+            return _empty_cashback_result()
+        if ledger_tx_type != "expense":   # skip cc_payment / income / transfer
+            return _empty_cashback_result()
+        if amount <= 0:   # refund/correction stored as negative expense (FR-2.3)
+            return _empty_cashback_result()
+        # Cashback rules + tiers are VND. A foreign-currency purchase must not be
+        # summed as VND (would wrongly earn cashback / open the spend gate).
+        if row_currency(row) != "VND":
+            return _empty_cashback_result()
+        # Deferred to Phase B (founder review 2026-06-09) — known edge cases the
+        # compute-only orchestrator does NOT handle yet; the `/cashback recompute
+        # <cc_id> [cycle]` rescue command (Phase B) covers reshuffles:
+        #   - out-of-order live arrivals don't rebuild the day;
+        #   - the gate only promotes (pending→eligible), never demotes;
+        #   - recompute_cashback_for_tx rebuilds only the same DAY, not the whole
+        #     statement cycle (cross-day MCC-cap dependents stay stale);
+        #   - rule effective_from/effective_to windows are not enforced (§4.3
+        #     field; §4.6 compute path omits it; Cake doesn't use it).
+        config = get_card_config(account_id)
+        if not config or not config.get("active", False):
+            return _empty_cashback_result()
+
+        mcc_match = resolve_mcc_or_exclusion(description)
+        mcc = mcc_match["mcc_code"] if mcc_match else ""
+        rules = get_cashback_rules(account_id)
+        matched_rule = next(
+            (r for r in rules if r["match_type"] == "mcc" and r["match_value"] == mcc),
+            None,
+        ) if mcc else None
+        tier_set = matched_rule["per_tx_cap_tier"] if matched_rule else ""
+        tiers = get_cashback_tiers(tier_set) if tier_set else []
+
+        cycle = cycle_id(account_id, tx_date, account.get("statement_day"))
+        mcc_cycle_used = _mcc_cashback_used(account_id, cycle, mcc, exclude_tx_row=tx_row_num)
+        daily_count = daily_eligible_count(account_id, mcc, tx_date, exclude_tx_row=tx_row_num)
+        eligible_before = eligible_spend_in_cycle(account_id, cycle, exclude_tx_row=tx_row_num)
+
+        lines = compute_cashback(
+            tx={"amount": amount}, mcc=mcc, rules=rules, tiers=tiers,
+            card_config=config, mcc_cycle_used=mcc_cycle_used,
+            daily_count=daily_count, eligible_spend_before_tx=eligible_before,
+        )
+        append_cashback_rows([
+            {**line, "tx_row_num": tx_row_num, "account_id": account_id, "cycle": cycle}
+            for line in lines
+        ])
+
+        # Activation gate (this tx pushes the cycle total over the threshold).
+        # Count this tx toward the gate only when the engine actually produced an
+        # eligible-MCC line — same rule as eligible_spend_in_cycle (which drops
+        # mcc_unknown / mcc_not_eligible, e.g. below-min-tx). Keeps the gate
+        # increment consistent with the cycle-spend total it's compared against.
+        counts_for_gate = any(
+            l["reason"] not in ("mcc_unknown", "mcc_not_eligible") for l in lines
+        )
+        min_spend = float(config.get("min_eligible_spend") or 0)
+        eligible_after = eligible_before + (amount if counts_for_gate else 0)
+        gate_just_opened = bool(min_spend > 0 and eligible_before < min_spend <= eligible_after)
+        if gate_just_opened:
+            promote_pending_to_eligible(account_id, cycle)
+
+        # Daily-limit notices (FR-2.7): general for any rule with a daily cap.
+        max_per_day = int((matched_rule or {}).get("max_eligible_tx_per_day") or 0)
+        daily_limit_first = any(
+            l["cashback_amount"] > 0 and max_per_day > 0 and daily_count == 0
+            for l in lines
+        )
+        daily_limit_blocked = any(l["reason"] == "daily_limit" for l in lines)
+
+        return {
+            "lines": lines,
+            "gate_just_opened": gate_just_opened,
+            "daily_limit_first": daily_limit_first,
+            "daily_limit_blocked": daily_limit_blocked,
+            "summary_text": _cashback_summary(lines, daily_limit_first,
+                                              daily_limit_blocked, matched_rule),
+            "cycle": cycle,
+            "account_id": account_id,
+        }
+
+
+def recompute_cashback_for_tx(tx_row_num: int) -> dict:
+    """Rebuild cashback for the tx's whole statement CYCLE, in timestamp order.
+
+    Recomputing the entire same-account cycle (not just the day, not just
+    same-MCC) is deliberate — two dependencies span the rebuild:
+      - daily limit: clean-state + chronological order makes the earliest
+        eligible tx win the day's single slot regardless of webhook arrival /
+        write order (out-of-order arrivals);
+      - per-MCC cycle cap: voiding/changing one tx frees cap for later tx on
+        OTHER days of the same cycle, which must be refreshed (cross-day).
+    All cycle lines are voided first, then recomputed strictly chronologically
+    so each tx sees only correctly-settled earlier siblings.
+    """
+    row = get_transaction_row(tx_row_num)
+    account_id = (row[16] if row and len(row) > 16 else "").strip()
+    tx_date = row[1] if row and len(row) > 1 else ""
+    if not account_id or _parse_tx_date(tx_date) is None:
+        return compute_and_record_cashback(tx_row_num)
+
+    account = find_account_by_id(account_id)
+    if not account or account.get("type") != "credit":
+        return compute_and_record_cashback(tx_row_num)  # non-credit → per-tx (voids + empty)
+    statement_day = account.get("statement_day")
+    cycle = cycle_id(account_id, tx_date, statement_day)
+    # Read-once rebuild (Sheets 429 fix): read Transactions + ledger ONCE and
+    # replay the cycle in memory instead of O(N) per-row ledger reads. Holds the
+    # reentrant write lock across the whole void+append so concurrent webhooks
+    # for the same cycle can't interleave.
+    with tx_write_lock:
+        return _recompute_cycle_in_memory(account_id, account, statement_day, cycle, tx_row_num)
+
+
+def _recompute_cycle_in_memory(account_id: str, account: dict, statement_day,
+                               cycle: str, target_tx_row: int) -> dict:
+    """Read-once, in-memory rebuild of a whole statement cycle's cashback.
+
+    Reads the Transactions tab and the Cashback Ledger ONCE each, then replays
+    the exact per-tx logic of compute_and_record_cashback in chronological order
+    with running in-memory state (mcc_used / daily_count / eligible_spend),
+    batch-voids the old cycle rows and batch-appends the rebuilt ones. Output is
+    byte-identical to the old per-tx recompute (parity) — only the read pattern
+    changes (O(1) ledger reads instead of ~4×N). Caller holds tx_write_lock.
+
+    Returns the result dict for `target_tx_row` (same shape as
+    compute_and_record_cashback) for the webhook reply.
+    """
+    config = get_card_config(account_id)
+    active = bool(config and config.get("active", False))
+    min_spend = float((config or {}).get("min_eligible_spend") or 0)
+
+    # 1. Transactions read-once → cycle expense items, chronological. Force a
+    #    fresh read: the rebuild must see a just-appended/updated tx, never a
+    #    still-valid TTL cache that could omit it (Codex round 02).
+    cycle_items = []  # (ts, row_num, amount, description, currency)
+    for i, r in enumerate(_get_tx_rows(force_refresh=True)):
+        row_num = i + 2
+        if (r[16] if len(r) > 16 else "").strip() != account_id:
+            continue
+        if ((r[17] if len(r) > 17 else "").strip() or "expense") != "expense":
+            continue
+        ts = r[1] if len(r) > 1 else ""
+        if cycle_id(account_id, ts, statement_day) != cycle:
+            continue
+        amount = _parse_amount(r[7]) if len(r) > 7 and r[7] else 0.0
+        cycle_items.append((ts, row_num, amount,
+                            r[5] if len(r) > 5 else "", row_currency(r)))
+    cycle_items.sort(key=lambda x: x[0])
+
+    void_targets = {it[1] for it in cycle_items}
+    void_targets.add(target_tx_row)  # void target even if now non-expense (parity)
+
+    # 2. Ledger read-once → batch-void old cycle rows; find append start.
+    ledger_ws = _ensure_cashback_ledger_tab()
+    all_ledger = ledger_ws.get_all_values()
+    void_updates = []
+    for li, lr in enumerate(all_ledger[1:]):
+        if len(lr) < 11 or not lr[0]:
+            continue
+        txn = int(_to_num(lr[1])) if str(lr[1]).strip() else None
+        if txn in void_targets and str(lr[10]).strip().lower() != "void":
+            void_updates.append({"range": f"K{li + 2}:K{li + 2}", "values": [["void"]]})
+    append_start = len(all_ledger) + 1
+
+    # 3. Rebuild in memory (chronological running state) — same guards + engine
+    #    as compute_and_record_cashback (amount>0, VND, eligible MCC, gate).
+    rules = get_cashback_rules(account_id)
+    tier_sets = {r["per_tx_cap_tier"] for r in rules if r.get("per_tx_cap_tier")}
+    tiers_by_set = {ts: get_cashback_tiers(ts) for ts in tier_sets}
+
+    mcc_used: dict = {}
+    daily_cnt: dict = {}
+    elig_spend = 0.0
+    new_rows = []   # list[(cashback_id, line-dict)]
+    target_result = _empty_cashback_result()
+
+    for ts, row_num, amount, desc, cur in cycle_items:
+        if not active or amount <= 0 or cur != "VND":
+            continue  # no line (matches compute_and_record early return); already voided
+        mcc_match = resolve_mcc_or_exclusion(desc)
+        mcc = mcc_match["mcc_code"] if mcc_match else ""
+        matched_rule = next(
+            (r for r in rules if r["match_type"] == "mcc" and r["match_value"] == mcc), None
+        ) if mcc else None
+        tiers = tiers_by_set.get(matched_rule["per_tx_cap_tier"], []) if matched_rule else []
+        d = _parse_tx_date(ts)
+        eligible_before = elig_spend
+        dc = daily_cnt.get((mcc, d), 0)
+        lines = compute_cashback(
+            tx={"amount": amount}, mcc=mcc, rules=rules, tiers=tiers, card_config=config,
+            mcc_cycle_used=mcc_used.get(mcc, 0.0), daily_count=dc,
+            eligible_spend_before_tx=eligible_before,
+        )
+        counts_for_gate = any(l["reason"] not in ("mcc_unknown", "mcc_not_eligible") for l in lines)
+        if counts_for_gate:
+            elig_spend += amount
+        for j, l in enumerate(lines):
+            mcc_used[mcc] = mcc_used.get(mcc, 0.0) + l["cashback_amount"]
+            if l["cashback_amount"] > 0:
+                daily_cnt[(mcc, d)] = daily_cnt.get((mcc, d), 0) + 1
+            new_rows.append((f"CB{row_num}_{j + 1}",
+                             {**l, "tx_row_num": row_num, "account_id": account_id, "cycle": cycle}))
+        if row_num == target_tx_row:
+            max_per_day = int((matched_rule or {}).get("max_eligible_tx_per_day") or 0)
+            first = any(l["cashback_amount"] > 0 and max_per_day > 0 and dc == 0 for l in lines)
+            blocked = any(l["reason"] == "daily_limit" for l in lines)
+            after = eligible_before + (amount if counts_for_gate else 0)
+            target_result = {
+                "lines": lines,
+                "gate_just_opened": bool(min_spend > 0 and eligible_before < min_spend <= after),
+                "daily_limit_first": first,
+                "daily_limit_blocked": blocked,
+                "summary_text": _cashback_summary(lines, first, blocked, matched_rule),
+                "cycle": cycle,
+                "account_id": account_id,
+            }
+
+    # Gate promote (once): if the cycle reached the gate, earlier pending lines
+    # become eligible — mirrors promote_pending_to_eligible after the walk.
+    if min_spend > 0 and elig_spend >= min_spend:
+        for _cid, l in new_rows:
+            if l.get("status") == "pending":
+                l["status"] = "eligible"
+        for l in target_result["lines"]:
+            if l.get("status") == "pending":
+                l["status"] = "eligible"
+
+    # 4. Write: void old (batch) then append rebuilt rows (batch).
+    if void_updates:
+        ledger_ws.batch_update(void_updates)
+    if new_rows:
+        now = datetime.utcnow().isoformat()
+        last = _last_col_letter(len(CASHBACK_LEDGER_HEADER))
+        payload = [[
+            cid, l["tx_row_num"], l["account_id"], l.get("rule_id", ""),
+            l.get("mcc_code", ""), l.get("eligible_amount", 0), l.get("rate", 0),
+            l.get("cashback_amount", 0), l.get("cycle", ""),
+            "TRUE" if l.get("capped_flag") else "FALSE", l.get("status", ""),
+            now, l.get("reason", ""),
+        ] for cid, l in new_rows]
+        _auto_expand(ledger_ws, append_start + len(payload) - 1)
+        ledger_ws.update(f"A{append_start}:{last}{append_start + len(payload) - 1}", payload)
+
+    return target_result
 
 
 # ─── Pending Accounts API ─────────────────────────────────────
@@ -1522,6 +2609,7 @@ def _account_from_row(row: list, row_num: int) -> dict:
         # separate starting field, the declared opening debt would
         # silently disappear).
         "starting_outstanding": _parse_amount(r[15]) if len(r) > 15 and r[15] else 0.0,
+        # Cols Q/R — cashback wallet linkage (Phase B). Read pad-safe so legacy
         # 16-col rows hydrate without IndexError.
         "linked_credit_id":     (r[16] if len(r) > 16 else "") or "",
         "redeem_only":          (str(r[17]).upper() == "TRUE") if len(r) > 17 and r[17] else False,
@@ -1660,13 +2748,13 @@ def set_billing_cycle(account_id: str, statement_day: int,
     """Set a credit card's statement (and optional due) day — cols J/K.
 
     `statement_day` drives `cycle_id`: it defines the [stmt+1 … stmt] window
-    /report groups transactions by. Must be 1–28 (days 29–31 don't
+    cashback + /report group transactions by. Must be 1–28 (days 29–31 don't
     exist in every month, so they'd make the cycle boundary ambiguous — same
     bound the onboarding prompt documents). Returns False for a missing /
     non-credit account or an out-of-range day; `due_day` is informational only
     (shown in /report; not used by cycle math) and skipped when None/invalid.
 
-    Caller is responsible for recomputing affected cycles after a
+    Caller is responsible for recomputing affected cashback cycles after a
     change — moving the boundary re-labels which cycle past tx belong to.
     """
     acc = find_account_by_id(account_id)

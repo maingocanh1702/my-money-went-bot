@@ -91,3 +91,9 @@ class SHEETS:
     ACCOUNTS        = "Accounts"
     LEDGER          = "Account Ledger"
     PENDING_ACCOUNTS = "Pending Accounts"
+    # Cashback tracking (BRD §6) — 5 additive tabs, no DB.
+    CASHBACK_RULES   = "Cashback Rules"
+    CASHBACK_TIERS   = "Cashback Tx Tiers"
+    CASHBACK_CONFIG  = "Cashback Card Config"
+    CASHBACK_LEDGER  = "Cashback Ledger"
+    MCC_MAP          = "MCC Map"

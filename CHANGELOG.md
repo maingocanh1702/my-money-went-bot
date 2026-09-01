@@ -1,830 +1,212 @@
 # Changelog
 
-All notable changes to MyMoneyWent are documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) where applicable. Pre-release pre-development phase has no formal version yet — entries below are dated.
-
-## Conventions
-
-- **Repo-level changes:** structural moves, doc restructure, tooling, repo hygiene → in this file
-- **BRD/PRD/TDD/feature spec changes:** in their own changelog tables at the bottom of each doc
-- **Code changes (post Phase 1):** standard `[Added]`, `[Changed]`, `[Fixed]`, `[Removed]`, `[Deprecated]`, `[Security]` sections per release
-
----
-
-## [Unreleased]
-
-### Added — Zalo Channel Core (2026-05-28)
-
-- `core/messenger/zalo.py`: `ZaloSender(BaseSender)` registered under
-  `channel_type='zalo'`. OAuth v4 token refresh on 401. Plain text
-  rendering with configurable `ZALO_TEXT_LIMIT` (default 2000 chars).
-  Markup callback buttons → numbered text options.
-- `core/handlers/zalo_webhook.py`: `POST /zalo/webhook` route guarded
-  by `ZALO_ENABLED` and `ZALO_INTERACTIVE` env vars. Candidate
-  signature verification (HMAC-SHA256, pending live fixture confirm).
-  Dispatches `/start`, numeric replies (→ categorize), help text.
-- `core/handlers/categorize.py`: DB-backed category queue for
-  post-transaction numbered parent-category selection. Queue in
-  `bot_state.payload`, 6-hour TTL, concurrent-transaction-safe append.
-- `core/services/bot_state.py`: Bot state persistence service for
-  category queue.
-- Migration `0004_add_zalo_channel`: `channel_chat_id TEXT NULL` column
-  + `chk_channel_type` CHECK expanded to include `'zalo'`.
-- i18n keys: 11 new `categorize.*` keys (vi + en parity-tested).
-- ADR-0003: Identity model decisions for accounts + channels.
-- `docs/implementation-plan-zalo-channel-core.md` v0.6.0.
-- `docs/research-zalo-multi-user-bot.md`: Zalo multi-user research.
-
-### Added — Work-State Engine (8 PRs, 2026-05-20~21)
-
-- **MYM-1 Phase 1a:** Engine skeleton + filesystem + git collectors
-  (23 files, +2646 LOC, 127 unit + 6 e2e tests).
-- **MYM-3 Phase 1b:** GitHub + CI + Railway collectors (63 new tests,
-  190 total). PR identity 5-step fallback. Cache TTL tiering.
-- **MYM-4 Phase 1b':** Dashboard projection module (17 unit + 6
-  integration tests, atomic write pattern).
-- **MYM-5 Phase 1c:** Engine driver + aggregation + persistence +
-  workflow (32 new tests, 245 total). `actions/cache@v4.2.0`
-  SHA-pinned. Dashboard.yml 6 triggers + anti-loop guard.
-- **MYM-6 Dashboard Live View A:** Engine→build wire (+202 LOC build
-  script, +369 LOC tests). Single-read pattern, warning banner,
-  `--strict-engine` flag.
-- **MYM-7 Dashboard Live View B:** Doc-change awareness. Filesystem
-  collector +spec/tech/tracker hash tracking. Signals +5 fields, 3
-  new events, 4 new overlays (14→18).
-- **MYM-8 Doc-change hash dedup:** Hash-aware dedup for doc-change
-  events. `_dedup_key` + `is_duplicate`. Bootstrap noise prevention.
-  12 new tests (340 total).
-- **MYM-10 Phase 1d:** Urgency derivation (4-tier first-match-wins),
-  MAX aggregation, foundation_change signals, projection emoji
-  rendering (+28 tests).
-- **MYM-11:** Spec §8.2 reconcile — CANONICAL_OVERLAYS +3 code extras.
-
-### Added — SePay Multi-Tenant C1 (2026-05-15)
-
-- **C1 P1 (PR #23):** DB pool + Sentry + structlog + request_id at
-  startup in FastAPI.
-- **C1 P2 (PR #24):** `POST /webhooks/sepay/{token}` multi-tenant
-  webhook route.
-- **C1 P3 (PR #25):** Parallel-run telemetry on legacy + v2 SePay
-  dispatch.
-
-### Security — Batch B (2026-05-22)
-
-- 9 fixes merged (`30e6a4e`): H5, H7, M1-M7, SSRF.
-- Capture path hardening (M1+M2), observability cleanup (M3+M5+M6+M7),
-  hygiene + config + supply chain, SSRF mitigation.
-- Security review quick wins (PR #16, 2026-05-15).
-
-### Changed — Transaction Capture (`_persist()` return type, 2026-05-28)
-
-- `_persist()` now returns `int | None` (inserted tx_id or None for
-  duplicate). Enables SePay webhook handler to distinguish new inserts
-  from duplicate retries and only trigger category picker on new rows.
-
-### Removed — Dashboard Engine cleanup (2026-05-28~29)
-
-- `scripts/work_state/` directory deleted (moved to
-  `tools/dashboard-engine/`).
-- `scripts/build-dashboard.py` deleted (moved to
-  `tools/dashboard-engine/`).
-- `docs/autopilot/ops-tracker-dashboard/` (15 files) — superseded by
-  `tools/dashboard-engine/` self-contained package.
-- `docs/autopilot/prompts/` (11 work-state/dashboard prompts) — PRs
-  shipped, prompts archived in git history.
-- `docs/operations/dashboard-engine/` (5 files) — superseded by
-  consolidated approach.
-
-### Changed — F07 Settings (architecture cleanup, 2026-05-13)
-
-- `core/settings_svc.get_overview()` is now PURE READ — no DB
-  side-effects. Returns `SettingsOverview.inbound_email: str | None`
-  (None for legacy NULL rows; UI renders fallback via
-  `settings_svc.fallback_inbound_email`).
-- Renamed `backfill_inbound_email` → `ensure_inbound_email(user_id)`.
-  Idempotent backfill helper now invoked only from trusted callsites
-  (migration 0003 today; future post-auth gate later). NOT called from
-  `get_overview`.
-- New pure helper `core/settings_svc.fallback_inbound_email(user_id)` —
-  deterministic display string for NULL rows. Formula matches what
-  `ensure_inbound_email` / migration 0003 would persist, so display and
-  backfilled value always agree.
-- New migration `migrations/versions/0003_backfill_inbound_email.py` —
-  one-time backfill of `users.inbound_email = NULL` rows with
-  deterministic `u{id}@in.mymoneywent.com`. Idempotent; downgrade is a
-  no-op (pre-state not safely recoverable).
-- F07 spec G4 revised: read/write separated, CQRS-aligned. See
-  `docs/features/feature-settings.md` G4 for rationale +
-  alternatives_rejected.
-
-### Fixed — F07 Settings (Codex catches R2 + R3, root-cause version)
-
-- R2 (`handle_timezone_input` called `get_overview` before tz validation
-  → side-effect on invalid input) and R3
-  (`handle_settings_callback` called `get_overview` before sub-command
-  dispatch → side-effect on unknown callback) resolved by the
-  architecture cleanup above. The previous R2 band-aid (commit
-  `0246010`) is superseded — `get_overview` is now safe to call anywhere
-  because it no longer mutates. Comments updated; the upfront
-  `is_valid_timezone` short-circuit in `handle_timezone_input` is kept
-  on UX grounds (saves a `set_timezone` DB roundtrip on invalid input).
-
-### Added — F07 Settings (autopilot codegen)
-
-- `core/services/settings_svc.py`: `compute_plan_status()` (Free /
-  trial-with-days-left / active-paid / expired) and `valid_timezone()`
-  IANA validation (≤64 chars, zoneinfo lookup). Pure, no DB / no
-  messenger.
-- `handlers/settings_handler.py`: `/settings` command scaffold rendering
-  plan status + timezone via i18n keys; uses abstract Messenger payload
-  (text_key + markup), no Telegram coupling.
-- i18n keys for settings screen (vi + en): `settings.title`,
-  `settings.plan.free`, `settings.plan.trial`, `settings.plan.active`,
-  `settings.plan.expired`, `settings.tz.label`, `settings.tz.invalid`.
-- Test coverage: happy-path, retry/idempotency, missing-optional,
-  pathological inputs (SQL-shaped / oversized tz), concurrent updates,
-  and MANDATORY tenant-isolation integration test (testcontainers
-  Postgres, no mock DB).
-
-### Fixed — Autopilot orchestrator v0.2.3 (keyword word-boundary)
-
-- **`CONCURRENCY_KEYWORDS`, `ARCH_KEYWORDS`, `SECURITY_KEYWORDS_SOFT`
-  now use compiled regex with `\b` word boundaries** — mirrors the
-  `SECURITY_KEYWORDS_SEVERE` pattern v0.2.2 R4 already established.
-  Closes the gap that caused F07 phase B halt 2026-05-13: Codex
-  finding "Move serialization inside the guarded block" had `"lock"`
-  substring inside `"block"`, tripping `CONCURRENCY_FINDING` circuit
-  breaker. Same root-cause class as v0.2.2 R2's "rce" in "force"
-  false positive.
-- **`"lock"` keyword uses compound regex
-  `\b(?:dead|live)?lock(?:s|ing|ed)?\b`** — matches
-  `lock`/`locks`/`locking`/`locked`/`deadlock`/`livelock` variants
-  WITHOUT false-matching `block`/`blocker`/`blocking`/`padlock`/
-  `lockstep`/`wedlock`. The `"lock"` substring is unusually
-  false-positive-prone because so many unrelated English compounds
-  contain it.
-- **`Finding.matches_keywords` signature changed.** New type:
-  `tuple[re.Pattern[str], ...]` (compiled regex). Existing call sites
-  (`circuit_breaker.evaluate`) pass the module-level keyword tuples
-  directly — no callsite changes needed. The public
-  `SECURITY_KEYWORDS = SECURITY_KEYWORDS_SEVERE + SECURITY_KEYWORDS_SOFT`
-  alias remains a tuple, now of compiled patterns.
-- **Morphology-friendly ARCH keywords:** `refactor` and `redesign` use
-  a non-capturing suffix group so `"refactoring"` / `"redesigned"` /
-  etc. still match (preserves substring-era behaviour those words
-  relied on; their false-positive risk is negligible compared to
-  short tokens like `"lock"`).
-
-### Notes — v0.2.4 backlog (cumulative deferrals)
-
-- R6 P2 halt-message label diagnostic (cosmetic — `MAX_ROUNDS` halt
-  message always cites `confirmation_rounds_after_last_fix` even when
-  the legacy gate fired).
-- Budget-semantics knob split: explicit `max_fix_rounds` +
-  `confirmation_rounds_after_last_fix` (currently overloaded onto
-  `max_review_rounds`).
-- Halt-report directory writes clobber on rerun — mirror codex
-  artifact `-resume{N}` naming.
-- Codex CLI stale-blob true fix (pin explicit SHA in `codex review`
-  invocation, verify resolved blob).
-- `.autopilot/locks/<repo-hash>.lock` advisory file lock for
-  concurrent-session safety (currently doc-only policy).
-- Dashboard auto-rebuild scheduler races with founder pushes —
-  observed during v0.2.2 and v0.2.3 ship cycles (push rejected;
-  founder rebases manually).
-
-### Fixed — Autopilot orchestrator v0.2.2 (tooling hardening)
-
-- **`max_review_rounds` default raised 3 → 5; new
-  `confirmation_rounds_after_last_fix=2` knob.** F07 + v0.2.1 pilots
-  showed the math `max=3 + clean=2 consecutive` cannot ship when
-  adjacent micro-findings cascade (each fix grows the diff, Codex's
-  next pass surfaces a new nit in the new code). New logic requires N
-  clean rounds AFTER the last fix commit, decoupled from total budget.
-  If no fix is ever applied, the legacy `required_clean_rounds_before_merge`
-  gate still applies.
-- **`SECURITY_FINDING` keyword tiering.** Severe keywords (`auth bypass`,
-  `injection`, `csrf`, `xss`, `ssrf`, `rce`, `timing attack`,
-  `constant-time`, `*-leak`) auto-HALT regardless of severity. Soft
-  keywords (`token`, `secret`, `hmac`, `auth`, `password`, `credential`,
-  `security`) now require P0/P1 severity to escalate. Stops benign
-  Markdown-rendering findings that mention "token" from auto-tripping
-  the security circuit breaker (F07 v0.2.1 R1 regression).
-- **Resume syncs git checkout to `feature_state.branch`.** `loop.run(resume=True)`
-  now verifies HEAD matches the recorded branch before re-entering Phase
-  C, and `git checkout`s if not. Previously, a founder running `autopilot
-  resume F07` from `main` would have Codex review an empty `main..main`
-  diff. Missing branch → HALT `BRANCH_MISSING` instead of silent failure.
-- **`tracker.update_status` no-op on feature branches.** Orchestrator no
-  longer mutates `docs/implementation-tracker.md` while a feature branch
-  is checked out, eliminating noise commits during Phase C fix flow.
-  Tracker updates are now the founder's post-squash responsibility (or
-  v0.2.3 may centralize via a sidecar `sync-tracker` CLI).
-- **`state.load` tolerates unknown fields.** JSON state files with extra
-  keys load cleanly with a warning, instead of raising `TypeError`.
-  Supports cross-version safety when orchestrator code lags the
-  state-file schema — the v0.2.1 → v0.2.2 transition with
-  `last_active_phase` being the trigger.
-- **Codex artifact non-clobber on resume.** `save_review_artifact` writes
-  to `round-NN-resume{1,2,…}.txt` instead of overwriting `round-NN.txt`.
-  Resume cycles preserve forensics from earlier attempts.
-
-### Added — Autopilot diagnostic + policy
-
-- **Codex stale-blob detection.** `run_review()` logs a warning when
-  Codex output references a SHA that doesn't share the current HEAD's
-  7-char prefix. Operator verifies findings against current state. True
-  fix (Codex CLI integration audit, pin explicit blob) deferred to
-  v0.2.3 backlog.
-- **Concurrency policy doc.** `docs/autopilot/orchestrator-usage.md`
-  now documents the one-session-per-repo rule, the
-  `.git/*.lock` pre-check, the `git update-ref` recovery procedure
-  (validated during v0.2.2 work itself when a parallel session
-  hijacked HEAD mid-commit), and the `git worktree` workaround.
-
-### Notes — v0.2.3 backlog
-
-- Codex CLI stale-blob true fix (pin explicit SHA in `codex review`
-  invocation; verify resolved blob matches input before parsing).
-- Tracker-update sidecar / explicit `python -m tools.autopilot
-  sync-tracker` command (replaces the no-op-on-feature-branch workaround).
-- `.autopilot/locks/<repo-hash>.lock` advisory file lock for
-  concurrent-session safety (orchestrator acquires at preflight, releases
-  at terminal phase). Three concurrency incidents observed during v0.2.2
-  work confirmed the hazard the policy doc describes.
-
-### Known issues — deferred to v0.2.3
-
-- `loop.py` MAX_ROUNDS halt message always cites
-  `confirmation_rounds_after_last_fix` even when the legacy
-  `required_clean_rounds_before_merge` gate was the one that fired.
-  Diagnostic-only (no functional impact); misleads recovery under
-  custom thresholds. Codex v0.2.2 R6 P2.
-- Budget semantics: current logic conflates "max review rounds total"
-  with "max fix rounds + post-fix-confirm rounds". Should be split into
-  explicit `max_fix_rounds` + `confirmation_rounds_after_last_fix`
-  knobs rather than reusing `max_review_rounds`. Surfaced repeatedly
-  across R1-R6 review cascade.
-- Halt-report directory writes are clobber-on-rerun. Each new session
-  overwrites the prior `halt-report.md`, losing cross-session forensic
-  context. Mirror the Codex artifact `-resume{1,2,…}` suffix scheme.
-
-### Fixed — Autopilot orchestrator v0.2.1 (Codex parser + halt forensics)
-
-- **Codex parser early-return.** `codex.parse_findings` no longer requires
-  a `^codex$` marker line. Codex CLI v0.130 in subprocess context sometimes
-  emits only the verdict (~900 bytes, no preamble, no marker); parser now
-  falls back to whole-output parsing. Caught by F07 pilot 2026-05-12 —
-  round 1 verdict carried a real P2 finding that the old parser missed
-  entirely, sending the loop into an empty-fix → `FIX_FAILED` halt.
-- **Halt-report writer.** `loop._halt` now always writes
-  `.autopilot/state/<feature>/halt-report.md` with state snapshot, recent
-  commits, diffstat, and (when available) Codex review + trigger context.
-  Previously only the Codex circuit-breaker path wrote a forensic file;
-  `CODEGEN_FAILED`, `VERIFY_FAIL`, `FIX_FAILED`, `VERIFY_REGRESSION`,
-  `MAX_ROUNDS`, `MERGE_GATE_FAIL` halts all left `halt_artifact_path` null.
-- **Resume from HALTED.** `state.transition` records `last_active_phase`
-  before going `HALTED`. `loop.run(..., resume=True)` re-enters at that
-  phase, clears `halt_reason` / `halt_artifact_path`, and resets Phase-C
-  round counters. Previously resume on `HALTED` state returned a silent
-  no-op ("Already at HALTED — nothing to do"). Legacy state files without
-  `last_active_phase` halt with `RESUME_AMBIGUOUS` so the founder is
-  prompted to edit `state.json` once.
-
-### Added — Autopilot v0.2.1
-
-- `tests/fixtures/codex/` — 4 real Codex CLI outputs captured from F07
-  (Settings) and W0.8 (webhook display_suffix) pilot runs. Cover both
-  observed CLI shapes: with `codex` marker + preamble + diff dump, and
-  without marker (just the verdict). All future parser tests build on
-  this gold-standard set rather than synthetic fixtures.
-- `CLEAN_PHRASES` expanded with one new phrase observed in real outputs:
-  `"did not identify any introduced defects"`. (An earlier draft also
-  added `"appear internally consistent"` — removed during Codex review
-  round 02 as a P1 false-positive risk: a negated form like "do NOT
-  appear internally consistent" would still substring-match.)
-- `PARSER_UNCERTAIN` circuit-breaker code. Fires when `parse_findings`
-  returns `findings=[], clean=False` (no clean phrase matched AND no
-  findings extracted). Defensive net — primary parser fix should make
-  this rarely fire, but if Codex output format drifts again, the loop
-  halts with a meaningful reason instead of empty-fix → `FIX_FAILED`.
-
-### Removed — Autopilot v0.2.1
-
-- `circuit_breaker.write_halt_report` — folded into `loop._halt` /
-  `loop._write_halt_report` so every halt path produces the same forensic
-  artifact (the previous split caused bug #2 above).
-
-### Added — Autopilot orchestrator v0.2.0 (pre-pilot blockers)
-
-- `--auto-merge` opt-in flag on `python -m tools.autopilot run`/`resume`
-  (default OFF). Phase E only invoked when explicitly passed AND spec
-  `risk_tier=P2`. P0/P1 specs refused with exit 4. P2 specs prompt y/N
-  on stdin. Per plan v0.1.6 Blocker #5.
-- Atomic `state.json` write (tmp + POSIX rename) — survives crash
-  mid-save without truncating the prior good state. Plan Blocker #4.
-- Chunked codegen driver — `run_codegen` now drives 4 sequential
-  `claude -p` invocations (plan → skeleton → tests → verify), with
-  context flowing through git commits since the probe confirmed no
-  multi-turn flag exists. Plan Blocker #2 Option A.
-- Claude-CLI fallback commit — orchestrator commits dirty working
-  tree when Claude exits without committing (probe 2026-05-12 showed
-  this is common with `-p`). Per-invocation forensic log persisted to
-  `.autopilot/state/<feature>/<kind>-NN.log`. Plan Blocker #1 + NTH-2.
-- `spec_lint.parse_risk_tier` — reads `risk_tier` from a spec's
-  `autopilot:meta` block; powers the auto-merge gate.
-- Manual-merge ready-report writer — `.autopilot/state/<feature>/
-  ready-report.md` summarizes branch state + suggested squash command
-  + post-merge smoke checklist for the founder.
-
-### Changed
-
-- Default `python -m tools.autopilot run <feature>` behavior: stops at
-  `READY` (no auto-merge). Pass `--auto-merge` explicitly to enable
-  Phase E, allowed only for P2 features per plan §6.5.
-- `pyproject.toml`: `[[tool.mypy.overrides]]` for `tools.autopilot.*`
-  documents the "mypy strict NOT scoped to tools/" stance from plan
-  §1.1; pre-commit mypy hook gains `--config-file=pyproject.toml` so
-  the override applies under the isolated hook env too.
-
-### Documentation
-
-- F07 (Settings) spec migrated to autopilot template format — adds
-  `autopilot:meta`, `autopilot:gaps` (10 gaps closed/deferred against
-  current W0.2 schema), `autopilot:test_plan` (5 categories + tenant
-  isolation). `python -m tools.autopilot lint F07` reports 0 warnings.
-- `docs/operations/orchestrator-usage.md` — new section documenting
-  the `--auto-merge` flag, gate flow, and first-pilot policy.
-- `docs/operations/probes/claude-cli-2026-05-12.md` — Blocker #1
-  probe findings: claude -p behavior, no multi-turn flag, fallback
-  commit pattern required.
-
-### Notes
-
-- Resolves Blockers #1–#5 from
-  [autopilot-implementation-plan.md](docs/operations/autopilot-implementation-plan.md)
-  v0.1.6. F07 first-pilot is unblocked.
-- No production schema or runtime code changed in this batch — purely
-  orchestrator tooling + spec migration. F02/foundation code untouched.
-
-### Phase 1 — Foundation refactor (target: Tuần 1-2)
-
-Pending. Per [BRD-VI v3.1.0](docs/brd-vi.md) Phase 1.
-
-### Added — F-i18n (Wave 1, phase A foundation)
-
-- `i18n/` top-level package per `docs/features/feature-i18n.md` §4 / BE tech §3.1:
-  - `i18n/__init__.py` — `t(locale, key, **kwargs)` helper with fallback chain
-    (target locale → DEFAULT_LOCALE → `[MISSING: key]`) and KeyError-safe
-    `str.format` (missing arg returns raw template, never raises).
-  - `i18n/vi.py` + `i18n/en.py` — seed packs covering all 10 prefixes
-    (`onboard.*`, `cat.*`, `manage.*`, `report.*`, `settings.*`, `upgrade.*`,
-    `payment.*`, `job.*`, `error.*`, `btn.*`) plus `fmt.*` and `lang.*`.
-    Key parity + placeholder parity enforced by tests.
-- `core/locale_svc.py` — channel-agnostic locale auto-detection:
-  - `detect_locale_from_telegram` / `_discord` / `_messenger` (BE tech §3.2).
-  - `CATEGORIES_BY_LOCALE` + `default_categories_for(locale)` — bilingual seed
-    catalog used by onboarding (3 categories × 2 locales).
-  - `fmt_currency(amount, locale)` — VND with `đ` (vi) / `VND` (en) suffix.
-- `.importlinter` — new contract `i18n-is-pure`: top-level `i18n` MUST NOT
-  import from `core` / `markets` / `handlers` (language packs stay data-only).
-- `pyproject.toml` — added `i18n` to `setuptools.packages.find.include` and to
-  `mypy.files` so the new module ships in the wheel + is type-checked strict.
-
-### Changed — F-i18n
-
-- `core/messenger/i18n.py` reduced to a thin compat shim that delegates the
-  legacy `t(key, locale, **params)` signature to the top-level `i18n.t`.
-  Existing call sites (TelegramSender, etc.) keep working unchanged.
-- `tests/unit/test_messenger_i18n.py` + `test_messenger_telegram_mock.py`
-  migrated to the spec's namespaced keys (`onboard.welcome`, `btn.confirm`,
-  `fmt.spent`, …) — old flat keys (`greeting`, `tx_recorded`, `btn_confirm`)
-  retired with the seed pack rewrite.
-
-### Tests — F-i18n
-
-5-category coverage per `docs/operations/wave0-retrospective.md` §4:
-- Happy: vi/en lookups, format args, currency formatting, default categories.
-- Retry/idempotency: detect functions verified idempotent (pure).
-- Missing optional: NULL / empty / whitespace `language_code` → default `vi`;
-  missing format kwargs → raw template; missing key in EN → falls back to VI.
-- Pathological: unknown locale → fallback; unknown key → loud marker;
-  cross-locale placeholder drift detector; non-vi tags (pt/ja/ko/zh/fr/de).
-- Concurrent: N/A — module-level dicts read-only after import; pure stateless
-  functions (documented in test docstrings).
-- Tenant isolation: N/A — phase A introduces zero DB code paths. Will land
-  with F02 cutover when handlers wire `user.locale` through `t()`.
-
-Phase A scope deliberately excludes legacy handler wiring (`handlers/*.py`
-still hardcoded Vietnamese) — that integration lands with F02 per Wave 0
-retro's strangler-fig decision (W0.6 deferred cutover).
-
-### Added — Webhook `display_suffix` (W0.8)
-
-- `webhook_tokens.display_suffix VARCHAR(8)` column (migration 0002).
-  Populated by `mint_token` from `raw_token[-6:]`. Auth path
-  (`resolve_token`) unchanged — suffix is cosmetic-only. Unblocks F07
-  webhook URL display rule (G3 closed, option b).
-- `get_display_suffix(user_id, kind)` read helper in
-  `markets/vn/capture/webhook_tokens.py` for F07 to consume.
-
-### Notes
-
-- Legacy rows (predating migration 0002) have `display_suffix = NULL`;
-  F07 displays without suffix for those — accepted UX trade-off.
-- VARCHAR(8) over CHAR(6) for future-proofing; only 6 chars used today.
-
----
-
-## 2026-05-11 — F01 W0.6: Plugin parsers + SePay webhook + Sheets-migration scaffold (Wave 0)
-
-### Scope decision (read first)
-
-The autopilot spec for W0.6 called for the *full* legacy `handlers/*` move + `sheets.py` deletion in one PR. In practice each handler (`transaction.py`, `manage.py`, `reports.py`, `allocation.py`) is a single-tenant rewrite that warrants its own PR with full multi-tenant test coverage — collapsing them into W0.6 would have produced one PR with 1000+ lines of behaviour change and made review impossible.
-
-**This PR ships the foundational invariants W0.6 needed to lock in (Gap 2, Gap 3, Gap 5, parser-purity contract) and explicitly defers the rest of the legacy handler move to F02 (Wave 2)** where each handler gets its own focused refactor + isolation tests. Legacy `handlers/` + `sheets.py` remain in place (already excluded from `ruff`/`black`/`mypy` strict checks via `pyproject.toml` extend-exclude). The `import-linter` `parsers-are-pure` contract is in force now, so new code can't drift even while legacy lingers.
-
-### Added — plugin parser pattern (Gap 2)
-- `core/canonical_tx.py` — `CanonicalTx` dataclass that every transaction-capture path emits (VN webhook, VN email parsers, future Global Plaid adapters). Frozen + `__post_init__` validation (positive amount, valid direction, non-empty source/bank).
-- `markets/vn/email_parsers/base.py` — `BankEmailParser` ABC + `InboundEmail` envelope + module-level `PARSERS` registry + `@register_parser('BANK')` decorator + `find_parser(email)` dispatcher (skips broken parsers, doesn't crash).
-- `markets/vn/email_parsers/{tcb,mb,acb,sacombank,bidv,cake}.py` — six parser shells. Each implements `can_parse` (sender/subject heuristic) + `parse` (CanonicalTx extraction). F02 will fill the full HTML-table extraction logic; the contract is locked in here.
-- `markets/vn/email_parsers/__init__.py` — auto-imports every parser module (explicit `_AUTO_IMPORT_MODULES` list, not globbing — deterministic registration order).
-- `.importlinter` — new contract `parsers-are-pure`: `markets.vn.email_parsers MUST NOT import core.db / core.messenger`. Enforced statically + a grep-level test (`test_parser_modules_dont_import_db_or_messenger`) belts-and-braces against bypass via lazy imports.
-- `tests/integration/test_email_parser_plugins.py` — 18 tests: registration set (6 banks), parametrised can_parse/reject-foreign/parse-CanonicalTx per bank, find_parser dispatch, grep-level purity check, register_parser empty-bank ValueError, BaseParser inheritance, idempotent re-import.
-
-### Added — webhook tokens (Gap 3)
-- `markets/vn/capture/webhook_tokens.py`:
-  - `hash_token(raw)` — SHA-256 hex digest. Rejects empty raw.
-  - `mint_token(user_id, kind)` — generates a fresh `secrets.token_urlsafe(24)` token, persists ONLY its hash via `INSERT … ON CONFLICT (user_id, kind) DO UPDATE SET token_hash = EXCLUDED.token_hash, revoked_at = NULL, created_at = NOW()`. Re-minting revokes the prior token by overwriting its hash. Returns the raw token to the caller exactly once.
-  - `resolve_token(raw, kind)` — looks up by `token_hash` UNIQUE index (O(log n) regardless of input) + `hmac.compare_digest` belt-and-braces. Returns `user_id | None`. No info leak — same return shape for bad/wrong-kind/revoked.
-- `markets/vn/capture/sepay_webhook.py`:
-  - `handle_sepay_webhook(token, payload)` — main entry. Resolves user via hashed token, parses SePay JSON → `CanonicalTx`, persists with `ON CONFLICT (user_id, ref_code) DO NOTHING` (idempotent retries), sets `tenant_context.set_tenant(user_id)` so downstream logs/Sentry tag correctly. **Always returns `{"ok": True}` regardless of failure** — bad tokens / bad payloads are logged silently, no info leak about token validity.
-- `tests/integration/test_sepay_webhook.py` — 11 tests: hash determinism + empty rejection, mint/resolve roundtrip, unknown-token → None, wrong-kind → None, re-mint revokes old, webhook persists tx scoped to user, silent 200 on bad token (no insert), silent 200 on bad payload, tenant_context set after success, `ref_code` UNIQUE-driven dedupe (replays don't double-insert).
-
-### Added — founder seed scaffold (Gap 5)
-- `scripts/__init__.py`, `scripts/migrate_sheets.py` — one-time Sheets → Postgres migration runner with:
-  - Strict ordering: users → categories → funding_sources (from col P) → transactions → audit. Order is FK-driven; deviating breaks inserts.
-  - Founder seed: user_id=1, role='founder'. README + module docstring document the **bootstrap-only** rule — runtime MUST NOT hardcode `if user_id == 1`; admin checks use `users.role IN ('founder','admin')`.
-  - Pre-flight `_assert_schema_ready()` — verifies alembic head before touching data.
-  - Verification: orphan-row checks for transactions + categories (more added when Sheets reads land in Wave 1).
-  - CLI: `--database-url` required, `--apply` to actually insert (otherwise dry-run prints plan only).
-  - W0.6 ships dry-run only; the `_step_*` functions raise `NotImplementedError("…implement in Wave 1")` so the founder can't accidentally fire a real migration before the Sheets-read code is in.
-- `tests/scripts/__init__.py`, `tests/scripts/test_migrate_sheets.py` — 5 tests (4 passing + 1 skipped destructive variant): dry-run returns zero summary, `_assert_schema_ready` passes on head, `_verify` passes when clean, `_verify` fails on injected orphan tx.
-
-### Changed
-- `README.md` — added "Founder seed — bootstrap only" subsection under Migration making the role-not-id rule prominent for any future code reader.
-
-### Deferred (NOT in this PR — flagged for founder)
-- **Legacy `handlers/` move + `sheets.py` deletion** — moved to F02 (Wave 2 — handlers refactor). Each of `handlers/{transaction,manage,reports,allocation,sepay,email_parser}.py` will become a focused multi-tenant PR there. SePay capture moved here (`markets/vn/capture/sepay_webhook.py`) because Gap 3 demanded the wiring; the rest stay until their feature wave.
-- **`telegram_api.py` merge into `core/messenger/telegram.py`** — same reason. The TelegramSender adapter from W0.4 supersedes `telegram_api.py`; the old module isn't imported by new code. Removal is one-line once handlers no longer reference it.
-- **Full TCB/MB email-body extraction** — parsers ship can_parse + amount/direction heuristics only; full HTML-table extraction lands in F02 alongside the email-receiver service.
-- **Real Sheets reads in `migrate_sheets.py`** — W0.6 ships the orchestration + verification skeleton + safety rails (`NotImplementedError` in `_step_*`). Wave 1 implements `_step_users` / `_step_categories` / etc.
-
-### Verified locally
-- `ruff` / `black --check` / `mypy --strict`: all green (50 source files, including `scripts/`).
-- `lint-imports`: **4 contracts kept, 0 broken** (new `parsers-are-pure` joins the 3 ADR-0001 contracts).
-- `pytest -v`: **112 passed, 1 skipped in 7.03s**. New tests: 18 parser plugin + 11 SePay webhook + 5 migrate_sheets (4 + 1 skipped destructive variant deferred to unit-level mock — destructive schema mutation would race with other tests in the shared container).
-
-### Next PR
-- **None — W0.6 closes Wave 0.** Wave 1 begins with payment-matching layer per `feature-payment.md` + `feature-onboarding.md`. F02 (Wave 2) starts the handler-by-handler multi-tenant refactor.
-
----
-
-## 2026-05-11 — F01 W0.5: Logging + Sentry + health (Wave 0)
-
-### Added
-- `core/logging.py` — structlog config:
-  - `configure_logging(env)` wires processors: `merge_contextvars` → stdlib log level → ISO UTC timestamp → `_bind_tenant` (injects `user_id` + `request_id` from `core.tenant_context`) → stack/exc formatters → JSON (prod/staging) OR `dev.ConsoleRenderer` (dev).
-  - `get_logger(name, **initial)` returns a `BoundLogger` with optional bound fields.
-  - `render_event_for_test()` helper so tests assert tenant-binding without spinning a real logger.
-  - Idempotent — safe to call from multiple startup paths.
-- `core/observability.py` — Sentry + health + request ID:
-  - `init_sentry(dsn, environment, release, traces_sample_rate)` — no-op when DSN empty (local dev runs without Sentry project). `before_send` hook tags every event with `user_id` / `request_id` from tenant context AND fills `user.id`. `StarletteIntegration` + `FastApiIntegration` enabled.
-  - `health_app: FastAPI` sub-app:
-    - `GET /health` → always `200 {"status":"ok"}` (liveness; never blocks on deps).
-    - `GET /health/detailed` → checks DB pool via `SELECT 1`. Returns `200` + `status: ok` when pool healthy, `503` + `status: degraded` when pool uninitialised or DB query fails. Always includes `build` info (`version`, `commit` from env).
-  - `request_id_middleware`: stamps `X-Request-ID` UUID4 hex per request, propagates into `tenant_context._request_id` (via ContextVar set/reset for proper async-task scoping), echoes the same value back as response header. Honours inbound `X-Request-ID` for client→server correlation.
-- `tests/unit/test_logging.py` — 5 tests: tenant fields injected when set, omitted when unset, caller bind wins via `setdefault`, `configure_logging` idempotent, `get_logger` returns non-None bound logger.
-- `tests/unit/test_sentry.py` — 4 tests: `before_send` populates tags + user; no-op when tenant unset; `init_sentry` returns False with no DSN; returns True with DSN-shaped string.
-- `tests/integration/test_health.py` — 5 tests via in-process ASGI client:
-  - liveness always 200
-  - detailed → 503 when pool uninitialised, with `pool-not-initialised` error key
-  - detailed → 200 + `status: ok` + non-None `pool_size` + correct `build.service` when DB up
-  - request_id middleware generates UUID4 hex
-  - request_id middleware honours client-supplied X-Request-ID
-
-### Changed
-- `requirements.txt` — added `structlog==24.4.0`, `sentry-sdk[fastapi]==2.18.0`, `jinja2==3.1.4` (the last needed by sentry-sdk's `StarletteIntegration.patch_templates()` at import time even though we don't use Jinja directly).
-
-### Verified locally
-- `ruff` / `black --check` / `mypy --strict`: all green (32 source files).
-- `lint-imports`: 3 contracts kept, 0 broken. New `core/logging.py` + `core/observability.py` stay inside `core/`.
-- `pytest -v`: **72 passed in 5.62s** (W0.1–4 carried over + 5 logging + 4 sentry + 5 health).
-
-### Notes
-- We use `setdefault` semantics in `_bind_tenant` and `_sentry_before_send` so callers that already bound `user_id` (e.g. background jobs running impersonated) keep their value.
-- `traces_sample_rate` defaults to 0.0 — performance tracing off until we have a Sentry project + ROI estimate.
-- The single `# type: ignore[arg-type]` on `sentry_sdk.init(before_send=...)` is the only one in `core/` — sentry-sdk types its callback against an internal `Event` TypedDict; the runtime contract is a plain dict.
-
-### Next PR
-- W0.6 — Legacy code move. Migrate `handlers/*` → `core/handlers/*` + `markets/vn/`. Refactor email_parser to plugin (Gap 2). Wire SePay handler to webhook_tokens lookup (Gap 3). Migrate founder sheet data → Postgres (Gap 5). Delete `sheets.py`.
-
----
-
-## 2026-05-11 — F01 W0.4: Messenger adapter interface (Wave 0)
-
-### Added
-- `core/messenger/base.py` — Adapter contract (Gap 4 schema verbatim):
-  - `SendPayload(TypedDict, total=False)` with `text_key` / `text_params` / `text` / `locale` / `markup` / `parse_mode`.
-  - `Button` dataclass — `__post_init__` enforces label_key XOR label AND callback_data XOR url.
-  - `Markup` dataclass — `rows: list[list[Button]]`. Platform-agnostic.
-  - `BaseSender` ABC — `send_validated()` wraps `send()` with `_validate_payload()` so contract violations raise `ValueError` *before* any platform API call.
-  - `register_sender(channel_type)` decorator + `senders_for(channel_type)` lookup. Idempotent on re-registration (tests can monkeypatch).
-  - `_validate_payload()` enforces exactly-one-of `text_key`/`text`, valid `parse_mode`, and `markup` is `Markup` (rejects platform-specific structures sneaking through).
-- `core/messenger/i18n.py` — Minimal `t(key, locale, **params)` stub. Loads `core/messenger/locales/{vi,en}.json` lazily, caches per locale. Unknown key → `??key??` (loud, not silent); unknown locale → falls back to `vi` (default market). `reset_cache()` for tests.
-- `core/messenger/locales/{vi,en}.json` — minimal strings: `greeting`, `tx_recorded`, `btn_confirm`/`btn_cancel`/`btn_pick_category`, `error_generic`. Enough to exercise format-string params + button labels in tests.
-- `core/messenger/telegram.py` — `TelegramSender(BaseSender)` impl:
-  - httpx `AsyncClient` injected (tests pass a mock; production gets a default with `timeout=10s`).
-  - `_resolve_chat_id` reads `users.chat_id` (falls back to legacy `users.telegram_id` for users seeded before multi-channel).
-  - `_markup_to_telegram` converts abstract `Markup` → `{"inline_keyboard": [[{text, callback_data|url}]]}`.
-  - `parse_mode` mapping: `markdown` → `MarkdownV2`, `html` → `HTML`, `plain` → omit field.
-  - Raises `RuntimeError` on Telegram `ok: false` response so Sentry catches it; `raise_for_status()` covers transport errors.
-  - `@register_sender("telegram")` factory reads `TELEGRAM_BOT_TOKEN` env.
-- `core/messenger/send.py` — Top-level `send(user_id, payload)` entry: resolves the user's `channel_type` via the DB, looks up the registered factory, awaits adapter `send_validated()`. Supports sync or async factories.
-- `core/messenger/__init__.py` — Public API + side-effect import of `telegram` so `senders_for("telegram")` finds a factory without callers having to import the adapter module.
-- `tests/unit/test_messenger_payload.py` — 9 tests covering every `Button`/`Markup`/`SendPayload` validation branch.
-- `tests/unit/test_messenger_i18n.py` — 5 tests: vi/en lookup, unknown-locale fallback, unknown-key loud marker, no-params template passthrough.
-- `tests/unit/test_messenger_telegram_mock.py` — 6 tests with httpx + `_resolve_chat_id` mocked: text_key resolves through i18n, abstract Markup → inline_keyboard, parse_mode mapping, `ok: false` raises, validation runs before any API call (assert `client.post.assert_not_awaited()`), empty bot_token rejected.
-- `tests/contract/test_messenger_contract.py` — 5 parametrised tests over `ADAPTERS = [("telegram", TelegramSender)]`. When W6 adds Discord/Messenger, those rows extend the parametrisation and inherit the same contract checks.
-
-### Changed
-- `pyproject.toml` — `[tool.ruff.lint.per-file-ignores]` for `tests/**/*.py` now also ignores `S106` ("hardcoded password"), since test code legitimately passes literal fake `bot_token="TEST_TOKEN"` values.
-
-### Verified locally
-- `ruff` / `black --check` / `mypy --strict`: all green (27 source files).
-- `lint-imports`: 3 contracts kept, 0 broken. `core/messenger/` is fully self-contained inside `core/` — no `markets/` imports.
-- `pytest -v`: **58 passed in 5.51s** (W0.1 + W0.2 + W0.3 + 6 + 5 + 9 + 5 unit + i18n + payload tests + 5 contract tests).
-
-### Notes
-- TelegramSender's chat_id lookup depends on W0.3's `core/db` pool — chains nicely now that the pool ships with W0.3.
-- i18n is a stub; W3+ will likely switch to ICU or gettext when we tier locale resources properly. Loud `??key??` markers make missing strings obvious in dev/staging.
-- Adapter registry is intentionally module-global (no DI container). Solo founder; simpler is faster.
-- Gap 4 decision is now load-bearing: every handler in W0.6 emits `SendPayload`, not raw Telegram dicts.
-
-### Next PR
-- W0.5 — Logging (structlog + tenant binding), Sentry init, /health endpoints, request_id middleware.
-
----
-
-## 2026-05-11 — F01 W0.3: DB pool + tenant context (Wave 0)
-
-### Added
-- `core/db.py` — Global asyncpg pool singleton: `create_pool(dsn)` / `get_pool()` / `close_pool()`. Defaults `min_size=2`, `max_size=10`, `command_timeout=30s`, `statement_cache_size=100`. `create_pool` rejects double-init (config-race detector); `get_pool` raises if uninitialised (never auto-creates); `close_pool` is idempotent.
-- `core/tenant_context.py` — Per-request tenant context via `ContextVar` (asyncio-task-safe, propagates across `await` boundaries). API: `set_tenant(user_id, request_id=None) -> request_id`, `get_user_id()` (raises `LookupError` if unset — fail loud), `get_user_id_or_none()` (for logging/health only — NEVER in tenant-scoped queries), `get_request_id()`, `clear_tenant()`. Hard-rejects `user_id <= 0`. UUID4 hex auto-generated when request_id omitted.
-- `tests/integration/test_db_pool.py` — 5 tests: create/get/close roundtrip, double-init raises, close-idempotent, get-without-init raises, **15 concurrent queries against max_size=10 pool queue without crashing** (proves asyncpg's built-in queueing — no app-level semaphore needed).
-- `tests/integration/test_tenant_isolation.py` — 7 tests including the **THE mandatory** 2-user isolation rule that subsequent feature waves lean on:
-  - `test_user_a_query_returns_only_user_a_rows` — user-scoped SELECT returns only A's rows, validated with `assert_tenant_isolated()`.
-  - `test_user_b_query_returns_only_user_b_rows` — mirror with B.
-  - `test_tenant_context_isolation_under_concurrent_tasks` — three `asyncio.gather`ed tasks with different tenants don't cross-contaminate (ContextVar correctness proof).
-  - `test_delete_user_cascades_transactions` — schema sanity (ON DELETE CASCADE).
-  - `test_get_user_id_raises_when_unset`, `test_set_tenant_returns_request_id_and_generates_uuid`, `test_set_tenant_rejects_invalid_user_id` — API contracts.
+## Audit 2026-08-25 round 2 — Zalo flow-integrity parity + UX (unreleased)
+
+Full repo re-audit focused on UX. Zalo now has the same "never lose a
+transaction, never clobber the user's typing" guarantees Telegram got in
+round 1, plus several dead-ends removed. See `audit-2026-08-25-round2.md`.
+
+### Zalo flow integrity (parity with round 1's Telegram fixes)
+- **Durable pending queue** (`handlers/zalo_queue.py`, state key
+  `zalopq:<chat>`): a webhook arriving while the Zalo user is mid-flow
+  (manage/allocate/keywords/cashback/wizard/...) no longer overwrites their
+  state — the tx is parked and a notice points at the new Zalo **/pending**
+  command. Running a command over an active numbered picker parks the
+  picker's transactions too (Zalo picker numbers die with their state —
+  unlike Telegram inline buttons). `/cancel`, `/start`, finalize summaries
+  all surface the parked count.
+- **/recat parity**: no-arg `/recat` now shows the 8-most-recent numbered
+  picker on Zalo; transfer/cc_payment rows are refused (2-leg ledger
+  protection — recategorizing them corrupted balances); cross-month recat
+  uses the transaction's OWN month for buckets + summary (was "now").
+- The unknown-MCC cashback learn picker no longer clobbers a busy Zalo
+  state (skipped with a log; the Telegram picker still asks).
+- Zalo rule-edit prompts were sending the raw i18n key (`cb.rf_name`) —
+  now translated.
+- Zalo daily summaries localize naive timestamps (evening tx no longer
+  shifts +7h onto the wrong day) and use proper Vietnamese diacritics.
+
+### Daily cap editable in-chat (dead-end fixed)
+- `/today` said "dùng /manage để bật cap" but /manage had no such option —
+  the cap was only editable by hand in the sheet. Now: Telegram `/manage` →
+  Daily Spending → **⏰ Daily cap** button; Zalo `/manage` → bucket menu
+  option **5**. `0` turns the cap off. i18n'd (vi+en).
+
+### Other UX
+- `/help`, `/start` moved to i18n — the command list now follows `/lang`.
+- Zalo `/help` added (alias of /start); Zalo command list completed
+  (+/cashback, /pending, /lang, money-shorthand tip).
+- `ac.unmapped` i18n string rendered a literal `\n\n` in chat — fixed, and
+  the onboarding prompt now actually uses the i18n string.
+- Stale-tx guard windows configurable: `TX_MAX_AGE_MINUTES` (default 10) /
+  `EMAIL_TX_MAX_AGE_MINUTES` (default 1440) — raise if the bot can be down
+  longer than 10' (late SePay retries were silently skipped).
+
+### Docs
+- README (EN+VI): features/roadmap/project-layout caught up with reality
+  (cashback, email ingestion, Zalo, i18n, multi-currency — all shipped but
+  still listed as "deferred"); test badge un-staled.
+- `crontab.txt`: documents that **daily-recap has no schedule anywhere**
+  (endpoint + GH-Actions manual dispatch exist) + a ready-to-enable entry.
+
+### Tests
+- +26 tests: `test_zalo_pending_queue.py`, `test_zalo_recat_parity.py`,
+  `test_manage_daily_cap.py`, `test_i18n_and_prompts.py` (incl. vi/en key
+  parity + no-literal-`\n` guards).
+
+## Audit 2026-08-25 — security hardening + input UX (unreleased)
+
+Full repo audit (code + docs). All findings implemented; suite green.
+
+### Security (all opt-in via env — existing deploys unaffected until enabled)
+- **Telegram webhook auth**: `/webhook` now validates the
+  `X-Telegram-Bot-Api-Secret-Token` header when `TELEGRAM_WEBHOOK_SECRET` is
+  set (re-register the webhook with the same `secret_token`). Previously ANY
+  POST with an `update_id` was processed.
+- **Owner-only dispatch**: `_handle_message` / `_handle_callback` now reject
+  chats other than `CHAT_ID` (previously unchecked — a forged update could
+  drive `/manage`, `/allocate`, ... against the owner's data).
+- **Callback validation**: callback_query shape + prefix allowlist +
+  min-part checks before dispatch (`_validate_callback`).
+- **Cron auth**: `/trigger/*` endpoints require `?secret=<CRON_SECRET>` when
+  `CRON_SECRET` is set (crontab.txt updated). Startup logs a warning listing
+  any unset secrets.
+- **Config fail-fast**: missing `BOT_TOKEN`/`CHAT_ID`/`SHEET_ID` now exits
+  with a clear message instead of a KeyError traceback.
+- Removed a per-request debug print of full transaction rows (PII) from
+  `get_daily_status`.
+
+### Input UX — money shorthand + no more silent mis-reads
+- New `utils.parse_money` used by EVERY amount input (TG + Zalo): understands
+  `500k`, `3tr`, `3tr5`, `1m2`, `2 triệu`, `1 tỷ` alongside `3.000.000` /
+  `3,000,000` / decimals. Previously "500k" was digit-stripped to **500đ**.
+- Budget inputs (`/allocate`, `/manage`, Zalo menus, cashback cap) now REJECT
+  garbage — "abc" used to silently become 0đ and flip a bucket to
+  tracking-only. Fixed the accounts wizard rejecting dotted amounts
+  ("30.000.000" was unparseable in the credit-limit step).
+
+### Flow integrity
+- **pending_tx_queue (Telegram)**: a webhook arriving while the user is
+  mid-typing (keyword, rename, budget, wizard, cashback config) no longer
+  clobbers their state — the tx is queued; new `/pending` command drains it.
+  Queue survives command-clears, `/cancel`, recat, and skip.
+- **Auto-categorize no longer touches BOT_STATE** (`_finalize(tx_info=...)`)
+  — it used to overwrite whatever the user was doing.
+- **/recat**: no-arg mode shows the 8 most recent tx as buttons; row mode kept.
+  Cross-month recat now uses the transaction's own month (was "now"), and
+  transfer/cc_payment rows are refused (recategorizing them corrupted the
+  2-leg ledger). `_finalize` parses dd/mm/yyyy sheet dates tolerantly.
+- `/help` + `/start` commands added (previously "unknown command");
+  setMyCommands list completed; unknown-command reply points at /help.
+
+### Docs
+- README (EN+VI): full command table (+`/cashback`, `/transfer`, `/cc`,
+  `/recat`, `/pending`, `/lang`, `/help`), shorthand note, security section
+  rewritten with the 4-secret table. `.env.example` + `crontab.txt` document
+  the new secrets.
+
+## Cashback read-efficiency (429 fix) (unreleased)
+
+Fixes the 2026-06-09 Sheets 429 incident ('Read requests per minute per user')
+on `/cashback seed cake` and per-tx cashback. Same cashback output, far fewer reads.
 
 ### Fixed
-- `tests/conftest.py` `pg_url_async` — was returning `postgresql+asyncpg://...` (SQLAlchemy-style), but raw `asyncpg.create_pool()` rejects that scheme with `ClientConfigurationError`. Now returns the bare `postgresql://` DSN (asyncpg-compatible). Documented that SQLAlchemy async engines (when added) need the prefixed scheme; this fixture serves raw-asyncpg callers.
-
-### Verified locally
-- `ruff` / `black --check` / `mypy --strict`: all green (15 source files).
-- `lint-imports`: 3 contracts kept, `core/db.py` + `core/tenant_context.py` cleanly stay inside `core/` (no markets imports).
-- `pytest -v`: **32 passed in 5.79s** — 4 boundary + 16 migrations + 5 db_pool + 7 tenant_isolation.
-
-### Notes
-- Pool sizing tuned for the Wave 1-2 traffic envelope (single-region, low-RPS bot). Will revisit when adding read-replicas in W3+.
-- `tenant_context.set_tenant()` returns the resolved request_id so callers can log it without a second `get_request_id()` round-trip.
-- The 15-concurrent-query exhaustion test deliberately doesn't pass `timeout=...` to `pool.acquire()` — asyncpg's FIFO queue is what we depend on, not custom timeouts.
-
-### Next PR
-- W0.4 — Messenger adapter (`core/messenger/`): `BaseSender` ABC + `SendPayload` (Gap 4 verbatim) + `TelegramSender` impl + i18n stub + adapter contract tests.
-
----
-
-## 2026-05-11 — F01 W0.2: Migration framework + initial schema (Wave 0)
-
-### Added
-- `alembic.ini` + `migrations/env.py` + `migrations/script.py.mako` — Alembic harness. `DATABASE_URL` env var resolves connection URL at runtime; asyncpg/psycopg URL normalised so the same migrations run against testcontainers Postgres in CI and the real Railway Postgres. No SQLAlchemy models — raw DDL via `op.execute`, schema is source of truth.
-- `migrations/versions/0001_initial_schema.py` — 11 tables per TDD §2.1: `users`, `bank_connections`, `categories`, `funding_sources` (F08 / Gap 1), `transactions` (with `funding_source_id INTEGER NULL REFERENCES funding_sources(id) ON DELETE SET NULL` per Gap 1), `webhook_tokens` (Gap 3 — dedicated hashed-token table, replaces `users.webhook_token` column), `bot_state`, `scheduled_jobs`, `monthly_reports`, `admin_audit_log`, `analytics_events`. `users.role` column with CHECK (`user`/`founder`/`admin`) added for Gap 5 founder seed. Indexes per TDD §2.1.
-- `tests/conftest.py` — session-scoped `pg_container` (testcontainers Postgres 16-alpine) + `pg_url` / `pg_url_async` DSN fixtures + `migrated_db` (auto `alembic upgrade head`) + `assert_tenant_isolated()` helper. `_has_docker()` skip-guard so non-Docker dev envs don't break collection.
-- `tests/integration/test_migrations.py` — 5 tests + parametrised `test_each_table_queryable` (one per expected table = 11 cases): upgrade-creates-tables, FK shape check on `transactions.funding_source_id`, `webhook_tokens` shape (token_hash + kind CHECK), full `downgrade base` roundtrip, INSERT/SELECT smoke. **All 20 tests pass locally** (14.98s including container spin).
-- `requirements.txt` — runtime deps: `asyncpg==0.30.0`, `sqlalchemy[asyncio]==2.0.36`.
-- `pyproject.toml` `[project.optional-dependencies.dev]` — `alembic>=1.13`, `testcontainers>=4.7` (postgres module ships in base since 4.x, no extra needed), `asyncpg`, `sqlalchemy[asyncio]`, `psycopg[binary]>=3.2`.
-
-### Gap decisions applied (locked, no founder re-ask)
-- **Gap 1** — `funding_sources` table shell created in 0001 + `transactions.funding_source_id` FK nullable. F08 ON-DELETE logic ships in Wave 2; W0.2 only schema.
-- **Gap 3** — Webhook tokens live in dedicated `webhook_tokens` table with `token_hash TEXT UNIQUE` (SHA256 hex). Raw token never stored. `users.webhook_token` column NOT created — replaced by this table.
-- **Gap 5** — Added `users.role` enum (`user`/`founder`/`admin`) so founder seed (user_id=1, role='founder') has a column to populate in W0.6's data migration. Bootstrap-only — runtime MUST NOT hardcode `if user_id == 1`.
-
-### Verified locally
-- `ruff check core/ markets/ tests/ migrations/`: All checks passed (S608 false positive fixed by switching to `psycopg.sql.Identifier`).
-- `black --check`: 11 files unchanged.
-- `mypy --strict`: Success, 11 source files.
-- `lint-imports`: 3 contracts kept, 0 broken.
-- `pytest -v`: 20 passed in 14.98s (alembic upgrade/downgrade roundtrip + schema shape + INSERT/SELECT + parametrised table-exists per all 11 tables + 4 boundary tests from W0.1 carried over).
+- **recompute_cashback_for_tx** now reads the Transactions tab + Cashback Ledger
+  **once each** and rebuilds the whole statement cycle **in memory** (running
+  mcc-used / daily-count / eligible-spend, then batch void + batch append) —
+  was O(N) per-row ledger reads (~4×N) that burst to hundreds at end-of-cycle.
+  Semantics unchanged (cycle-wide, chronological, RLock-serialized); ledger
+  output is byte-identical (parity-tested). Forces a fresh tx read so a
+  just-appended/updated tx is never missed.
+- **seed_cake_card** now batches: new bulk helpers `add_cashback_rules_bulk` /
+  `add_mcc_maps_bulk` read each tab **once** and batch-write (was add_* per item
+  → ~28 reads → 429). Output rows identical to the canonical `add_*`; idempotent;
+  bulk rule helper dedupes duplicate ids within a batch. Tiers seeded in one write.
 
 ### Notes
-- W0.2 is the foundation for W0.3 (DB pool) and W0.6 (data migration). W0.3 will branch from this PR head.
-- `sub_categories`, `pending_payments`, `payment_matches`, `unmatched_payments` from TDD §2.1 deferred — those tables come in their respective feature waves (F02, F-payment).
-- 11 tables created vs. autopilot spec's "10" — discrepancy in spec wording (it listed 11 names). Going with the explicit list.
+- `add_cashback_rule` / `add_mcc_map` signatures unchanged (`/cashback add`, `mcc`
+  still use them); bulk = additive new functions.
+- `compute_and_record_cashback` (single-tx) unchanged — still the recompute fallback.
+- New `tests/unit/test_cashback_readcount.py` pins ledger/seed reads to O(1) +
+  asserts cross-day parity.
 
-### Next PR
-- W0.3 — DB access layer (`core/db.py` asyncpg pool) + `core/tenant_context.py` (ContextVar-based) + 2-user tenant isolation integration test (THE mandatory rule).
+## Cashback Phase B — live integration (webhook + /cashback + recat + /report) (unreleased)
 
----
+Wires the Phase A cashback foundation into the live transaction flow + adds the
+`/cashback` management command. Telegram + Zalo. Builds on Phase A (merged).
 
-## 2026-05-11 — F01 W0.1: Repo skeleton + lint boundary (Wave 0)
+### Added / Changed
+- **Phase 1 (harden):** `recompute_cashback_for_tx` now rebuilds the whole
+  **statement cycle** in timestamp order (was same-day), under a reentrant
+  `tx_write_lock` (RLock) so concurrent webhooks for a cycle can't interleave.
+  Absorbs the Phase A "out-of-order arrivals" + "cross-day MCC-cap" deferrals.
+- **handlers/sepay.py** — webhook hook on the outgoing/credit path (before the
+  auto-categorize branch): `recompute_cashback_for_tx` → FR-2.5/2.7 notice +
+  FR-2.6 gate-activation notice. try/except, never blocks the tx write.
+- **sheets.py** — `backfill_account_id_by_source_key` recomputes cashback for a
+  newly-onboarded credit card's cycles (incl. the already-stamped trigger row).
+- **handlers/cashback.py (NEW)** — `/cashback`: card menu, `seed cake`
+  (BRD §4.4: 5 rules + tiers + config + MCC patterns; credit-validated),
+  recompute (accepts short `2026-06` or full cycle id), Config/MCC/Add-rule
+  wizards. Telegram inline; Zalo numbered-text (seed + recompute; advanced
+  config is Telegram-only — see Residuals).
+- **handlers/transaction.py** — recat: `void_cashback_for_tx` on reset +
+  `recompute_cashback_for_tx` on finalize (state-flag gated). Mirrored in the
+  Telegram + Zalo `/recat <row>` command paths (main.py).
+- **handlers/report.py** — `render_cashback_section(period)` appended to BOTH
+  lenses (category + account), on Telegram **and** Zalo. Hidden when no credit
+  card has cashback configured. Rate now inherits card config (blank rule rate).
+- **main.py** — `/cashback` command + `cb_*` callbacks + text-steps, Telegram & Zalo.
+- **tests** — `test_cashback_hardening.py`, `test_cashback_email_flow.py`,
+  `test_cashback_command.py`, `test_cashback_recat.py`, `test_cashback_report.py`.
 
-### Added
-- `pyproject.toml` — project metadata (name=mymoneywent, version=0.0.1, py>=3.11) + tool configs (ruff/black/mypy/pytest) + `[project.optional-dependencies.dev]`. Legacy code excluded from strict checks via `extend-exclude` (will be cleaned in W0.6). Runtime deps stay in `requirements.txt` for Railway nixpacks compat.
-- `requirements-dev.txt` — pointer to `-e .[dev]`.
-- `core/__init__.py`, `markets/__init__.py`, `markets/vn/__init__.py`, `markets/global_/__init__.py` — empty package skeletons với module docstring giải thích boundary rule. **Note:** `markets/global_/` dùng trailing underscore vì `global` là Python reserved keyword (ADR-0001 intent unchanged).
-- `tests/__init__.py`, `tests/test_import_boundary.py` — 3 smoke tests: config exists, positive run clean, **negative test** (deliberate `core → markets` violation phải bị catch).
-- `.pre-commit-config.yaml` — hooks: ruff (lint+fix), black (format), mypy (strict on core/markets/tests), detect-secrets (against `.secrets.baseline`), import-linter (lint-imports).
-- `.importlinter` — 3 contracts: `core ↛ markets` (ADR-0001 strict), `markets.vn ↮ markets.global_` (market isolation 2 chiều).
-- `.secrets.baseline` — detect-secrets baseline với 22 plugins enabled. User runs `detect-secrets scan > .secrets.baseline` để populate against current repo.
-- `.github/workflows/ci.yml` — GitHub Actions trên push main + PR: pre-commit (all files) → lint-imports → pytest. Python 3.11, timeout 10min.
+### Residuals (deferred, founder-reviewable; Cake unaffected)
+- `/report` cashback section shows the **current statement cycle** (honestly
+  labeled), not period-filtered totals for week/quarter/year (FR-3.4 partial).
+- Zalo `/cashback` exposes seed + recompute only; rule/MCC/Config wizards are
+  Telegram-only (menu points there).
+- Still deferred from Phase A: activation-gate **demotion** on refund,
+  rule `effective_from/to` windows (§4.3), non-stackable multi-rule priority (§4.7).
 
-### Changed
-- `README.md` — thêm section "Development setup" với install commands, lint/test commands, boundary rule note, link đến workflow doc.
+## Cashback Phase A — data layer + pure engine + CRUD/orchestrator (unreleased)
 
-### Verified locally
-- `ruff check core/ markets/ tests/`: All checks passed
-- `black --check core/ markets/ tests/`: 6 files unchanged
-- `mypy core/ markets/ tests/`: Success, no issues found in 6 source files
-- `lint-imports`: 3 contracts kept, 0 broken
-- **Negative test:** deliberate `core/_test_violation.py` with `from markets import vn` → lint-imports correctly reports "core MUST NOT import from markets (ADR-0001) BROKEN", exit 1. Boundary enforced.
-
-### Notes
-- W0.1 = first PR của Wave 0 split (6 PRs sequential per docs/operations/development-workflow.md §4). No business logic, no DB schema. Boring foundation.
-- Pre-commit uses **black for format, ruff for lint only** (dropped `ruff-format` hook để tránh conflict với black).
-- Next PR: W0.2 — alembic migration framework + initial schema (depends Gap 1 decision = YES per project_wave0_gap_decisions.md memory).
-
-### Fixed (post-Codex adversarial review)
-- **[HIGH] `tests/test_import_boundary.py` negative test race** — rewrite negative test: thay vì write violation file vào `core/_test_boundary_violation.py` (real package tree, race-prone), build isolated mini-project trong `tmp_path` với synthetic `.importlinter` config + plant violation ở đó. Thêm `test_real_config_declares_core_markets_contract` static check để guard against accidental removal of contract block. 4 tests, all pass; verified KHÔNG còn leftover file trong `core/`.
-- **[MED] GitHub Actions floating tags** — `.github/workflows/ci.yml`: pin `actions/checkout@v4` → `@11bd71901bbe5b1630ceea73d27597364c9af683` (v4.2.2), `actions/setup-python@v5` → `@0b93645e9fea7318ecaed2b359559ac225c90a2b` (v5.3.0). Comment ghi rõ SemVer tag để readable. Thêm `.github/dependabot.yml` để auto-bump SHAs hằng tuần.
-- **[MED] Empty `.secrets.baseline`** — chạy thật `detect-secrets scan` toàn repo. Found 2 false positives trong legacy code: (1) `docs/tdd-vi.md:647` placeholder `postgresql://user:pass@host:5432/fintrack` trong env var doc; (2) `google_apps_script.js:19` template string `"your_random_email_secret_here"`. Cả 2 đã audit + marked `is_secret: false` trong baseline. New secrets in future commits sẽ bị block.
-- **[P2 mini-review] Static contract test quá permissive** — Codex mini-review trên fix diff phát hiện `test_real_config_declares_core_markets_contract` chỉ substring-match `"type = forbidden"`, `"core"`, `"markets"` trên toàn file text → một edit weakening contract (vd đổi source_modules sang `handlers`) vẫn pass nhờ decoy tokens ở sections khác. Rewrite dùng `configparser` parse exact section `[importlinter:contract:core-must-not-import-markets]`, assert `type == 'forbidden'`, `source_modules == ['core']` (exact list), `forbidden_modules == ['markets']` (exact list). Không còn substring lurking attack surface.
-
----
-
-## 2026-05-11 — Development workflow doc
-
-### Added
-- `docs/operations/development-workflow.md` v1.0.0 — Quy trình code-review-test per-feature (10 steps: spec → test plan → code+test → codex review → fix → CHANGELOG → PR → squash-merge → tag). Wave 0-6 dependency graph cho 16 feature spec (Wave 0 F-saas-refactor là blocker; F08 → F02 sequential trong Wave 2; F-discord/F-messenger parallel với Wave ≥3). Test strategy 3 layer (unit / integration real-Postgres / contract tests cho `messenger.send()` + `bank_email_parser` plugin), tenant isolation test mandatory. PR template + branch naming `feat/F##-name` + tag pattern `v0.X.0-F##`. Skills mapping (`engineering:testing-strategy`, `engineering:debug`, etc.). Anti-patterns + revise triggers.
-
----
-
-## 2026-05-11 — Feature spec: Funding Sources (F08)
+Foundation for credit-card cashback tracking (BRD `brd-cashback-tracking.md` v5.1,
+plan `implementation-plan-cashback.md` v1.5.0). **Additive only — NOT yet wired to
+the live webhook/`/report`/`/cashback` flow** (that is Phase B). Unit-tested end to end.
 
 ### Added
-- `docs/features/feature-funding-sources.md` v1.0.0 — FE/UX spec cho tracking transaction theo từng bank account, debit/credit card, ví điện tử. VN market (SePay + email). Single `funding_sources` entity với canonical identity `(user_id, kind, bank, last4)`, status enum `(active/hidden/archived)`, auto-discovery embed-in-picker UX, `/accounts` command (list / rename / hide / manual-add), `/reports account=<display_id>` filter (Option A: explicit lookup match cả active + hidden, ambiguity → disambiguation prompt, power-syntax `kind:display_id` bypass). FK chain: `users→fs` CASCADE, `tx.fs_id→fs` SET NULL (retention của tx do TDD §6.3 quyết).
-- `docs/features/BE/feature-funding-sources-tech.md` v1.0.0 — BE tech doc: Postgres DDL với check constraints, transitional Sheets schema (worksheet + col Q FK mirror), UPSERT_SQL canonical (CTE-based `was_resurrected` detection, `COALESCE(..., FALSE)` strict bool), TOUCH_SQL cho cache-hit path xử lý multi-process resurrect race, inference rules cho credit_card / e_wallet, backfill script với `kind='bank_account'` constraint, 30 test cases với subcases (cross-kind race, hidden vs archived, ambiguity, resolve failure, embed/delayed notification, last4 validation).
-
-### Changed
-- `docs/features/feature-transaction-capture.md` v1.0.1 → **v1.1.0** — F08 integration: pipeline diagram + acceptance criteria require fs resolve trước tx INSERT, FK `funding_source_id` populated, fallback NULL khi resolve fail. §4 schema bổ sung column `funding_source_id INTEGER REFERENCES funding_sources(id) ON DELETE SET NULL` (F08 extension) + ownership note. Discovery message embed làm header trong category picker (1 message).
-- `docs/features/BE/feature-transaction-capture-tech.md` v1.0.0 → **v1.1.0** — `process_transaction()` rewrite (resolve trước INSERT, try/except fallback NULL, discovery header prepend vào picker, delayed resurrect notif). §2.1 INSERT query thêm column `funding_source_id` ($9). Test plan +3 cases.
-
-### Notes
-- F08 xây trên F02 — không breaking change column P (`bank_account` string) hiện tại; thêm 1 entity registry bên trên.
-- TDD-vi §2.1 chưa update — schema `funding_sources` sẽ promote vào TDD khi bump version kế tiếp.
-- Spec locked sau nhiều round in-session tech review (canonical identity, status enum, FK chain, cache resurrect race, COALESCE bool); chi tiết technical decisions xem changelog trong từng spec file.
-
----
-
-## 2026-05-10 (afternoon) — Repo cleanup pass 2
-
-### Added
-- `__pycache__/` explicit entry in `.gitignore` (was caught by `*.py[cod]` glob but folder name now ignored explicitly)
-- `docs/strategy/` — pricing + cost projection docs grouped
-- `docs/operations/` — production ops docs grouped
-- `docs/marketing/` — landing page + marketing assets grouped
-- `docs/adr/0002-onboarding-ui-strategy.md` — promoted from `decision-onboarding-ui-strategy.md`
-- `docs/research/2026-05-07-competitive-round1/` — consolidated from `plans/reports/`
-- `docs/research/2026-05-08-feature-landscape-round3/` — consolidated from `assets/research/`
-
-### Changed
-- 📝 **Naming convention standardized to kebab-case** across all docs:
-  - 16 `feature_*.md` → `feature-*.md` in `docs/features/`
-  - 15 `feature_*_tech.md` → `feature-*-tech.md` in `docs/features/BE/`
-  - 2 `implementation_plan_*.md` → `implementation-plan-*.md` in `docs/implementation-plans/`
-  - All cross-refs across the repo bulk-updated
-- 📂 **Implementation plans consolidated** — 4 files all now in `docs/implementation-plans/` (was split between `docs/` and `docs/implementation-plans/`)
-- 📂 **Research consolidated** — 3 locations (`docs/research/`, `plans/reports/`, `assets/research/`) merged into single `docs/research/` with date-based subfolders
-- 📂 **docs/ root categorized** — 12 loose files grouped into `strategy/`, `operations/`, `marketing/`, `adr/`, `research/` subfolders. Only canonical specs (BRD/PRD/TDD x 2 markets + market-strategy-overview + strategic-pivot-global) remain at `docs/` root
-
-### Moved
-- `docs/cost-projection.md` → `docs/strategy/cost-projection.md`
-- `docs/pricing-redesign.md` → `docs/strategy/pricing-redesign.md`
-- `docs/observability-plan.md` → `docs/operations/observability-plan.md`
-- `docs/landing-page-handoff-{en,vi}.md` → `docs/marketing/landing-page-handoff-{en,vi}.md`
-- `docs/persona-business-deep-dive.md` → `docs/research/persona-business-deep-dive.md`
-- `docs/decision-onboarding-ui-strategy.md` → `docs/adr/0002-onboarding-ui-strategy.md` (promoted to ADR)
-- `docs/competitive-pricing-research.md` → `docs/research/competitive-pricing-research.md`
-- `docs/implementation-plan-500-users-and-more.md` → `docs/implementation-plans/implementation-plan-500-users-and-more.md`
-- `docs/implementation-plan-payment-vietqr-email.md` → `docs/implementation-plans/implementation-plan-payment-vietqr-email.md`
-- `updates/2026-04-05.md` → `docs/archive/updates/2026-04-05.md`
-- `plans/reports/*` → `docs/research/2026-05-07-competitive-round1/`
-- `assets/research/2026-05-08-feature-landscape-round3/` → `docs/research/2026-05-08-feature-landscape-round3/`
-
-### Removed (empty folders left behind by mv — user can `rm -rf` on Mac)
-- `plans/reports/` (empty — now in research/)
-- `assets/research/` (empty — now in research/)
-- `updates/` (empty — file moved to archive)
+- **config.py** — 5 sheet-tab constants: `CASHBACK_RULES`, `CASHBACK_TIERS`,
+  `CASHBACK_CONFIG`, `CASHBACK_LEDGER`, `MCC_MAP`.
+- **sheets.py — schema:** `_last_col_letter(n)`; 5 `*_HEADER` + `_ensure_*_tab`
+  bootstrappers (dynamic `A1:{last}1` range, ledger has audit `reason` col M).
+- **sheets.py — CRUD:** rules (get/add/update/soft_delete; unique rule_id with
+  reactivation), tiers (get), card config (get/upsert), MCC map (get/add/`match_mcc`),
+  ledger (append/get/`void_cashback_for_tx`/`promote_pending_to_eligible`); in-memory
+  caches + `invalidate_cashback_caches()` (ledger uncached).
+- **sheets.py — cycle helpers:** `cycle_id` (statement-cycle, Asia/Ho_Chi_Minh),
+  `eligible_spend_in_cycle`, `daily_eligible_count` (both with `exclude_tx_row`).
+- **sheets.py — orchestrator:** `compute_and_record_cashback` (idempotent void-then-write,
+  activation gate promote, FR-2.7 daily-limit flags) and `recompute_cashback_for_tx`
+  (whole-day chronological rebuild).
+- **handlers/cashback_engine.py** — pure `compute_cashback` per BRD §4.6 (MCC eligibility,
+  daily limit, per-tx tier cap, per-MCC cycle cap, min-tx threshold, activation gate),
+  rounded VND, no I/O.
+- **tests** — `test_cashback_engine.py`, `test_cashback_schema.py`, `test_cashback_sheets.py`
+  (47 tests).
 
 ### Fixed
-- 26 docs had broken refs to `docs/prd.md` / `docs/tdd.md` after split → bulk-updated to `docs/prd-vi.md` / `docs/tdd-vi.md`
-- Updated cross-refs for all moved files (~100 cross-refs across 30+ docs)
+- **Accounts tab header truncation:** `_ensure_accounts_tab` hardcoded `A1:O1` while
+  `ACCOUNTS_HEADER` already had col P+ → a freshly-created Accounts tab lost
+  `starting_outstanding`. Now uses a dynamic range. Header extended to col R with
+  `linked_credit_id`, `redeem_only` (cashback wallet, declared for Phase B).
 
----
-
-## 2026-05-10 — Repo hygiene + dual-market structure
-
-### Added
-
-- 📄 **CHANGELOG.md** — this file (per founder rules: bắt buộc có README + CHANGELOG)
-- 📄 **[docs/market-strategy-overview.md](docs/market-strategy-overview.md)** v1.0 → v1.1.0 — entry-point doc explaining VN vs Global track coexistence; updated channel comparison (shared platforms + Zalo VN-only)
-- 📄 **[docs/brd-en.md](docs/brd-en.md) v4.0.0** — formal Global market BRD (My Money Went). Promoted from `strategic-pivot-global.md`. ICP: e-commerce solopreneur. Capture stack: Plaid/TrueLayer/Tink + Stripe/PayPal/Shopify/Etsy/Amazon SP-API + payout email parsing. Pricing: $6 Pro / $12 Solopreneur + annual plans. Channels: Telegram + Discord + Messenger MVP + read-only web dashboard.
-- 📄 **[docs/adr/0001-monorepo-not-split-repos.md](docs/adr/0001-monorepo-not-split-repos.md)** — Architecture Decision Record locking monorepo + `core/ + markets/vn/ + markets/global/` adapter pattern. 7 explicit re-evaluation triggers. Q3 2026 default review.
-- 📁 **`docs/adr/`** — new folder for Architecture Decision Records
-- 📁 **`docs/research/`** entries — moved 9 strategy/research docs from root to organize repo
-
-### Changed
-
-- 📝 **[docs/brd-vi.md](docs/brd-vi.md) v3.1.0** — added 🌐 SCOPE NOTE clarifying this is canonical VN spec (Tiền Về Nơi Đâu); added 🏗️ CODE STRUCTURE note locking VN code path at `markets/vn/` per ADR-0001; channel architecture clarified
-- 📝 **[README.md](README.md)** — markets section reframed as dual-market (VN primary + Global parallel); quick links restructured (BRD-VI + BRD-EN canonical, brd.md archived); architecture decisions section added; repo structure tree split into "current pre-refactor" + "target Phase 1 goal"; decision log entry for 2026-05-10
-- 📝 **[strategic-pivot-global.md](docs/strategic-pivot-global.md)** v1.0 → v1.2 — title changed from "Strategic Pivot Analysis" to "Global Market Strategy"; reframed as parallel global track (NOT replacement of VN); status updated to "Promoted into formal BRD" pointing to brd-en.md; moved from repo root to `docs/`
-- 📂 **Doc structure** — `docs/brd.md` (FinTrack v2.9.0) archived → `docs/archive/brd-fintrack-v2.9.0-archived.md`; replaced by canonical pair brd-vi.md (VN) + brd-en.md (Global)
-- 📂 **Path fix** — bulk replaced 20 doc cross-refs from `docs/brd.md` → `docs/brd-vi.md` to keep links resolving after archive
-- 📂 **`strategic-pivot-global.md` location** — moved from repo root to `docs/`; all cross-refs updated (`../strategic-pivot-global.md` → `./strategic-pivot-global.md` for docs/, `strategic-pivot-global.md` → `docs/strategic-pivot-global.md` for README)
-
-### Removed (moved to archive)
-
-- 🗑️ **40 root-level duplicate files** moved to `docs/archive/root-duplicates-2026-05-10/`:
-  - Stale BRDs/PRDs at root (older versions than docs/): `brd-en.md` v2.8.0, `brd-vi.md` v3.1.0/2026-05-07, `prd-en.md` v1.5.0, `prd-vi.md` v1.5.0
-  - 30 duplicate feature_*.md (identical to docs/features/ + docs/features/BE/)
-  - 4 duplicate implementation plans (root vs docs/ + docs/implementation-plans/)
-  - 2 identical duplicates: `persona-business-deep-dive.md`, `pricing-redesign.md`
-  - 2 Office lock files (`~$c1-...docx`, `~$c2-...docx`)
-- 🗑️ **`docs/brd.md` (FinTrack v2.9.0)** — archived to `docs/archive/brd-fintrack-v2.9.0-archived.md` (legacy FinTrack BRD; superseded by brd-vi.md + brd-en.md split)
-
-### Moved (to better location)
-
-- 📦 **9 research/strategy docs** from root → `docs/research/`:
-  - `competitive-analysis-solopreneur-lite-tools-may2026.md`
-  - `competitive-intelligence-report.md`
-  - `insights-from-competitive-research.md`
-  - `research-prompt-competitor-analysis.md`
-  - `research-prompt-features-deep-dive.md`
-  - `research-prompt-round-2.md`
-  - `Doc1-Market-Analysis-Vendor-Strategy.{md,docx}`
-  - `Doc2-User-Research-Findings-Plan.{md,docx}`
-- 📦 **`strategic-pivot-global.md`** from root → `docs/` (cleaner repo root, all docs together)
-
-### Fixed
-
-- 🔧 **Broken `docs/brd.md` cross-refs** — 20 docs updated from `docs/brd.md` → `docs/brd-vi.md` after BRD archive
-
-### Decision log (key product decisions, not just structural)
-
-- ✅ **Dual-market structure locked:** brd-vi.md (VN, Tiền Về Nơi Đâu) + brd-en.md (Global, My Money Went) as canonical sibling BRDs. Channel architecture confirmed shared (Telegram + Discord + Messenger), Zalo VN-exclusive Phase 3+, WhatsApp Global-only Phase 2.
-- ✅ **Monorepo over split repos:** per ADR-0001, single repo with `core/ + markets/vn/ + markets/global/` adapter pattern. Re-evaluate Q3 2026 or sooner if any of 7 triggers fires.
-- ✅ **brd-en.md content rewritten:** discarded VN-derived content (SePay, VN banks, Hùng+ persona). Promoted strategic-pivot-global.md into formal BRD form with Plaid + e-commerce APIs + solopreneur ICP + $6/$12 pricing.
-
----
-
-## 2026-05-07 — Pre-restructure baseline
-
-### Background
-
-Before 2026-05-10 restructure, the project had:
-
-- Single BRD (`docs/brd.md` v2.9.0, FinTrack branding) for VN market
-- Strategic exploration doc (`strategic-pivot-global.md`) at repo root proposing pivot to Global market
-- Multiple duplicate copies of docs at repo root + `docs/`
-- 30 feature_*.md files duplicated at root + docs/features/
-- Office lock files committed accidentally
-
-State as of 2026-05-07:
-
-- **BRD-vi.md v3.1.0** existed as Vietnamese branding ("Tiền Về Nơi Đâu") with v3.x version drift from FinTrack BRD v2.9.0
-- **strategic-pivot-global.md** v1.0 framing was "pivot from VN to Global" — superseded 2026-05-10 with parallel-track framing
-
----
-
-## Reference: Per-doc changelogs
-
-For doc-level changes (BRD/PRD/TDD/feature specs), see the changelog table at the bottom of each doc:
-
-- [BRD-VI changelog](docs/brd-vi.md#changelog)
-- [BRD-EN changelog](docs/brd-en.md#changelog)
-- [Strategic-pivot-global changelog](docs/strategic-pivot-global.md#changelog)
-- [Market-strategy-overview changelog](docs/market-strategy-overview.md#changelog)
-- [ADR-0001 changelog](docs/adr/0001-monorepo-not-split-repos.md#changelog)
+### Deferred to Phase B (founder review 2026-06-09, documented in code)
+These known P2 edge cases are out of Phase A scope (live-flow / `/cashback recompute`
+rescue command / BRD fields Cake doesn't exercise):
+- Out-of-order live arrivals don't rebuild the day; activation gate only promotes
+  (pending→eligible), never demotes when cycle spend later drops below the threshold.
+- `recompute_cashback_for_tx` rebuilds only the same **day**, not the whole statement
+  cycle (cross-day MCC-cap dependents can stay stale).
+- Rule `effective_from`/`effective_to` windows (§4.3) are not enforced.
+- Multiple non-stackable rules matching one MCC each emit a line (§4.7 says priority
+  winner only) — harmless for Cake (one rule per MCC).

@@ -3,7 +3,7 @@ builder = "nixpacks"
 
 [deploy]
 startCommand = "uvicorn main:app --host 0.0.0.0 --port $PORT"
-healthcheckPath = "/"
-healthcheckTimeout = 30
+healthcheckPath = "/healthz"
+healthcheckTimeout = 300
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3

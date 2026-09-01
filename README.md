@@ -1,271 +1,435 @@
-# MyMoneyWent
+# 💰 My Money Went Bot
 
-> SaaS fintech consumer + business — **dual-market strategy**: VN (primary, near-term) + Global (parallel track, validation phase).
+![My Money Went Bot — Telegram bot catches every Vietnamese bank transaction and writes it to your Google Sheet](docs/screenshots/banner.png)
 
-**Markets:**
-- 🇻🇳 **VN market** (primary): SePay webhook + email parsing bank emails. ICP: office worker / freelancer / online seller. Branding: Tiền Về Nơi Đâu. Spec: [brd-vi.md v3.1.0](docs/brd-vi.md).
-- 🌐 **Global market** (parallel, validation phase): Plaid/TrueLayer/Tink + e-commerce platform APIs (Stripe/PayPal/Shopify/Etsy/Amazon SP-API) + payout email parsing. ICP: e-commerce solopreneur. Branding: My Money Went. Spec: [brd-en.md v4.0.0](docs/brd-en.md). Strategic background: [strategic-pivot-global.md](docs/strategic-pivot-global.md).
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
+[![Tests: 300+ passing](https://img.shields.io/badge/tests-300%2B%20passing-brightgreen.svg)](tests/)
 
-**Channels:** Telegram + Discord + Messenger shared cho cả 2 markets (qua `messenger.send()` interface). **Zalo VN-exclusive** (Phase 3+). WhatsApp global-only (Phase 2).
+[🇻🇳 Tiếng Việt](README.vi.md)
 
-→ **Read [Market Strategy Overview](docs/market-strategy-overview.md) first** to understand how the 2 tracks coexist.
-
-**Status:** Phase 1 Foundation ~75% complete. Wave 0 shipped (6 PRs, 118 tests, 5 import-linter contracts). Remaining: Discord adapter + Docker Compose + smoke E2E. Global track pending validation sprint per brd-en.md Section 11.
-**Target launch (VN):** Tháng 9/2026 — Telegram + Discord MVP, Messenger Phase 3+
-**Target launch (Global):** TBD post-validation
-
-> **→ [docs/START_HERE.md](docs/START_HERE.md)** — quick reference for current tasks, source of truth rules, and execution context.
+> 🙏 **Credits:** built on top of patterns from [`maddyle8124/spend-less-bot`](https://github.com/maddyle8124/spend-less-bot). Big thanks to Maddy — without that seed this wouldn't exist.
 
 ---
 
-## Quick links
+## What it does
 
-**Execution context:**
-- 🚀 [**START HERE** — current tasks + source of truth](docs/START_HERE.md)
-- 📋 [Implementation Tracker — PR status board](docs/implementation-tracker.md)
-- 🗺️ [Roadmap — phase timeline + progress](docs/mymoneywent-roadmap.md)
-- ⚙️ [Development Workflow — 10-step process](docs/operations/development-workflow.md)
+![How it works — 5-step flow: bank transaction, SePay webhook, bot processes, write to Google Sheet, Telegram report](docs/screenshots/how-it-works.png)
 
-**Product specs:**
-- ⭐ [**Market Strategy Overview** — VN vs Global](docs/market-strategy-overview.md)
-- 🇻🇳 [BRD v3.1.0 — VN canonical spec](docs/brd-vi.md) · [PRD-VI v1.7.1](docs/prd-vi.md) · [TDD-VI v1.8.1](docs/tdd-vi.md)
-- 🌐 [BRD v4.0.0 — Global spec](docs/brd-en.md) · [PRD-EN v2.0.0](docs/prd-en.md) · [TDD-EN v1.0.0](docs/tdd-en.md)
-- [Strategic rationale — Global market](docs/strategic-pivot-global.md)
+**My Money Went Bot is a personal expense tracker that lives in your Telegram chat.** Every time a Vietnamese bank sends a transaction notification (via [SePay](https://sepay.vn)), the bot logs it to a Google Sheet *you own* and asks you to tap a category — or skips that step entirely if you've taught it a keyword rule. Type `/report` anytime to see where your money went, sliced by account, category, and time period.
 
-**Feature specs (18 FE + 17 BE):** [docs/features/](docs/features/) · [docs/features/BE/](docs/features/BE/)
+<details>
+<summary>📐 Detailed flow (with auto-categorize + onboarding branches)</summary>
 
-**Key references:**
-- [ADR-0001: Monorepo](docs/adr/0001-monorepo-not-split-repos.md) · [ADR-0002: Onboarding UI](docs/adr/0002-onboarding-ui-strategy.md)
-- [Disaster recovery runbook v1.2.0](docs/runbooks/disaster-recovery.md)
-- [Observability plan v1.1.0](docs/operations/observability-plan.md)
-- [Persona Hùng+ deep dive](docs/research/persona-business-deep-dive.md)
+```mermaid
+flowchart LR
+    A[🏦 Vietnamese<br/>bank tx] -->|SePay<br/>webhook| B[🤖 Bot]
+    B --> C[📊 Row in<br/>Google Sheet]
+    C --> D{Match<br/>keyword<br/>rule?}
+    D -->|✅ Yes| E[🎯 Auto-<br/>categorize]
+    D -->|❌ No| F[💬 'What<br/>category?']
+    F --> G[👆 You tap]
+    E --> H[📈 /report<br/>account ×<br/>category ×<br/>period]
+    G --> H
 
-## Product summary (VN market — per [brd-vi.md v3.1.0](docs/brd-vi.md))
+    B -. unknown<br/>source? .-> I[📝 Onboard<br/>wizard]
+    I -. future tx<br/>auto-route .-> B
 
-Bot Telegram + Discord tự động track giao dịch ngân hàng VN. 3 entry path cover full TAM:
+    classDef bank fill:#fef3c7,stroke:#d97706,color:#92400e
+    classDef bot fill:#dbeafe,stroke:#2563eb,color:#1e40af
+    classDef store fill:#dcfce7,stroke:#16a34a,color:#15803d
+    classDef user fill:#fce7f3,stroke:#db2777,color:#9d174d
+    classDef out fill:#f3e8ff,stroke:#9333ea,color:#6b21a8
+    class A bank
+    class B,E,I bot
+    class C store
+    class F,G user
+    class H out
+```
 
-1. **SePay quick connect** — user đã có SePay → 2-5 phút setup
-2. **SePay setup wizard** — user chưa có → bot guide step-by-step (10-15 phút)
-3. **Email forwarding parser** — user chỉ muốn dùng email → forward bank email tới `u<id>@in.tienvenoidau.com`, bot parse tự động (6 banks MVP: TCB, Cake, ACB, Sacombank/STB, BIDV, MB; VCB Phase 2 pending verification)
+</details>
 
-3-tier pricing: **Free** (45 tx/tháng, 1 bank) / **Pro 79k VND** (~$3.16, 3 banks, reports, CSV) / **Business 199k VND** (~$7.96, 5 banks, P&L, Personal-vs-Business split, Sheets sync).
+**No database. No third-party data store. Single-tenant — one bot per person.** Your Google Sheet IS the entire backend. Your data, your sheet, your rules.
 
-## Personas
+---
 
-- **Minh** (24-35, nhân viên văn phòng) — Free → Pro
-- **Linh** (22-30, freelancer) — Pro
-- **Hùng+** (28-42, online seller / chủ shop nhỏ) — Business *(revenue driver)*
+## Why this exists
 
-## Tech stack (Phase 1 onwards)
+Most personal finance apps (Money Lover, Misa, MoneyKeeper, ...) want your bank credentials, run on their cloud, and gatekeep your data behind a freemium wall. This bot does the opposite:
 
-- Backend: Python + python-telegram-bot
-- Database: PostgreSQL (multi-tenant)
-- Hosting: Railway Hobby plan (~$15-20/mo MVP)
-- Email parsing: Postmark Inbound ($10/mo)
-- Payment: **Bank transfer + auto-detect** qua SePay (primary, ≤60s) + Email parsing (backup, ≤5min). 0% fee. Xem [feature-spec-payment-bank-transfer.md](docs/features/feature-payment.md). PayPal/USDT optional secondary Phase 2.
-- Backup: Backblaze B2
+- **You own the data.** It lives in your Google Sheet. Export, fork, archive, pivot — your call.
+- **You see every line of code.** ~3,000 LOC of Python. Audit, customize, ship.
+- **You categorize once.** Auto-categorization via `/keywords` means recurring tx (Spotify, Grab, ...) skip the picker.
+- **Reports match your real model** — per-account *and* per-category, across week/month/quarter/year. Not just "monthly category bar chart".
 
-## Development setup
+---
 
-Python 3.11+. Setup dev environment:
+## Features
+
+![Feature overview — 6 features, system architecture, supported banks, and command list](docs/screenshots/features-architecture.png)
+
+The full feature breakdown:
+
+🏦 **Per-account tracking** — every tx tagged with which bank account it came from. `/report` slices by account (TPB / Vietcombank / cash) and by category.
+
+📊 **Unified `/report` with 2 lenses × 4 periods** — week/month/quarter/year via inline buttons. Toggle account ↔ category lens in-place. No re-typing the command.
+
+🤖 **Smart account onboarding** — first time a tx arrives from an unmapped source, bot asks. 3-step wizard: name → type → done. Future tx auto-route.
+
+⚡ **Auto-categorize** — `/keywords` lets you define patterns ("GRAB" → Daily Spending, "Spotify" → Subscription). Matching tx skip the prompt entirely.
+
+🎯 **Smart budget allocation** — `/allocate` sets monthly caps per category. After setup, returns in *edit mode* — tap one bucket to change its limit, no re-walking the full wizard.
+
+🔁 **Historical backfill** — `/accounts assign <slug>` retroactively links unmapped past txs to a newly-onboarded account. No tx lost between "first webhook" and "wizard complete".
+
+🧾 **Credit cards + cashback engine** — outstanding balance, `/cc pay`, statement-cycle tracking, and a full MCC-based cashback tracker (`/cashback`): rules, per-cycle caps, activation gate, self-learning MCC map.
+
+📧 **Email ingestion** — banks SePay doesn't cover (TCB, Cake, Hang Seng) flow in via a Google Apps Script forwarding notification emails to `/webhook/email` (see `google_apps_script.js`).
+
+💬 **Zalo channel** — the same flows on Zalo Bot Platform via numbered text menus: category picker, `/report`, `/manage`, `/allocate`, `/keywords`, `/cashback`, `/recat`, `/pending`.
+
+🌐 **Bilingual UI** — `/lang` switches the whole bot between Vietnamese and English.
+
+🇻🇳 **Vietnamese banks** — works with anything SePay supports. VND-first; foreign-currency accounts (e.g. HKD via Hang Seng email) are tracked per-account without polluting VND totals.
+
+---
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%" align="center"><b>🤖 Auto-categorize + log</b></td>
+    <td width="50%" align="center"><b>📊 <code>/report</code> — monthly category lens</b></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/auto-categorize.png" alt="Auto-categorize a Bach Hoa Xanh transaction" /></td>
+    <td><img src="docs/screenshots/report-monthly.png" alt="Monthly report with budget bars and tracking buckets" /></td>
+  </tr>
+  <tr>
+    <td>Tx from Bach Hoa Xanh hits a <code>/keywords</code> rule → auto-tagged Food, no prompt. Bot replies with logged amount + bucket progress.</td>
+    <td>Tổng spending vs budget, per-bucket budget bars with status emoji, plus a Tracking section for buckets you watch without capping.</td>
+  </tr>
+</table>
+
+---
+
+## Supported banks
+
+Whatever [SePay supports](https://sepay.vn/ngan-hang.html), this bot tracks. SePay directly connects to **10 Vietnamese banks** (as of 2026):
+
+| Bank | Code |
+|---|---|
+| VPBank | VPB |
+| ACB | ACB |
+| Sacombank | STB |
+| VietinBank | ICB |
+| MBBank | MBB |
+| BIDV | BIDV |
+| MSB | MSB |
+| TPBank | TPB |
+| KienLongBank | KLB |
+| OCB | OCB |
+
+A subset (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) use **direct API integration** for instant webhooks; the rest go through **SMS Banking** which has a slight delay. Either way the bot handles the payload identically — see [SePay pricing](https://sepay.vn/bang-gia.html) for the latest.
+
+---
+
+## What you'll need
+
+| Requirement | Where to get it |
+|---|---|
+| Telegram account | You probably have one |
+| [SePay](https://sepay.vn) account | Connects to your Vietnamese bank |
+| Google account | For Google Sheets + Google Cloud |
+| Server with public HTTPS | [Railway](https://railway.app) is simplest (free tier OK). Or Ubuntu VPS + [ngrok](https://ngrok.com) for testing. |
+| Python 3.11+ | On your server / Railway |
+
+---
+
+## Quick start
+
+### Step 1 — Create your Telegram bot
+
+1. Message [@BotFather](https://t.me/BotFather) → `/newbot` → save the token.
+2. Message [@userinfobot](https://t.me/userinfobot) → save your chat ID.
+
+### Step 2 — Set up Google Sheets
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com) → new project.
+2. Enable **Google Sheets API** + **Google Drive API**.
+3. **IAM & Admin → Service Accounts → Create** → **Keys → Add Key → JSON** → download as `credentials.json`.
+4. Create a new Google Sheet. Copy the **SHEET_ID** from the URL.
+5. Share the sheet with the service account email (Editor access).
+
+**Sheet tabs auto-create on first webhook** — no manual schema setup. Tabs:
+
+| Tab | Purpose |
+|---|---|
+| `Đầu ra` | All transactions (one row per tx) |
+| `Accounts` | Onboarded accounts (name, type, source_keys) |
+| `Account Ledger` | Append-only ledger — source of truth for balances |
+| `Pending Accounts` | Onboarding queue (24h TTL) |
+| `Budget Config` | Per-month bucket allocations |
+| `Sub-category Config` | Optional sub-labels per bucket |
+| `Keyword Rules` | Auto-categorize patterns |
+| `Bot State` | Wizard / picker state per chat |
+| `Monthly Reports` | Archived monthly summaries |
+
+### Step 3 — Set up SePay
+
+1. Sign up at [sepay.vn](https://sepay.vn), connect your bank.
+2. **Webhook settings** → URL = `https://<your-domain>/webhook`. Pick which directions to track:
+   - **Only spending** → enable **Tiền ra** only.
+   - **Spending + income** → enable both **Tiền ra** and **Tiền vào**.
+
+   (Income tx are logged but skip the category picker — see [Why this exists](#why-this-exists).)
+3. ⚠️ **Disable SePay's native Google Sheets integration** — this bot writes its own rows; doubling = duplicate transactions.
+
+### Step 4 — Deploy
 
 ```bash
-# 1. Create venv (recommended)
-python3.11 -m venv .venv && source .venv/bin/activate
-
-# 2. Install runtime + dev deps
-pip install -r requirements.txt        # runtime (FastAPI, gspread, httpx, ...)
-pip install -e ".[dev]"                # dev tooling (ruff, black, mypy, import-linter, ...)
-
-# 3. Install pre-commit hooks
-pre-commit install
-
-# 4. (First-time) refresh detect-secrets baseline against current repo
-detect-secrets scan > .secrets.baseline
+git clone https://github.com/maingocanh1702/MyMoneyWent.git
+cd my-money-went-bot
+cp .env.example .env
+# Edit .env: BOT_TOKEN, CHAT_ID, SHEET_ID, GOOGLE_CREDS_JSON (or GOOGLE_CREDS)
 ```
 
-**Lint + test commands:**
+**Railway** (recommended):
+
+1. Push your fork to GitHub.
+2. [railway.app](https://railway.app) → New Project → Deploy from GitHub repo.
+3. Add env vars in Railway dashboard. For `GOOGLE_CREDS_JSON`, paste the full JSON as one line.
+4. Railway gives you a `*.up.railway.app` URL — use that as your SePay webhook URL.
+5. Register the Telegram webhook:
+   ```bash
+   curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
+     -d "url=https://<your-app>.up.railway.app/webhook"
+   ```
+
+**VPS** (Ubuntu 22.04):
 
 ```bash
-pre-commit run --all-files     # ruff + black + mypy + detect-secrets + import-linter
-lint-imports                    # ADR-0001 boundary check (core ↛ markets)
-pytest tests/ -v                # smoke + unit tests
+sudo apt install -y python3.11 python3-pip python3-venv
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+chmod 600 .env credentials.json
+
+# systemd service
+sudo tee /etc/systemd/system/mmwbot.service <<EOF
+[Unit]
+Description=My Money Went Bot
+After=network.target
+[Service]
+WorkingDirectory=$(pwd)
+ExecStart=$(pwd)/.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
+EnvironmentFile=$(pwd)/.env
+Restart=always
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl enable --now mmwbot
+journalctl -u mmwbot -f   # watch logs
 ```
 
-**Boundary enforcement:** `core/` MUST NOT import from `markets/`. Verified by `import-linter` (config in `.importlinter`). 5 contracts active:
-- `core ↛ markets` (ADR-0001 strict)
-- `markets.vn ↛ markets.global_`
-- `markets.global_ ↛ markets.vn`
-- `markets.vn.email_parsers` ↛ `core.db` / `core.messenger` (parser purity — W0.6)
-- `i18n` ↛ `core` / `markets` / `handlers` (i18n purity)
+### Step 5 — First run
 
-**Note on Python keyword:** the global market package is `markets/global_/` (trailing underscore) because `global` is a Python reserved word. ADR-0001 intent unchanged.
+1. Open a chat with your bot on Telegram, send `/today` — bot should reply.
+2. Make a small test transaction through your bank — within a few seconds the bot pings: *"Account chưa map"* + *"Khoản này thuộc mục nào?"*.
+3. Tap **✅ Setup** → onboard the account (name → type).
+4. Tap a category for the transaction.
+5. Type `/report` → see your spending breakdown.
 
-Full workflow doc: [docs/operations/development-workflow.md](docs/operations/development-workflow.md).
+Future tx from the same account auto-route. Set up `/keywords` rules to auto-categorize recurring tx.
 
-## Roadmap (14-16 tuần MVP)
+---
 
-| Phase | Tuần | Deliverable |
+## Bot commands
+
+| Command | What it does |
+|---|---|
+| `/today` | Today's spending vs daily cap (Daily Spending bucket). |
+| `/report [period]` | Full spending report. Inline buttons for week/month/quarter/year × account/category lens. |
+| `/accounts` | List configured accounts. `/accounts add` opens the wizard. `/accounts assign <slug>` bulk-tags historical txs. |
+| `/manage` | Add / rename / delete categories. Per-bucket edit-amount. |
+| `/keywords` | Manage auto-categorize rules. |
+| `/allocate` | Edit budget. Wizard on first run, per-bucket edit-mode after. |
+| `/cashback` | Credit-card cashback: rules, MCC map, billing cycle, overview. |
+| `/transfer <amount> <from> <to>` | Record an internal transfer between tracked accounts. |
+| `/cc pay <amount> [bank] <cc>` | Record a credit-card payment. |
+| `/recat [row]` | Re-categorize a past transaction. No argument → pick from the 8 most recent; `/recat <row>` targets a sheet row directly. |
+| `/pending` | Categorize transactions queued while you were mid-flow. |
+| `/lang` | Switch bot language (vi/en). |
+| `/cancel` | Abort the current multi-step flow. |
+| `/help` | Command list. |
+
+💡 Wherever the bot asks for an amount, Vietnamese shorthand works: `500k`, `3tr`, `3tr5`, `1m2`, `2 triệu` — all parsed as VND. Most commands also work on Zalo via numbered menus.
+
+---
+
+## Architecture
+
+```
+┌──────────┐   webhook    ┌────────────────┐    rows      ┌──────────────┐
+│  SePay   │ ───────────► │  FastAPI bot   │ ───────────► │ Google Sheet │
+└──────────┘              │  (Railway/VPS) │              │   (yours)    │
+                          └──────┬─────────┘              └──────────────┘
+                                 │ Telegram Bot API
+                                 ▼
+                          ┌────────────────┐
+                          │   You (chat)   │
+                          └────────────────┘
+```
+
+**Source of truth = ledger table.** `running_balance` is a cache recomputed from the ledger on every write. See [`handlers/account_resolver.py`](handlers/account_resolver.py) and [`sheets.py`](sheets.py).
+
+### Project layout
+
+```
+.
+├── main.py                       # FastAPI entry — routes all webhooks (TG + Zalo + email)
+├── config.py                     # Reads env vars, sheet tab names
+├── sheets.py                     # All Google Sheets read/write logic
+├── telegram_api.py               # Telegram Bot API wrapper
+├── messenger.py                  # Multi-channel send layer (Telegram + Zalo)
+├── i18n/                         # UI strings — vi.py / en.py, /lang switches
+├── handlers/
+│   ├── sepay.py                  # Incoming SePay webhook handler
+│   ├── email_parser.py           # TCB / Cake / Hang Seng notification emails
+│   ├── account_resolver.py       # Maps payload → account_id
+│   ├── accounts.py               # /accounts wizard + onboarding + backfill
+│   ├── transaction.py            # Category picker + confirmation flow
+│   ├── allocation.py             # /allocate budget wizard + edit mode
+│   ├── manage.py                 # /manage categories (+ daily cap)
+│   ├── keywords.py               # /keywords auto-categorize rules
+│   ├── cashback.py               # /cashback command (rules, MCC, cycles)
+│   ├── cashback_engine.py        # Pure cashback computation (no I/O)
+│   ├── report.py                 # Unified /report (account + category lenses)
+│   ├── reports.py                # /today snapshot + daily recap
+│   ├── zalo_queue.py             # Durable Zalo pending-tx queue (/pending)
+│   └── zalo_render.py            # Zalo plain-text summaries
+├── tests/unit/                   # 300+ unit tests, in-memory FakeSpreadsheet
+├── google_apps_script.js         # Gmail → /webhook/email forwarder
+├── .env.example                  # Template — copy to .env and fill in
+├── crontab.txt                   # Example cron jobs (VPS reference; prod = GitHub Actions)
+├── setup.sh                      # VPS bootstrap script
+├── railway.toml                  # Railway deploy config
+└── requirements.txt
+```
+
+---
+
+## Security ⚠️
+
+A few things to be careful about — this handles bank notification data:
+
+**1. Protect your `.env` and `credentials.json`.** These are the keys to your bot. Anyone with them reads your spending data.
+
+```bash
+chmod 600 .env credentials.json
+```
+
+Never commit either to GitHub — `.gitignore` already blocks them.
+
+**2. Webhook auth is opt-in — turn it ALL on.** Every inbound surface has an optional secret; unset means that endpoint accepts unauthenticated requests (the app logs a startup warning listing what's open):
+
+| Env var | Protects | Without it |
 |---|---|---|
-| 1. Foundation | 1-2 | Repo, DB schema (incl. admin_audit_log), `messenger.send()` interface, multi-user routing |
-| 2. Handlers refactor | 3-4 | Multi-tenant handlers via messenger, auth, isolation, admin command framework |
-| 3. Pricing logic | 5 | Free limits, trial, upgrade triggers |
-| 4. SePay onboarding | 6 | Quick connect + Wizard |
-| 5. Email parsing | 7-9 | Postmark + 6 banks parser (TCB, Cake, ACB, STB, BIDV, MB) |
-| 6. Polish + Deploy | **10-12** | Payment integration, **admin tools commands**, **observability dashboard + alerts**, Railway deploy, scheduling |
-| 7. Closed beta | 13-14 | 5-10 users, validate cost + parser accuracy, DR restore test |
-| 8. Soft launch | 15-16 | 20-30 users, monitor 3 path. Buffer absorbed if needed |
+| `SEPAY_SECRET` | `/webhook` (SePay payloads) | Anyone can log fake transactions |
+| `TELEGRAM_WEBHOOK_SECRET` | `/webhook` (Telegram updates) | Anyone who knows the URL can drive the bot (send `/manage`, delete categories, ...) |
+| `CRON_SECRET` | `/trigger/*` | Anyone can spam reports / clobber wizard state |
+| `EMAIL_SECRET` | `/webhook/email` | Anyone can inject fake email transactions |
 
-Phase 2 (~tháng 11-12): Business tier launch — Personal/Business toggle + Tag-based P&L + Sheets sync (must-have bundle ship đồng thời).
+For `TELEGRAM_WEBHOOK_SECRET`, re-register the webhook with the same value (`setWebhook` + `secret_token` — see `.env.example`). For `CRON_SECRET`, append `?secret=<value>` to the URLs in `crontab.txt`. **Recommended:** set all four and put Cloudflare (or another WAF) in front of your Railway app.
 
-## Architecture decisions
+**3. Use SSH keys, not passwords.** If you VPS-deploy, password SSH is brute-forceable:
 
-- 🏗️ [**ADR-0001: Monorepo over split repos**](docs/adr/0001-monorepo-not-split-repos.md) (2026-05-10) — single repo cho cả 2 markets, dùng `core/ + markets/vn/ + markets/global/` adapter pattern. Re-evaluate Q3 2026 hoặc sau 7 explicit triggers.
-
-## Repo structure (current — post Wave 0, 2026-05-13)
-
-> ⚠️ **Legacy files** (`main.py`, `sheets.py`, `telegram_api.py`, `handlers/`) remain in root until Phase 2 F02 strangler cutover. Do NOT build new features on these — new code goes in `core/` + `markets/`.
-
-```
-MyMoneyWent/
-├── README.md
-├── CHANGELOG.md
-├── pyproject.toml              # Build config + dev deps
-├── alembic.ini                 # Migration config
-│
-├── core/                       # ✅ Market-agnostic foundation (Wave 0)
-│   ├── canonical_tx.py         #   CanonicalTx dataclass (W0.6)
-│   ├── db.py                   #   asyncpg pool (min=2, max=10) (W0.3)
-│   ├── tenant_context.py       #   ContextVar per-request isolation (W0.3)
-│   ├── logging.py              #   structlog + tenant binding (W0.5)
-│   ├── observability.py        #   Sentry + /health endpoints (W0.5)
-│   ├── locale_svc.py           #   Locale resolution
-│   └── messenger/              #   Channel adapter pattern (W0.4)
-│       ├── base.py             #     BaseSender ABC + SendPayload
-│       └── telegram.py         #     TelegramSender (Discord pending W1.2)
-│
-├── markets/                    # ✅ Market-specific adapters (ADR-0001)
-│   ├── vn/                     #   🇻🇳 VN market
-│   │   ├── capture/            #     SePay webhook + webhook_tokens (W0.6)
-│   │   └── email_parsers/      #     6 bank parser shells (W0.6)
-│   └── global_/                #   🌐 Global (planned, stub only)
-│
-├── i18n/                       # Language packs (vi.py, en.py)
-├── migrations/versions/        # Alembic (0001_initial_schema — 11 tables)
-├── scripts/migrate_sheets.py   # Founder seed scaffold (W0.6, dry-run only)
-├── tests/                      # 118 tests passing
-│   ├── unit/
-│   ├── integration/
-│   ├── contract/
-│   └── fixtures/
-│
-├── main.py                     # ⚠️ LEGACY — entry point (refactor Phase 2)
-├── config.py                   # Configuration
-├── sheets.py                   # ⚠️ LEGACY — Google Sheets (delete Phase 2)
-├── telegram_api.py             # ⚠️ LEGACY — replaced by core/messenger/
-├── handlers/                   # ⚠️ LEGACY — all move to core/handlers/ Phase 2
-│
-├── .autopilot/                 # ⚙️ Runtime state only (gitignored)
-│   └── state/                  #   Orchestrator checkpoints
-│
-└── docs/
-    ├── START_HERE.md            # ⭐ Entry point — current tasks + source of truth
-    ├── mymoneywent-roadmap.md   # Phase timeline + overall progress
-    ├── implementation-tracker.md # PR-level status board
-    ├── implementation-plans/    # Per-phase PR detail (source of truth for tasks)
-    ├── autopilot/               # Automation tooling + execution prompts (tracked)
-    │   ├── prompts/             #   Autopilot execution prompts
-    │   └── probes/              #   CLI probes + experiments
-    ├── brd-vi.md, brd-en.md     # Business requirements (VN + Global)
-    ├── prd-vi.md, prd-en.md     # Product requirements
-    ├── tdd-vi.md, tdd-en.md     # Technical design
-    ├── features/                # 18 feature specs (FE)
-    │   └── BE/                  #   17 backend tech specs
-    ├── adr/                     # Architecture Decision Records (2)
-    ├── strategy/                # Pricing + cost projections
-    ├── operations/              # Dev workflow + observability + retros
-    ├── runbooks/                # DR runbook
-    ├── research/                # Competitive + user research (22 docs)
-    ├── marketing/               # Landing page handoffs
-    ├── reviews/                 # Code reviews
-    └── archive/                 # Historical docs (indexed in archive/README.md)
+```bash
+ssh-keygen -t ed25519
+ssh-copy-id root@your-server
+# Then in /etc/ssh/sshd_config:
+#   PasswordAuthentication no
 ```
 
-## Repo structure (target — Phase 1 refactor goal, per ADR-0001)
+**4. Bot only talks to your `CHAT_ID`.** Hardcoded check — no one else can interact even if they find the bot name.
 
+**5. No banking credentials touch this code.** The bot receives transaction *notifications* (amount + description) from SePay. Your bank login, card numbers, etc. never pass through.
+
+**6. PII in descriptions.** SePay's payload includes raw transfer descriptions which may contain partner names, account numbers, references. These get written to the `Description` column. Anyone with read access to your Sheet sees this — keep the Sheet private.
+
+---
+
+## Troubleshooting
+
+| Problem | Check |
+|---|---|
+| No message when transaction happens | Service running? `systemctl status mmwbot` or Railway logs |
+| Bot crashed | `journalctl -u mmwbot -n 50` |
+| Wrong amounts in sheet | Check logs for `DEBUG append_transaction:` |
+| Duplicate rows in sheet | Make sure SePay's native Sheets integration is disabled |
+| Daily recap at wrong time | Server in UTC? Shift cron hours by -7 from ICT |
+| `/allocate` not saving | Check logs for `[allocate]` messages |
+| Bot doesn't auto-route tx from known account | Check that `source_keys` cell in `Accounts` tab has the right SePay account number |
+
+---
+
+## Updating the bot
+
+```bash
+# On your server
+cd /path/to/my-money-went-bot
+git pull
+systemctl restart mmwbot
+journalctl -u mmwbot -f   # watch logs
 ```
-MyMoneyWent/
-├── core/                      # Market-agnostic foundation — both markets reuse
-│   ├── messenger/             # Telegram + Discord + Messenger adapters
-│   ├── auth/                  # Multi-tenant auth, channel_user_id resolution
-│   ├── db/                    # Multi-tenant schema, migrations
-│   ├── tenant_context.py      # Resolves user's market → routes to markets/<m>/
-│   ├── pricing/               # Generic tier framework
-│   ├── categorization/        # Generic rules engine
-│   └── observability/
-├── markets/
-│   ├── vn/                    # 🇻🇳 Tiền Về Nơi Đâu
-│   │   ├── capture/           # SePay webhook + VN bank email parsers
-│   │   ├── payment/           # VietQR + bank transfer auto-detect
-│   │   ├── pricing/tiers_vnd.py  # $4 / $9 in VND
-│   │   ├── channels/zalo.py   # VN-only channel
-│   │   └── locale/            # Vietnamese strings
-│   └── global/                # 🌐 My Money Went
-│       ├── capture/           # Plaid + TrueLayer + Tink + Stripe/PayPal/Shopify/Etsy/Amazon
-│       ├── payment/stripe_billing.py
-│       ├── pricing/tiers_usd.py  # $6 / $12 + annual
-│       ├── web_dashboard/     # Next.js + Supabase (Global-only MVP)
-│       └── locale/
-├── handlers/                  # Common command/event handlers (refactored Phase 2)
-├── tests/{core,markets}/
-└── docs/                      # (same as current)
+
+On Railway: just push to your fork, Railway auto-deploys.
+
+---
+
+## Roadmap (deferred)
+
+Intentionally out of scope for now:
+
+- 💬 **Facebook Messenger bot** — same UX as Telegram, another front-end.
+- 🎮 **Discord bot** — for users who live in Discord, not Telegram.
+
+Shipped from the original roadmap: credit cards + cashback, manual `/transfer`,
+email ingestion (TCB / Cake / Hang Seng), multi-currency accounts (HKD), and a
+Zalo channel.
+
+---
+
+## Development
+
+```bash
+pip install -r requirements.txt
+pytest tests/unit/ -v
 ```
 
-**Lint rule:** `core/` MUST NOT import from `markets/`. Adapter dispatch happens at one boundary (`core/tenant_context.py`).
+300+ unit tests use an in-memory `FakeSpreadsheet` — zero Google API calls during tests. Tests with `@freeze_time` need `freezegun` for deterministic period assertions.
 
-## Migration from Bot Finance
+---
 
-Repo này được fork từ `Bot Finance/` (personal bot). Strategy:
+## Contributing
 
-1. ✅ Copy tất cả source code + config làm baseline
-2. ✅ Copy main BRD + supporting docs vào `docs/`
-3. ✅ Archive original planning docs vào `docs/archive/` cho reference
-4. ⏳ Phase 1: Migrate single-tenant → multi-tenant DB schema
-5. ⏳ Phase 1: Import founder's existing data (Apr 2026 onwards) làm test cohort
+Contributions welcome — issue / PR / fork. Be opinionated about scope: this bot is intentionally minimal. Features outside the [Roadmap](#roadmap-deferred) are unlikely to be merged but happy to discuss.
 
-### Founder seed — bootstrap only
+When opening a PR:
+- Include tests for new behavior.
+- Match existing code style (functional helpers, docstrings, no over-engineering).
+- For UX changes, attach a Telegram screenshot.
 
-The Sheets → Postgres migration (`scripts/migrate_sheets.py`, Gap 5) seeds the founder row as `users(id=1, role='founder')`. **Runtime code MUST NOT hardcode `if user_id == 1`** — admin powers come from `users.role IN ('founder', 'admin')`. The `user_id=1` identity is incidental (it happens to be the first row inserted); the founder role is what authorises admin commands.
+---
 
-This decouples the bootstrap mechanic (one founder seeded by a one-time script) from the runtime model (any user with `role='founder'` is treated as such), so future migrations or DB rebuilds can re-seed without subtly breaking authorisation paths.
+## Acknowledgments
 
-**Original Bot Finance repo:** giữ nguyên ở `/Users/maingocanh/Projects/Bot Finance` làm reference + để founder vẫn tiếp tục dùng cho personal trong giai đoạn dev.
+This project started as a fork-and-rewrite of [`maddyle8124/spend-less-bot`](https://github.com/maddyle8124/spend-less-bot). The core idea — Telegram bot + SePay webhook + Google Sheet — comes from there. My Money Went Bot adds per-account tracking, unified multi-period reports, account onboarding wizard, and a number of UX refinements.
 
-## Validation gates (VN track — must pass before next phase)
+---
 
-> Global track has its own validation plan in [brd-en.md Section 11](docs/brd-en.md) (50-100 user survey + 10 interviews + Plaid sandbox quote + Stripe Connect partner application).
+## License
 
-| Gate | Threshold | Phase |
-|---|---|---|
-| Customer interview Hùng+ | ≥4/7 structured interviews confirm pain "đập đầu Excel cuối tháng" | Before scaling beyond Phase 1 foundation |
-| MVP cost validation | Actual ≤ $25/mo @ 10-20 users | Phase 7 |
-| Email parser accuracy | ≥85% per bank (TCB, Cake, ACB, STB, BIDV, MB) | Phase 5 |
-| Backup recovery test | Pass full restore vào staging | Phase 7 |
-| Onboarding completion | ≥80% complete trong 1 session | Phase 8 |
-| **Hộ kinh doanh registration** | Hoàn tất đăng ký + có MST | **Pre-Phase 6 (BLOCKER cho launch)** |
-| Payment match accuracy | Layer 1 ≥95%, Layer 4 manual ≤5% | Phase 6-7 |
-| Error budget | Rolling 30-day error rate < 0.1% | Phase 7 onwards |
-| Cost margin | > 50% sustained ở 100 users | Phase 8 |
-| `@FinTrackUpdates` channel | Created + 1 test announcement | Pre-launch |
-| Business tier validation | ≥3/5 concierge user nói "trả $9/mo" | Trước Phase 2 (post-launch) |
+[MIT](LICENSE) — fork it, ship it, sell it.
 
-## Decision log
-
-- **2026-05-05:** Decision lock B+C combined (email parsing + SePay wizard trong MVP). Trade-off: timeline 14-16 tuần, cost +$10/mo Postmark, đổi lại full TAM coverage. Lý do: runway >5 tháng, 6 Hùng+ chat informal signal đủ để start Phase 1 foundation; structured validation gate vẫn cần pass trước khi scale/build Business tier assumptions.
-- **2026-05-05:** Decision lock **bank transfer auto-detect** làm payment primary (0% fee, reuse SePay+email infra). PayPal/USDT defer Phase 2. Hộ kinh doanh registration là pre-launch blocker (lead time 1-2 tuần, start ngay). Detail: [feature-spec-payment-bank-transfer.md](docs/features/feature-payment.md).
-- **2026-05-10:** Decision lock **dual-market structure** với 2 BRD canonical riêng biệt: brd-vi.md (VN) + brd-en.md (Global). Legacy brd.md (FinTrack v2.9.0) archived. Channel architecture confirmed shared (Telegram + Discord + Messenger), Zalo VN-exclusive Phase 3+, WhatsApp Global-only Phase 2. brd-en.md promoted from strategic-pivot-global.md với Plaid + e-commerce APIs stack, e-commerce solopreneur ICP, $6/$12 pricing.
-
-## Contact
-
-- Founder: Ngoc-Anh
-- Repo: `/Users/maingocanh/Projects/MyMoneyWent`
+If you build something cool on top, a backlink or shoutout is appreciated but not required.
