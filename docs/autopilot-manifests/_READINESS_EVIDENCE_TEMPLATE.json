@@ -1,0 +1,13 @@
+{
+  "evidence_schema_version": "level3-readiness-v2",
+  "task_id": "repo-id:task-slug",
+  "feature": "task-slug--slice-slug",
+  "base_sha": "0000000000000000000000000000000000000000",
+  "head_sha": "0000000000000000000000000000000000000000",
+  "acceptance": {
+    "status": "satisfied"
+  },
+  "breakers": {
+    "status": "clear"
+  }
+}

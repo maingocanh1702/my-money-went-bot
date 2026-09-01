@@ -1,0 +1,933 @@
+#!/usr/bin/env bash
+# KIT_VERSION: 34
+# v34 (2026-08-31) — three derive-don't-declare fixes in `autopilot-review-readiness.mjs`, one
+# collision-check fix in THIS file to close a gap review round 1 found in the first of the three, and
+# one item attempted and dropped. Closes docs/kit-derive-dont-declare-EXECUTE-PROMPT.md. Each landed
+# change is test-first (RED then GREEN) in test/e2e.sh's derive1-derive3 sections.
+# (1) scope is no longer validated against the diff. SCOPE_DRIFT could not distinguish a real
+# violation from a stale declaration and, measured 2026-08-31 across two product repos, caught neither
+# in a period a direct reviewer round found four real bugs. The certified file list is now the diff
+# itself -- already what gate-result.json recorded regardless. Declared `scope` is unchanged for its
+# other job: the register-time staleness pre-check in assertBaseUsable() and human/reviewer intent.
+# Consequence found by review round 1 and fixed in THIS file, same version: the `ready`-time collision
+# recheck below compared DECLARED scope against other active features, which was safe only because
+# SCOPE_DRIFT used to guarantee declared scope equalled the diff. With that guarantee gone, an
+# undeclared-but-actually-touched file could collide with another slice undetected. Fixed by reading
+# the CERTIFIED file list from gate-result.json's diff_files (written moments earlier by the `node
+# ... ready` call on the line above) instead of $SCOPE, fail-closed if that file cannot be read.
+# Review round 2 found the round-1 fix incomplete in two more ways, exhaustively enumerated by
+# grepping every consumer of declared scope in both files rather than patching per-round: (a)
+# assertBaseUsable() in autopilot-review-readiness.mjs still only protects DECLARED scope from base-
+# branch staleness -- an undeclared-but-actually-touched file could collide with an independent base-
+# branch change unnoticed. Fixed there with a second, additive staleness check against the certified
+# file list. (b) this file's `ready` case wrote DECLARED $SCOPE into the feature's INFLIGHT.md entry,
+# so a LATER feature's collision check (against THIS feature, once active) still saw a possibly-
+# narrower list than what was actually touched -- fixed by overwriting $SCOPE with the certified file
+# list before append_block ready runs.
+# Rounds 3 through 5 then converged on the collision recheck's OWN trust model, each round fixing one
+# part of the same property and a later round finding the remaining gap:
+#   round 2 trusted gate-result.json's diff_files outright;
+#   round 3 found that unbound (a tampered field would forge the check) and switched to recomputing
+#     the file list from a FRESH `git rev-parse HEAD` instead;
+#   round 4 found THAT reopened a different gap (a fresh HEAD is not bound to what the validator
+#     actually reviewed -- a commit or reset in the window between the validator's exit and this
+#     recheck would certify an unreviewed HEAD, and bypass SELF_CERTIFYING_GATE_CHANGE for it) --
+#     fixed by verifying gate-result.json's head_sha/manifest_sha256 against the live worktree first,
+#     then reading diff_base_sha from the now-identity-verified file;
+#   round 5 found THAT still left diff_base_sha itself unbound -- identity-verifying head_sha does not
+#     prove diff_base_sha was not independently changed (to head_sha itself, forcing an empty
+#     recomputed diff that silently bypasses collision detection and certifies an empty scope).
+# The recheck below resolves this by depending on gate-result.json for identity ONLY (verifies
+# head_sha/manifest_sha256 match the live worktree, `READY_HEAD_DRIFT` if not) and never reads any
+# diff-shaped field from it at all: diff_base_sha is resolved fresh from `$BASE_REF`, the same live-ref
+# resolution liveDiffState() itself performs, with no writer-mutable file in between to tamper. Also
+# review round 4: scope expansion beyond declaration is now structured, auditable data in
+# gate-result.json (scope_expanded/scope_expanded_files/declared_scope), not silent pass-through -- a
+# direct answer to level3-workflow.md's "scope is a ceiling" contract raised every round from round 1
+# on, from a different consumer's angle each time; see docs/kit-design-debt.md §11 for why full
+# re-enforcement was not built instead.
+# (2) a new `evidence` mode writes readiness.json's identity fields (task_id/feature/base_sha/head_sha)
+# from the same manifest/live-git-state register/ready already trust, instead of requiring an agent to
+# hand-type them. `ready`'s own validation of the file -- identity match, unknown-key whitelist,
+# freshness -- is unchanged; a hand-written file is still accepted if correct.
+# (3) verification.focused/canonical commands now receive AUTOPILOT_BASE_SHA and
+# AUTOPILOT_DIFF_BASE_SHA in their environment (additive -- process.env is spread first). A command
+# proving negative_scope compliance had no live base to reference and so had to hardcode one, the same
+# base_sha diff-window trap v25/v26 already closed for the reviewer's own --base flag. negative_scope
+# itself has no executable command surface anywhere in the kit today (confirmed absent from this file,
+# ap-finish.sh, and every runtime check in autopilot-review-readiness.mjs beyond a type-only presence
+# check) -- this closes the gap before anyone hits it, rather than fixing a live call site.
+# (4) DROPPED, exactly as the EXECUTE PROMPT authorized doing first if the slice hit trust-boundary
+# complexity. Attempted: register accepting HEAD anywhere at or ahead of the pinned base (an ancestor
+# check) instead of demanding exact equality, to recover a branch that implemented before registering.
+# Review round 1: register's collision check (below, the register case) runs against declared scope
+# regardless of commit timing, so accepting pre-existing commits lets an agent sink real implementation
+# work before discovering a collision that register-before-commit catches at zero cost. Reverted; HEAD
+# === baseSha stays exact equality in autopilot-review-readiness.mjs.
+# None of the three landed changes touch TRUSTED_GATE_FILES, SELF_CERTIFYING_GATE_CHANGE, or the
+# pinned-diff binding (diffHash/GATE_INPUT_DRIFT/trustedReviewEnvironment) -- verified by `git diff`
+# against the pinned base showing zero +/- lines on any of those symbols. test/e2e.sh gains a fourth
+# new section, trust-boundary-verify, proving the property empirically: a slice whose own diff touches
+# a TRUSTED_GATE_FILES entry still halts SELF_CERTIFYING_GATE_CHANGE exactly as before this version --
+# no prior test exercised that halt at all. This version was reviewed via the pinned reviewer invoked
+# DIRECTLY (autopilot/parallel/codex-review-pin.sh review --base <sha> <prompt>), not through
+# autopilot-scope-gate ready, because a slice touching its own trust gate cannot certify itself through
+# that gate by design -- see the gate-attempt-* artifacts under this branch's own review for the rounds.
+# v33 (2026-08-27) — pack content change, plus one helper added here but not yet called here; no
+# behaviour change in THIS file. Two things, one reason.
+# `autopilot-review-readiness.mjs` gains the dynamic-segment scope guard already reviewed in Plexco:
+# a Next.js App Router segment (`[id]`, `[...slug]`, `[[...slug]]`) is a literal directory name and
+# the only way to spell a path parameter, so the old `/[*?[\]]/` test rejected every scope entry
+# under one. Traversal is now a `..` SEGMENT rather than a substring, which stops `...` inside a
+# catch-all reading as an escape. Consumers must re-sync to get it, which is what this number is for.
+#
+# Two claims stood here until review round 1 and both were wrong; amended in place rather than bumped
+# to v34, because v33 never reached a consumer — it was authored and reviewed inside this same lane,
+# so there is no repo holding the superseded text to be reconciled with.
+#   - "`[a-z]` and every real glob stay rejected" — no longer true, deliberately. The bracket grammar
+#     now constrains STRUCTURE only, not the parameter's characters, because the same round found
+#     that scope entries were reaching git as PATHSPECS, i.e. as globs. Fixed there, which is what
+#     retired the shape guess: with expansion gone, `[a-z]` can only mean the literal directory
+#     `[a-z]`, while the identifier rule was refusing `app/[user-id]/page.tsx`, a legal route with no
+#     way around it.
+#   - "`SCOPE_PATHSPECS` wraps every entry in `:(literal)`" — superseded by the security round, which
+#     showed the prefix is disarmed by the environment of the writer being judged:
+#     `GIT_LITERAL_PATHSPECS=1` makes git read the prefix itself as filename text, match nothing, and
+#     skip BASE_STALE entirely. Scope now reaches git raw under the `--literal-pathspecs` command
+#     option, which the environment cannot override, and the four `GIT_*_PATHSPECS` variables are
+#     stripped from every git child. Same guarantee, no longer forgeable by the caller.
+#   - "The two copies are byte-identical again" — no longer true either. Canonical is now AHEAD of
+#     Plexco's `scripts/autopilot-review-readiness.mjs` by that pathspec fix and this grammar change.
+#     That is the correct direction: canonical is the source, consumers receive on sync. Do not
+#     reconcile by weakening the fix to restore byte-identity.
+# The other reason this version exists at all: canonical `test/e2e.sh` had been red since v32 —
+# 6cd4e66 added two top-level imports to the gate and updated `test/unit.sh` but not the e2e fixture,
+# whose scratch repo therefore tracked the gate without the modules it imports. Since
+# `autopilot-update.sh` runs BOTH suites as a publish gate, a red e2e froze every consumer sync
+# outright: no repo could take any kit fix at all for twelve days. Fixture fixed, and `test/unit.sh`
+# now asserts each trust-gate file the pack ships is byte-identical to its canonical source, so the
+# next such divergence is a red test rather than a silent freeze.
+#
+# The helper, added here and deliberately not called here yet: `canonical_relpath`, one rule for
+# deciding whether two path STRINGS name the same file. That byte-identity assertion needs it,
+# because it was reading destinations as strings — `scripts/x` and `scripts/./x` looked like two
+# destinations with one mapping each, while `copy_pack` hands both to `cp` and the second one wins,
+# so the check passed on the exact drift it was added to catch. It lives here rather than in the test
+# because the SCOPE_COLLISION comparison below is string-exact for the same reason and will adopt it;
+# that defect predates this version and is being closed by its own change, not smuggled into this one.
+# v31 (2026-08-06) — pack content change, no behaviour change in THIS file. `ap-finish.sh` archives a
+# slice's gitignored state directory before removing its worktree, instead of deleting it
+# unconditionally along with everything else. Ported verbatim from `Bestminton Club Payment check
+# bot`'s `scripts/ap-finish.sh`, its only divergence from canonical (1291 bytes, one block plus flag
+# plumbing) — see docs/kit-design-debt.md §9. `.autopilot/` is gitignored, so `design-probe.md`, every
+# `HALT-*.txt`/`AWAIT-FOUNDER-*.txt`, and every gate-attempt/codex-review artifact exist only inside
+# the worktree's filesystem; `git worktree remove` deleted all of it unconditionally. The standing
+# rule "never delete a HALT-*/AWAIT-FOUNDER-* file" binds on the act and so never fired here, because
+# the sanctioned disposal path reached the same destructive outcome without ever performing that act.
+# Observed 2026-08-06, Plexco `chat-dm-safety-authority-core`: a HALT at MAX_ROUNDS left 7739 bytes of
+# diagnosed-but-unapplied fix detail one `--authorized-close` away from disappearing with no trace
+# anywhere else. Fix: archive `$STATE` to `$ROOT/.autopilot/state-archive/<slug>-<utc-timestamp>/state`
+# before `git worktree remove`, on by default, `--no-archive` to opt out, and HALT rather than
+# silently overwrite an existing archive destination. Ported faithfully, not redesigned — the
+# collision-halt and the opt-out flag are the consumer's own choices, kept as found; any concern about
+# them is a separate question from this port. Tests written first (test/e2e.sh's state-archive
+# section: happy path, collision halt, opt-out flag), confirmed RED against the pre-port file, GREEN
+# after.
+# v30 (2026-08-03) — pack content change, no behaviour change in THIS file. `autopilot-prompt-GENERIC.md`
+# gains "When a design probe is mandatory": the Level 3 rewrite (`b2893b9`, 2026-07-28) dropped a
+# numbered `§0.1` trigger classifier with no replacement, and two consumers separately absorbed the
+# gap — Plexco's manifests kept citing the now-dead `§0.1` (six of them, one merged as late as
+# 2026-08-02), while Bestminton Club Payment check bot's `CLAUDE.md` hand-carried the pre-rewrite list
+# forward and extended it with a three-tier decision model canonical never had. This restores the
+# substance from that consumer's copy — generalized, repo-specific examples stripped — under a stable
+# named heading instead of a number, states explicitly that it is a floor a stricter local rule may
+# tighten, and retires section-number citation in favour of naming the trigger inline.
+# `docs/kit-design-debt.md`'s "files that ship with the kit but are not in the sync pack drift into
+# forks" entry gains the third recorded instance of this drift shape (content dropped from a pack
+# file, not a file outside the pack); a new entry right after it records that no gate reads
+# `design_probe_required` and why building one now would be speculative. No manifest schema change, no
+# new validator, no behaviour change in this file or `autopilot-review-readiness.mjs` — see that new
+# entry for why not yet.
+# v29 (2026-08-03) — pack content change, no behaviour change in THIS file. `autopilot-update.sh`
+# gains a post-sync report (docs/kit-design-debt.md §6, "the cheap half"): after the pack sync
+# completes, it now compares a small, explicitly maintained list of kit files that ship OUTSIDE
+# pack_pairs against a plausible consumer-side path, and reports — never syncs, never halts on — one
+# that exists there and differs from canonical. Measured 2026-08-03: canonical `ap-merge.sh` has no
+# step 8b and never calls `autopilot-backlog-reconcile`, but Plexco's own `scripts/ap-merge.sh` grew a
+# step 8b calling `reconcile --fix` right after its own probe verification — functionality canonical
+# never had. Nothing reported the fork, because a file outside the pack produces no diff during a
+# sync; a sync that says nothing about `ap-merge.sh` was indistinguishable from one that confirmed it
+# matched. `unsynced_candidates()` currently holds exactly one entry (`ap-merge.sh` →
+# `scripts/ap-merge.sh`) — deliberately not a sweep of every file the kit ships, since most either
+# have no consumer-side counterpart at all (template-repo-internal planning/reference docs) or are
+# explicitly canonical-only by documented design (`ap-watch.sh` and its installers: see the
+# `WATCHDOG = CANONICAL-ONLY` comment a few lines below this one). Grows one entry at a time, the same
+# way `pack_pairs` itself did (v12 through v19), only when a real consumer copy is found — guessing a
+# mapping up front is exactly the pattern-guessing this change was asked not to do.
+# Explicitly NOT decided here, and it is a separate, larger question left open in kit-design-debt.md
+# §6: whether `ap-merge.sh` (or anything else) belongs IN the pack. Forcing a legitimately per-repo
+# file into the pack can overwrite local adaptation the updater has no merge strategy for; that is an
+# owner decision, not this updater's to make. This change only makes the drift visible.
+# Verified test-first (test/e2e.sh, "kit:sync-drift-report" section, 8 assertions, run in a dedicated
+# detached worktree so the suite's own stub `codex-review-pin.sh` doesn't confound the pack-drift
+# check): RED against the pre-fix code (the report never appeared), GREEN after (the drifted file is
+# named and clearly marked, exit stays 0, an identical or absent consumer copy stays silent).
+# v28 (2026-08-03) — BEHAVIOUR FIX in this file (docs/kit-test-suite-spec.md, "Defect 7", found
+# 2026-08-01): `register` was fail-open on the one control the rest of the gate assumes. The
+# contract-validator guard and the registered-manifest.sha256 hash-lock guard both gated on
+# manifest_schema_version == "level3-operational-v2", and neither had an else branch. Hand register
+# a manifest without that field — the tracked authored contract under docs/autopilot-manifests/ is
+# FORBIDDEN from carrying it — and both guards fell through: no validation ran, no hash-lock was
+# written, INFLIGHT.md still got a real in-flight reservation, and "registered: ... (in-flight)"
+# printed unconditionally. The writer had every reason to believe the slice was locked; it was not.
+# `ready` later halted MANIFEST_DRIFT ("manifest changed after registration") for a manifest that
+# was never locked in the first place, so the debugging trail pointed at a change that never
+# happened.
+# Fix shape: the property, not the two conditionals. `register` now HALTs CONTRACT_INVALID up
+# front — before acquire()/append_block() ever touch INFLIGHT.md, before TASK_STATE is created —
+# naming the missing field and the exact runtime path (.autopilot/state/<feature>/manifest.json)
+# the manifest should have been. Checking this before any mutation, not only at the hash-lock site,
+# is the part that matters: a patch that only added the missing else branch there would still let
+# acquire()/append_block() write a real INFLIGHT.md reservation first, so the halted attempt would
+# leave a dangling in-flight block that a corrected retry then collides with
+# (REJECT FEATURE_ALREADY_ACTIVE) — trading a silent lock failure for a locked-out legitimate retry.
+# Verified test-first on a scratch repo (test/e2e.sh, "defect7" section): RED against the pre-fix
+# code (register exited 0, no hash file, a dangling INFLIGHT.md reservation, no HALT), GREEN after
+# (a manifest without manifest_schema_version HALTs with no hash file and no INFLIGHT.md entry; the
+# real runtime manifest still registers and its hash-lock matches).
+# BREAKING CHANGE, deliberately: every consumer repo's per-slice launcher that calls
+# `register --manifest docs/autopilot-manifests/<slug>.json` (the authored path) now HALTs instead
+# of silently succeeding unlocked. That is the correct outcome — those registrations were never
+# actually locked — but it lands immediately on upgrade, not staged. Fixing those launchers is
+# explicitly out of scope for this fix; most belong to already-merged slices, and with the tool
+# halting, updating them becomes ordinary cleanup rather than a defence anyone is relying on.
+# v27 (2026-08-01) — ap-watch.sh's MAX_ROUNDS ceiling (MAXR_HALT, hard-coded default 6) sat one round
+# above the ceiling this kit actually enforces. The readiness gate's own manifest field,
+# budgets.fix_rounds_max (autopilot-review-readiness.mjs:377, manifests/_TEMPLATE.json:56), is 5, and a
+# real terminal HALT stops there, not at 6: backlog-level3-reconcile-v3's own HALT-MAX_ROUNDS.txt reads
+# "round 5 (the founder-declared last permitted round, fix_rounds_max=5) returned 5 actionable
+# findings ... no round 6 fix attempt was made" (fix-round-count.txt=5 on disk). With MAXR_HALT=6, the
+# pre-thrash warning ("fix-round-count=4 (HALT khi ≥6)") promised two rounds of headroom when only one
+# remained. The identical misleading line was logged five separate times (zalo-player-join-gate-on,
+# backlog-level3-reconcile-v3, messenger-player-join-gate-on, identity-claim-authz-hardening-v3,
+# identity-claim-authz-gate-gen2), per docs/autopilot-backlog.md's own
+# `ap-watch-max-rounds-ceiling-off-by-one` entry (filed 2026-08-01, the same day, by a session that had
+# just synced to this same KIT_VERSION 26).
+# Fix shape: do not restate the number as a second literal (6, or a corrected-but-still-hardcoded 5) —
+# read it. ap-watch.sh now derives the ceiling PER SLICE from that slice's own runtime manifest.json
+# (budgets.fix_rounds_max), via a portable python3/node/jq reader (read_fix_rounds_max, mirroring this
+# file's own json_get() pattern), falling back to 5 only when a manifest is missing, unreadable, or
+# carries a value outside the 0..5 schema range. MAXR_WARN is now derived as maxr_halt-1 ("warn one
+# round before the ceiling") instead of an independent constant, so the two numbers cannot drift apart
+# from each other the way MAXR_HALT already drifted from fix_rounds_max.
+# Same failure shape as v23 (BASE_STALE, one rule kept in two copies) and v24 (registry-lookup, one bug
+# kept in four copies across three files): a number duplicated instead of read eventually disagrees
+# with itself.
+# Per WATCHDOG-NOTES.md's own closing rule, ap-watch's alert paths — including this one — are outside
+# test-level3-operational-kit.sh's coverage (it drives only the resolver + `bash -n`; the alert paths
+# need osascript/stat -f/lsof/pgrep). This fix is verified by reading — bash -n, a standalone
+# read_fix_rounds_max test against valid/missing/malformed/out-of-range manifests, and re-derivation
+# against autopilot-review-readiness.mjs and a real HALT-MAX_ROUNDS.txt — not by CI.
+# v26 (2026-07-31) — v25's own note overclaimed: "the diff handed to the reviewer... is now taken from
+# the LIVE base-ref tip" was true only for the internal SCOPE_DRIFT/diffHash computation inside
+# liveDiffState(). Four other sites still read the pinned base_sha for the same window job: the --base
+# flag actually handed to the reviewer process, the two prompt strings describing that base to it, and
+# ap-finish.sh's own recomputed diff hash and file list. Measured consequences: the reviewer reviewed
+# 11 files for a slice that changed 5 (told --base <stale pin>, not the live window), and a nominally
+# PASSING gate produced a diff hash ap-finish could never reproduce, because ap-finish recomputed from
+# base_sha while the gate's own diff_files/diff_sha256 had already moved to the live base-ref tip.
+# Fix shape: one source, not two. liveDiffState() now returns diffBase alongside its other fields;
+# every reviewer invocation — the --base flag and both prompt strings — reads initialState.diffBase
+# instead of the module-level baseSha; gate-result.json gains a diff_base_sha field recording exactly
+# what the gate used. ap-finish.sh reads that field and recomputes its live_diff_hash and feature_files
+# from it — no fallback to base_sha, because a fallback is a second source of truth, which is the
+# defect this closes. base_sha itself is untouched everywhere it does its actual job: assertBaseUsable
+# ()'s legitimacy check, the register-time HEAD==base_sha equality, BASE_DRIFT, dependency-landed-
+# before-base proofs and gate-result.json's own base_sha field — kept alongside diff_base_sha, not
+# replaced by it, because legitimacy and window are still two different questions, just no longer
+# answered by the same value.
+# Also closes three defects in autopilot-backlog-reconcile's close_by/scope guard logic, found the
+# same day by the same live slice's Codex review rounds — see that file's own v7 note.
+# v25 (2026-07-31) — the root the last three fixes were circling: `base_sha` was doing TWO jobs. One is
+# proving the review rests on a legitimate base — v21/v23 moved that to assertBaseUsable(), which checks
+# ancestry plus untouched scope. The other is marking where the slice's own work begins, and for THAT the
+# pinned SHA is simply wrong the moment anything lands on the base branch. A slice that rebases to pick
+# up a gate fix finds every intervening commit inside `base_sha...HEAD`, and SCOPE_DRIFT then reports
+# files it never touched. Measured: a slice rebased through three sanctioned kit syncs and halted on four
+# kit files with no legal way out — re-registering is refused while in-flight (FEATURE_ALREADY_ACTIVE)
+# and editing the runtime manifest breaks its hash lock (MANIFEST_DRIFT). The registration was correct;
+# the measurement was not.
+# The diff window — commit count, changed-file list, and the diff handed to the reviewer — is now taken
+# from the LIVE base-ref tip. Correct in both states: rebased, merge-base is that tip so the window is
+# exactly this slice's commits; not rebased, merge-base is the old divergence point, which is also
+# exactly this slice's commits. The pinned SHA was right in neither case once the branch moved.
+# Pattern worth naming, and it now has three instances in one day: BASE_STALE twice, then SCOPE_DRIFT,
+# were three symptoms of one overloaded field, and fixing symptoms in sequence produced two of them.
+# Ask what a value MEANS before fixing where it is compared. The v24 note below is the same lesson in the
+# other direction — one meaning, copied into four places.
+# v24 (2026-07-31) — the v20 registry-lookup bug had FOUR copies across THREE files. v20 fixed the two
+# inside this file, because that is where the search was run. The other two — ap-finish.sh
+# registry_status() and ap-housekeep.sh — kept the reset, so `ap-finish.sh --squash-verified` refused
+# every feature that was not the last block in the registry, reporting that the status must be `ready`
+# while the registry plainly said `ready`. The housekeeping inventory silently listed live reservations
+# as `absent` for the same reason. Both fixed; a repo-wide search now finds no remaining copy.
+# This is the second time in one day that a fix landed in some copies of a rule and not all of them
+# (see v23). The pattern in both: search inside the file already open, treat that result as the whole
+# set. When changing a rule, enumerate its copies ACROSS THE PACK before editing any of them, then
+# collapse them into one definition so there is nothing left to enumerate next time.
+# v23 (2026-07-31) — v21 fixed one of TWO copies of the BASE_STALE rule. The pre-flight copy got the new
+# ancestry+scope logic; a second copy inside liveDiffState() — the one `ready` actually passes through —
+# kept exact equality. So the fix looked landed, was verified in the file, and changed nothing for the
+# slice that needed it; the only clue was that the halt message did not match either new condition.
+# Both call sites now share ONE function, assertBaseUsable(). The rule has a single definition, so the
+# next change to it cannot land in half the places.
+# How the duplicate survived v21: the author searched for BASE_STALE and piped the result through
+# `head`, then read the truncated output as the complete set. Truncated output is not exhaustive output —
+# the same failure shape as reading an empty query result as an empty world, which this kit already
+# records. When enumerating call sites of a rule you are about to change, print all of them.
+# v22 (2026-07-31) — two findings from the first codex round to reach the close_by logic. One was a real
+# bug, one was a doc/code mismatch resolved on the doc side.
+# (1) REAL: the close_by abuse guard tested file EXTENSION rather than config-vs-source, so
+# eslint.config.mjs read as source and the guard refused a live dependency slice that has nothing
+# symbol-like to probe — the same category as pnpm-workspace.yaml, already allowed. Config filenames
+# (`*.config.*`, dotfile rc files, lockfiles) now join docs, data and manifests on the allowed side;
+# real source and bare scripts stay refused.
+# (2) DOC, NOT CODE: the reviewer flagged that `is_wellformed_close_by` never enforced the `·` the
+# documentation showed. Measured: it accepts `hand <reason>` with any separator and rejects `hand` alone
+# — which is the behaviour worth having. Enforcing one hard-to-type character protects nothing and
+# invents a fresh class of authoring error, so the docs and the failure message were corrected to say the
+# reason is required and the interpunct is convention. The mismatch was real; the wrong side was written
+# down.
+# Worth recording about how (1) survived: the author of this helper DID test it, with fixtures for the
+# cases they had in mind rather than the cases the contract distinguishes. `hand <reason without a
+# middot>` was never among them, and it was the exact shape in question. A test suite written from the
+# same mental model that produced the code inherits that model's blind spots; the codex round did not.
+# v21 (2026-07-31) — BEHAVIOUR FIX in autopilot-review-readiness.mjs: BASE_STALE no longer requires
+# base_sha to EQUAL the tip of base_ref. It now requires base_sha to remain an ANCESTOR of that tip, and
+# no file in the slice's declared `scope` to have changed on base_ref since. Exact equality made every
+# concurrent registration terminal the moment anything landed on the default branch — an unrelated docs
+# commit was enough — so the parallel model this kit documents could never complete: the first slice to
+# merge killed every other in-flight slice. Measured 2026-07-31 with three lanes live; all three went
+# BASE_STALE from a single chore commit, and the symptom read as a registry fault rather than as this
+# check. The two replacement conditions preserve what mattered: a rewritten history still halts, and a
+# competing writer touching this slice's own files still halts. What is no longer fatal is somebody
+# touching an unrelated file. Division of labour, now explicit: this gate certifies the DIFF the
+# reviewer read; ap-merge.sh certifies the MERGE by performing a real one and stopping on conflict.
+# Verified before implementing, on a scratch repository, across three cases: unrelated commit on the
+# base ref (was HALT, now PASS), in-scope file changed on the base ref (HALT, unchanged), and rewritten
+# history so the base is no longer an ancestor (HALT, unchanged).
+# v20 (2026-07-31) — BEHAVIOUR FIX in this file, and it is a parallelism killer. The `ready` lifecycle
+# lookup read a feature's status out of INFLIGHT.md with an awk that reset its accumulator on EVERY
+# `## feature:` header. The status was therefore only retrievable when the feature happened to be the
+# LAST block in the registry; for any earlier block the captured value was erased by the next header and
+# the gate rejected a perfectly valid lifecycle with
+# `REJECT READY_LIFECYCLE_INVALID: status is 'absent'`.
+# Latent for as long as one slice ran at a time — the single active feature was always last. It surfaced
+# the moment three slices ran in parallel: the newest could run `ready`, the two before it could not, and
+# the symptom read like registry corruption rather than a query bug. Both `ready` lookups fixed by
+# dropping the reset. The per-block scanner near the top of this file KEEPS its reset — it evaluates each
+# block in turn instead of accumulating one named feature, so there the reset is required. Same idiom,
+# opposite requirement, which is exactly why the wrong one was easy to copy.
+# Known and deliberately NOT fixed here: these two lookups do not skip fenced code blocks, while other
+# INFLIGHT readers in this file do. No registry today contains a fence, and widening this change would
+# make a behaviour fix carry unrelated hardening. Separate slice.
+# v19 (2026-07-30) — the pack now carries the two docs that govern agent BEHAVIOUR, not just the scripts
+# that enforce it: autopilot-prompt-GENERIC.md and level3-workflow.md, both into docs/autopilot-templates/.
+# They were never in the pack. Each consumer held a hand-copy, and hand-copies drift: Plexco's
+# autopilot-prompt-GENERIC.md was a day stale against canonical while a sibling file in the same
+# directory had been updated that morning, and the task to build a mirror had sat unstarted in that
+# repo's own backlog. Every rule this kit has learned the hard way — findings must be closable within the
+# change set, never edit what you feed a gate, read the validator before authoring a field — reached
+# exactly one repo until now. Also adds two rules worth propagating on their own: a precedence order for
+# resolving trade-offs autonomously (fail-closed and least-privilege outrank everything, deadline never
+# outvotes them), and the test for whether a question belongs to the owner at all — it does only when the
+# answer is not derivable from the contract. Those two exist because a slice stopped to ask which version
+# to use when its own manifest had already pre-authorized the answer.
+# copy_pack now mkdir -p's the destination directory; a consumer without docs/autopilot-templates/ would
+# otherwise fail the copy.
+# v18 (2026-07-30) — pack content change, no behaviour change in THIS file. Fixes a defect this kit
+# introduced in v15. `manifests/_TEMPLATE.json`'s `_verification_rule` called the entries "commands"
+# and then illustrated every one of them with an English sentence ("osv-scanner reports zero findings
+# for <pkg>"). runVerificationGroup() spawns each string as a shell command and gates on exit status,
+# so prose fails on the first attempt and every attempt after. The examples taught louder than the
+# wording: the author of the very next slice copied their shape and the gate rejected all of them at
+# register time (Plexco authorize-tenant-action-core, 2026-07-30) — the writer had to rewrite them
+# in-flight. Examples are now executable. Also records the adjacent lesson: some properties belong in
+# `scope` rather than in a shell test — "no new migration" is already enforced by SCOPE_DRIFT when no
+# migration path is declared, and writing a grep for it duplicates a structural guarantee.
+# Second lesson from the same slice, recorded in level3-workflow.md rather than here: invariant tokens
+# must be read out of the catalog before they are written into a manifest. Two plausible-sounding
+# tokens were invented, both absent from the catalog, and would have HALTed INVARIANT_UNKNOWN. The
+# catalog's machine block stores `token — description` lines with an em-dash and NO backticks, so a
+# grep written for backticked tokens silently returns nothing — which reads exactly like an empty
+# catalog instead of a wrong query.
+# v17 (2026-07-30) — FIRST behaviour change to the pinned reviewer contract (codex-review-pin.sh 1→2).
+# The pinned prompt bounded what to REVIEW but never bounded what could count as a BLOCKING finding: it
+# says "review only the change set", then "inspect live source", then "CLEAN only when there are zero
+# actionable findings". A reviewer following those instructions exactly will find repo-wide staleness —
+# correctly — and block on it. But a writer cannot edit outside its registered scope, so that verdict is
+# unsatisfiable and the slice loops until a breaker fires. Measured on Plexco deps-security-bump: three
+# registrations, six fix rounds, three of them (2, 4, 6) the same class of out-of-scope docs finding, each
+# round producing a better EXPLANATION of an unclosable gap. The REGION_THRASH breaker never fired because
+# the writer explained itself in a different file each round, so `file:region` kept changing. The
+# dependency change itself passed review clean three times. Fix: findings must be closable by editing the
+# change set; everything else goes under "ADVISORY (outside change set)" and is excluded from the verdict.
+# This preserves the reviewer's genuinely useful repo-wide observations without letting them deadlock a
+# scoped slice. Consumers on kit <17 keep the old blocking behaviour until they sync.
+# v16 (2026-07-30) — pack content change, no behaviour change in THIS file. Two fixes from one live
+# slice. (1) `claude-notify-hook.sh` no longer writes its forensic sentinel as `AWAIT-FOUNDER-notify.txt`.
+# That name sat inside the readiness gate's terminal-signal namespace, so every Claude Code permission
+# prompt during a slice silently planted a fake terminal signal and the next `ready` refused to run with
+# TERMINAL_CONFLICT; worse, the file's own text reads "Claude needs your permission", so deleting it was
+# indistinguishable from bypassing the permission system and the agent was correctly denied for trying.
+# The sentinel had no consumer at all — `ap-watch.sh` never scanned for it. Renamed to
+# `notify-sentinel.txt`. (2) `level3-workflow.md` section 8 records a third measured gate gap: reviewer
+# auth-TIER failures are classified terminal instead of resumable. The auth detector matches only
+# 401-shaped strings, so a 400 `invalid_request_error` naming an unsupported model for the account type
+# falls through to HALT REVIEW_UNAVAILABLE — demanding a full close-and-re-register for what is, in
+# substance, exactly the CODEX_AUTH_REQUIRED "re-authenticate, then resume" condition. Observed after a
+# mid-run operator re-auth, on a slice that had already completed three clean review rounds that day.
+# v15 (2026-07-30) — pack content change, no behaviour change in THIS file. `manifests/_TEMPLATE.json`
+# gains `_verification_rule` and `_scope_rule`. The first exists because the runtime manifest is
+# hash-locked at `register`, so a pinned literal in `verification` cannot be corrected in place — it
+# forces a full close-and-re-register cycle. A Plexco slice paid that cost: `verification.focused`
+# asserted `postcss == 8.5.18`, the owner later narrowed the slice's scope, and the third registration
+# followed. A sibling manifest pinned a test-count baseline that went stale within hours of authoring
+# and HALTed its slice at MAX_ROUNDS. Verification must assert properties, never literals. The second
+# rule restates that `scope` takes exact file paths, since a directory entry is rejected and the error
+# arrives only at register time. See also level3-workflow.md section 8, which now records two measured,
+# unresolved gaps in the gate (reviewer receives no scope; breaker counts infra flakes as fix rounds).
+# v14 (2026-07-30) — pack content change, no behaviour change in THIS file. `autopilot-backlog-reconcile`
+# v14 (2026-07-30) — pack content change, no behaviour change in THIS file. `autopilot-backlog-reconcile`
+# (its own header goes 3 → 4) stops hard-coding `DEFAULT_BRANCH="main"`. It now resolves origin's default
+# branch from refs/remotes/origin/HEAD, falls back to whichever single conventional name exists, honours
+# AUTOPILOT_DEFAULT_BRANCH, and **HALTs** when it cannot resolve. Previously, in a `master`-default
+# consumer the probe ref did not exist, `git grep ... 2>/dev/null` failed silently, every task reported
+# "genuinely pending", and `--check` returned "No stale entries" exit 0 while checking nothing — the
+# anti-rot mechanism was a silent no-op. A gate that cannot fail is not a gate.
+# v13 (2026-07-30) — pack content change, no behaviour change in THIS file. `manifests/_TEMPLATE.json` gains a
+# leading `_role` field stating that it is the RUNTIME manifest shape for
+# `.autopilot/state/<FEATURE_ID>/manifest.json`, not the schema of the tracked authored contract under
+# `docs/autopilot-manifests/`. That distinction was guessed wrong in practice: the template ships with
+# `manifest_schema_version: level3-operational-v2` while living in the authored-contract directory, which
+# reads as "your tracked manifests are an old version" when in fact adding that string to a tracked contract
+# makes `register` HALT CONTRACT_INVALID (autopilot-review-readiness.mjs pins the path). See
+# level3-workflow.md section 11.
+# v12 (2026-07-29) — pack content change, no behaviour change in THIS file. Bumped because
+# `autopilot-update.sh` derives the whole pack's canonical version from this line, and v12 adds
+# `autopilot-backlog-reconcile` to the pack (it was shipped in the kit but never synced, so consumer
+# fixes to it were invisible and permanent) plus an explicit `node:process` import in
+# `autopilot-review-readiness.mjs` (bare `process` made `pnpm lint` red in any consumer that lints
+# scripts/). Consumers at v11 auto-upgrade; do not hand-edit pack files to match.
+# autopilot-scope-gate — parallel autopilot coordination (SCOPE_COLLISION gate).
+# REPO-AGNOSTIC template. Copy to <repo>/scripts/autopilot-scope-gate, chmod +x, commit.
+#
+#   scripts/autopilot-scope-gate register --manifest docs/autopilot-manifests/<feature>.json
+#   scripts/autopilot-scope-gate ready    --manifest <manifest>
+#   scripts/autopilot-scope-gate cleanup  --feature <slug>  # internal to ap-finish; requires record
+#
+# Lets MULTIPLE autopilot/Claude-Code sessions run in parallel (one git worktree each) without
+# clobbering each other: PARALLEL when file-scope + domain invariants are disjoint, SEQUENTIAL when
+# they overlap. Owns the SHARED runtime registry at MAIN-repo-root/.autopilot/INFLIGHT.md (resolved
+# via git-common-dir so every worktree hits the SAME file). Atomic across concurrent sessions via a
+# portable mkdir-lock (macOS has no flock). JSON parsed with python3 → node → jq (whichever exists).
+#
+# register HALTs if:
+#   - INVARIANT_UNKNOWN : a manifest invariant is not a canonical token in the repo catalog
+#                         (docs/autopilot-invariant-catalog.md). Prevents synonym drift bypassing (b).
+#   - DEP_MISSING       : a dependency is active or lacks a unique landing proof on the pinned base.
+#   - SCOPE_COLLISION   : my scope files OR invariants intersect another ACTIVE feature.
+# On PASS it replaces any existing block for my feature (e.g. queued) with a fresh in-flight block.
+# ready  : run the repo review-readiness gate, then flip status → ready (keeps the reservation).
+# cleanup: remove my block only after ap-finish wrote a valid landing/disposition record.
+#
+# NOTE (dependency semantics): absence from the runtime registry is never landing proof.
+# `level3-operational-v2` manifests require one `dep_checks` entry per dependency, binding the
+# dependency base, landed SHA and a slice-unique symbol to the downstream pinned base. The readiness
+# validator enforces that proof; this shell layer also rejects active prerequisites and performs a
+# quick merged-interface presence check.
+set -euo pipefail
+
+cmd="${1:-}"; shift || true
+manifest=""; feature_arg=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --manifest) manifest="${2:-}"; shift 2 ;;
+    --feature)  feature_arg="${2:-}"; shift 2 ;;
+    *) echo "unknown arg: $1" >&2; exit 2 ;;
+  esac
+done
+# cleanup may target a feature by slug (manifest is often deleted after merge); every other path
+# needs a manifest. register/ready by --feature is not allowed (they need scope/invariants).
+if [ "$cmd" = "cleanup" ] && [ -n "$feature_arg" ]; then
+  :
+else
+  [ -n "$cmd" ] && [ -n "$manifest" ] || { echo "usage: autopilot-scope-gate <register|ready|cleanup> --manifest <path>   (or: cleanup --feature <slug>)" >&2; exit 2; }
+fi
+
+# --- shared registry at MAIN repo root (works from any worktree) ---
+ROOT="$(cd "$(git rev-parse --git-common-dir)" && cd .. && pwd -P)"
+WORKTREE_ROOT="$(cd "$(git rev-parse --show-toplevel)" && pwd -P)"
+DIR="$ROOT/.autopilot"; INFLIGHT="$DIR/INFLIGHT.md"; LOCK="$DIR/INFLIGHT.lock"
+mkdir -p "$DIR"
+TASK_STATE_CANDIDATE=""
+REGISTRY_LOCK_HELD=0
+READY_LOCK=""
+READY_LOCK_HELD=0
+
+cleanup_locks(){
+  if [ "$REGISTRY_LOCK_HELD" = 1 ]; then rmdir "$LOCK" 2>/dev/null || true; fi
+  if [ "$READY_LOCK_HELD" = 1 ] && [ -n "$READY_LOCK" ]; then rmdir "$READY_LOCK" 2>/dev/null || true; fi
+}
+trap cleanup_locks EXIT
+
+halt_gate(){
+  _halt_code="$1"; shift
+  _halt_message="$*"
+  if [ -n "$TASK_STATE_CANDIDATE" ]; then
+    mkdir -p "$TASK_STATE_CANDIDATE"
+    _halt_file="$TASK_STATE_CANDIDATE/HALT-$_halt_code.txt"
+    if [ ! -e "$_halt_file" ]; then
+      {
+        printf 'HALT %s: %s\n' "$_halt_code" "$_halt_message"
+        printf 'created_at_utc: %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+        printf '%s\n' 'resolution: close this terminal lifecycle and create a fresh successor task after fixing the cause'
+      } > "$_halt_file"
+    fi
+  fi
+  echo "HALT $_halt_code: $_halt_message" >&2
+  exit 1
+}
+# INFLIGHT initialisation happens inside the lock (register/ready/cleanup) to avoid
+# a race where two concurrent fresh-repo runs both see the file absent and clobber each other.
+
+# --- portable JSON reader: scalar -> one line; array -> one item per line ---
+json_get(){ # $1 = abs json path, $2 = key
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$1" "$2" <<'PY'
+import json,sys
+try: d=json.load(open(sys.argv[1]))
+except Exception as e: sys.stderr.write("HALT: invalid JSON %s: %s\n"%(sys.argv[1],e)); sys.exit(3)
+v=d.get(sys.argv[2])
+print("\n".join(map(str,v)) if isinstance(v,list) else ("" if v is None else str(v)))
+PY
+  elif command -v node >/dev/null 2>&1; then
+    node -e 'const m=require(process.argv[1]);const v=m[process.argv[2]];if(Array.isArray(v))console.log(v.join("\n"));else if(v!=null)console.log(v);' "$1" "$2"
+  elif command -v jq >/dev/null 2>&1; then
+    jq -r --arg k "$2" 'if (.[$k]|type)=="array" then .[$k][] else (.[$k]//empty) end' "$1"
+  else
+    echo "HALT: need python3, node, or jq to parse manifest JSON" >&2; return 1
+  fi
+}
+
+# --- portable reader for dep_checks: array of {file,symbol} -> "file<TAB>symbol" per line ---
+json_get_dep_checks(){ # $1 = abs json path
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$1" <<'PY'
+import json,sys
+try: d=json.load(open(sys.argv[1]))
+except Exception as e: sys.stderr.write("HALT: invalid JSON %s: %s\n"%(sys.argv[1],e)); sys.exit(3)
+for c in (d.get("dep_checks") or []):
+    f=str(c.get("file","")).strip(); s=str(c.get("symbol","")).strip()
+    if f and s: print("%s\t%s"%(f,s))
+PY
+  elif command -v node >/dev/null 2>&1; then
+    node -e 'const m=require(process.argv[1]);for(const c of (m.dep_checks||[])){if(c&&c.file&&c.symbol)console.log(c.file+"\t"+c.symbol);}' "$1"
+  elif command -v jq >/dev/null 2>&1; then
+    jq -r '(.dep_checks // [])[] | select(.file and .symbol) | "\(.file)\t\(.symbol)"' "$1"
+  else
+    echo "HALT: need python3, node, or jq to parse manifest JSON" >&2; return 1
+  fi
+}
+
+# --- manifest fields — skipped for cleanup-by-slug ---
+if [ -n "$manifest" ]; then
+  _manifest_input_dir="$(dirname "$manifest")"
+  if [ ! -d "$_manifest_input_dir" ]; then
+    echo "HALT MANIFEST_MISSING: parent directory does not exist for $manifest" >&2
+    exit 1
+  fi
+  MANABS="$(cd "$_manifest_input_dir" && pwd -P)/$(basename "$manifest")"
+  _manifest_state_dir="$(dirname "$MANABS")"
+  _manifest_state_parent="$(dirname "$_manifest_state_dir")"
+  _manifest_state_feature="$(basename "$_manifest_state_dir")"
+  if [ "$_manifest_state_parent" = "$WORKTREE_ROOT/.autopilot/state" ]; then
+    case "$_manifest_state_feature" in
+      ""|[!a-z0-9]*|*[!a-z0-9._-]*) ;;
+      *) TASK_STATE_CANDIDATE="$_manifest_state_dir" ;;
+    esac
+  fi
+  [ -f "$MANABS" ] || halt_gate MANIFEST_MISSING "$MANABS"
+  if ! json_get "$MANABS" feature >/dev/null; then
+    halt_gate MANIFEST_INVALID "cannot parse $MANABS with an available JSON reader"
+  fi
+  FEATURE="$(json_get "$MANABS" feature)"; BRANCH="$(json_get "$MANABS" branch)"; RISK="$(json_get "$MANABS" risk)"
+  DEPS="$(json_get "$MANABS" depends_on)"; INVARIANTS="$(json_get "$MANABS" invariants)"; SCOPE="$(json_get "$MANABS" scope)"
+  BASE_REF="$(json_get "$MANABS" base_ref)"; [ -n "$BASE_REF" ] || BASE_REF="main"
+  MANIFEST_SCHEMA_VERSION="$(json_get "$MANABS" manifest_schema_version)"
+  REVIEW_GATE_VERSION="$(json_get "$MANABS" review_gate_version)"
+  DEP_CHECKS="$(json_get_dep_checks "$MANABS")"
+  [ -n "$FEATURE" ] || halt_gate CONTRACT_INVALID "manifest missing 'feature'"
+  if command -v python3 >/dev/null 2>&1; then
+    MANREL="$(python3 - "$ROOT" "$MANABS" <<'PY'
+import os,sys;print(os.path.relpath(sys.argv[2],sys.argv[1]))
+PY
+)"
+  else MANREL="${MANABS#"$ROOT"/}"; fi
+  # invariant catalog: normally docs/autopilot-invariant-catalog.md (sibling of the manifests dir).
+  # v6 FIX: a RUNTIME/TEMP manifest may live OUTSIDE docs/ (e.g. .autopilot/state/<feature>/manifest.json
+  # so no untracked file lands in docs/). The sibling derivation then resolves to the wrong dir and
+  # `register` HALTs INVARIANT_UNKNOWN even though the catalog exists. Resolve in order:
+  #   explicit $AUTOPILOT_INVARIANT_CATALOG > sibling-of-manifest > worktree docs/ > MAIN repo docs/.
+  _cat_dir="$(cd "$(dirname "$manifest")/.." 2>/dev/null && pwd)" || _cat_dir=""
+  CATALOG=""
+  for _c in "${AUTOPILOT_INVARIANT_CATALOG:-}" \
+            "${_cat_dir:+$_cat_dir/autopilot-invariant-catalog.md}" \
+            "$WORKTREE_ROOT/docs/autopilot-invariant-catalog.md" \
+            "$ROOT/docs/autopilot-invariant-catalog.md"; do
+    if [ -n "$_c" ] && [ -f "$_c" ]; then CATALOG="$_c"; break; fi
+  done
+  [ -n "$CATALOG" ] || CATALOG="${_cat_dir:+$_cat_dir/}autopilot-invariant-catalog.md"
+else
+  FEATURE="$feature_arg"
+  case "$FEATURE" in
+    ""|[!a-z0-9]*|*[!a-z0-9._-]*) ;;
+    *) TASK_STATE_CANDIDATE="$ROOT/.autopilot/state/$FEATURE" ;;
+  esac
+fi
+
+# canonical invariant tokens between the catalog markers. The catalog contract is one token as the
+# first whitespace-delimited field per line. Avoid a sed character class containing an em dash: BSD
+# sed can parse `[—-]` as an invalid/locale-sensitive range and silently return an empty catalog.
+catalog_tokens(){
+  [ -f "$CATALOG" ] || return 1
+  awk '
+    $0 == "<!-- catalog:start -->"{starts++; if(!start_line)start_line=NR; c=1; next}
+    $0 == "<!-- catalog:end -->"{ends++; if(!end_line)end_line=NR; c=0; next}
+    c && $1 ~ /^[a-z][a-z0-9_-]*$/ {print $1}
+    END {if (!(starts == 1 && ends == 1 && start_line < end_line)) exit 1}
+  ' "$CATALOG" | sort -u
+}
+
+# --- portable atomic lock (mkdir) ---
+acquire(){ local t=0; until mkdir "$LOCK" 2>/dev/null; do sleep 0.2; t=$((t+1)); [ $t -gt 150 ] && halt_gate REGISTRY_LOCK_TIMEOUT "shared registry lock did not clear: $LOCK"; done; REGISTRY_LOCK_HELD=1; }
+release(){ rmdir "$LOCK" 2>/dev/null || true; REGISTRY_LOCK_HELD=0; }
+acquire_ready(){
+  local t=0
+  READY_LOCK="$DIR/READY-$FEATURE.lock"
+  until mkdir "$READY_LOCK" 2>/dev/null; do
+    sleep 0.2
+    t=$((t+1))
+    if [ $t -gt 150 ]; then
+      # This rejects a duplicate invocation; it must not poison the valid transition that owns the
+      # lock with a HALT file.
+      echo "REJECT READY_TRANSITION_BUSY: another readiness transition for '$FEATURE' is still running." >&2
+      exit 1
+    fi
+  done
+  READY_LOCK_HELD=1
+}
+release_ready(){ rmdir "$READY_LOCK" 2>/dev/null || true; READY_LOCK_HELD=0; }
+
+# canonical_relpath <path> — decide, by string rules alone, what a repo-relative path IS, so two
+# callers can compare two paths with `=` and be right. Prints the canonical form and returns 0, or
+# prints nothing and returns 1 for an input it refuses. The refusal is the load-bearing half: a
+# caller handed a canonical string may compare it, and a caller handed a refusal has been told — in
+# the only way that fails closed — that it must not conclude "different string, therefore different
+# file". Under `set -e` a caller must therefore write `p="$(canonical_relpath "$x")" || <handle>`,
+# never a bare assignment.
+#
+# Normalises exactly three lexical accidents, each of which two authors can produce for one file
+# without either being wrong: a `.` segment (a/./b), a repeated separator (a//b), and a trailing
+# slash (a/b/).
+#
+# Letter CASE is deliberately not one of them, and that is a decision rather than an omission — the
+# distinction is what the three forms above have in common and case does not. `a/./b`, `a//b` and
+# `a/b/` resolve to one file under POSIX pathname resolution on EVERY filesystem, so folding them
+# asserts nothing about the host. Case-equality is a property of the mounted filesystem: `scripts/x`
+# and `Scripts/x` are one file on APFS/HFS+/NTFS and two distinct files on ext4, so a function that
+# reads only the string and folded case anyway would be asserting a fact it cannot know, and would be
+# wrong on half the hosts this kit installs onto. Two further reasons it must not move in here:
+#   - This function's output is used to OPEN files, not only to compare strings — test/unit.sh takes
+#     `basename` of it and `cmp`s against `$KIT/<that>`. A lowercased return value would fail to find
+#     a legitimately capitalised name (`CLAUDE.md.example`) on a case-sensitive host. A canonicaliser
+#     whose result cannot be handed back to the filesystem is not one.
+#   - The SCOPE_COLLISION caller below reaches git as a LITERAL pathspec (see `--literal-pathspecs`
+#     in the v33 note), and git matches pathspecs byte-wise. So for that caller "names one file" and
+#     "matches one pathspec" are two questions with different answers under case folding, and this
+#     primitive must not pre-answer them for a consumer that has not chosen.
+# A caller that must reject case variance can always do so, because it has something this function
+# does not: a REFERENCE spelling — the kit's or the manifest's own declaration of the path — to
+# compare against. Comparing against a reference is decidable and portable; folding a lone string is
+# neither. test/unit.sh's canonical_source_verdict is the worked example, and its `casealias` verdict
+# is what that comparison produces.
+#
+# Refuses: the empty path; an absolute path; a `..` SEGMENT; and anything that normalises away to
+# nothing (`.`, `./.`). `..` is refused rather than folded because folding it lexically is correct
+# only when no prefix is a symlink, which a string cannot know — and at both call sites the path was
+# typed by a human into a manifest or a pack, where a `..` is a defect to report rather than a form
+# to accept. Refusing keeps this helper small enough that its correctness is settled by reading it,
+# which is the property that lets two gates share it. Note `..` is matched as a whole segment: `a..b`
+# and the catch-all route segment `[...slug]` are ordinary names and pass through untouched.
+#
+# One caller today, and it is deliberately not in this file: test/unit.sh extracts and runs this
+# function to prove no installer pack declares two mappings for one trust-gate destination — two
+# spellings of one destination are two mappings, and copy_pack applies both, last one wins. It lives
+# HERE because the second caller is the SCOPE_COLLISION comparison below, which is string-exact for
+# exactly the same reason the pack check was, so two manifests can today reserve one file as `a/b`
+# and `a/./b` and both register. That defect predates the pack check and is being closed by its own
+# change; what it needs is this primitive, not a second copy of it.
+canonical_relpath() {
+  local _crp_in="$1" _crp_rest="$1" _crp_seg="" _crp_out=""
+  case "$_crp_in" in ""|/*) return 1 ;; esac
+  case "/$_crp_in/" in */../*) return 1 ;; esac
+  while [ -n "$_crp_rest" ]; do
+    _crp_seg="${_crp_rest%%/*}"
+    if [ "$_crp_seg" = "$_crp_rest" ]; then _crp_rest=""; else _crp_rest="${_crp_rest#*/}"; fi
+    case "$_crp_seg" in ""|.) continue ;; esac
+    _crp_out="${_crp_out:+$_crp_out/}$_crp_seg"
+  done
+  [ -n "$_crp_out" ] || return 1
+  printf '%s\n' "$_crp_out"
+}
+
+# lines (scope|invariants values) for every ACTIVE (in-flight|ready) feature != me
+active_others(){ # $1 = scope|invariants
+  awk -v me="$FEATURE" -v want="$1" '
+    /^```/{f=!f;next} f{next}
+    /^## feature:/{cur=$3;st="";sec=""}
+    /^status:/{st=$2}
+    /^invariants:/{sec="invariants";next}
+    /^scope:/{sec="scope";next}
+    /^## /{sec=""}
+    sec==want && /^- / && (st=="in-flight"||st=="ready") && cur!=me {print $2}
+  ' "$INFLIGHT" | sort -u; }
+
+active_feature_names(){ awk '/^```/{f=!f;next} f{next} /^## feature:/{cur=$3} /^status:/{if(($2=="in-flight"||$2=="ready"))print cur}' "$INFLIGHT" | sort -u; }
+
+drop_my_block(){ awk -v me="$FEATURE" '
+    /^```/{f=!f} !f && /^## feature:/{drop=($3==me)} !drop{print}
+  ' "$INFLIGHT" > "$INFLIGHT.tmp.$$" && mv "$INFLIGHT.tmp.$$" "$INFLIGHT"; }
+
+append_block(){ # $1 = status
+  { printf '\n## feature: %s\nbranch: %s\nstatus: %s\nrisk: %s\nmanifest: %s\n' "$FEATURE" "$BRANCH" "$1" "$RISK" "$MANREL"
+    if [ -n "$DEPS" ]; then printf 'depends_on:\n'; printf '%s\n' "$DEPS" | sed 's/^/- /'; fi
+    printf 'invariants:\n'; printf '%s\n' "$INVARIANTS" | sed 's/^/- /'
+    printf 'scope:\n'; printf '%s\n' "$SCOPE" | sed 's/^/- /'
+  } >> "$INFLIGHT"; }
+
+case "$cmd" in
+  register)
+    # v28 (defect 7): register must not exit 0 without locking the manifest. Checked up front,
+    # before acquire/append_block touch INFLIGHT.md or TASK_STATE is created, so a manifest that
+    # cannot be locked leaves no dangling reservation for a corrected retry to collide with.
+    [ "$MANIFEST_SCHEMA_VERSION" = "level3-operational-v2" ] || halt_gate CONTRACT_INVALID \
+      "manifest '$MANABS' is missing manifest_schema_version=level3-operational-v2 (got '${MANIFEST_SCHEMA_VERSION:-<empty>}'); register only locks the runtime manifest at .autopilot/state/$FEATURE/manifest.json — the authored contract under docs/autopilot-manifests/ must never carry this field and is not a valid --manifest input to register"
+    REVIEW_GATE="$WORKTREE_ROOT/scripts/autopilot-review-readiness.mjs"
+    if [ "$MANIFEST_SCHEMA_VERSION" = "level3-operational-v2" ] || [ -n "$REVIEW_GATE_VERSION" ]; then
+      [ -f "$REVIEW_GATE" ] || halt_gate REVIEW_GATE_MISSING "$REVIEW_GATE"
+      node "$REVIEW_GATE" register --manifest "$MANABS"
+    fi
+    acquire
+    [ -f "$INFLIGHT" ] || printf '# Autopilot in-flight registry\n\n---\n' > "$INFLIGHT"
+    if active_feature_names | grep -qxF "$FEATURE"; then
+      # Registration did not admit a new lifecycle. Reject the duplicate without terminalizing the
+      # already-valid active lifecycle.
+      echo "REJECT FEATURE_ALREADY_ACTIVE: '$FEATURE' already has an in-flight/ready reservation." >&2
+      echo "  → resume the exact existing contract without re-registering, or use a fresh task-scoped feature id." >&2
+      exit 1
+    fi
+    # (0) invariant catalog check (#22): every manifest invariant MUST be a canonical token.
+    cat_tokens="$(catalog_tokens)" \
+      || halt_gate INVARIANT_UNKNOWN "catalog missing/malformed; tried explicit, manifest sibling, worktree docs and root docs; last: $CATALOG"
+    if [ -n "$INVARIANTS" ]; then
+      unknown="$(comm -23 <(printf '%s\n' "$INVARIANTS" | sort -u) <(printf '%s\n' "$cat_tokens"))"
+      if [ -n "$unknown" ]; then
+        halt_gate INVARIANT_UNKNOWN "'$FEATURE' uses token(s) absent from the catalog: $(printf '%s' "$unknown" | tr '\n' ',')"
+      fi
+    fi
+    # (a) Runtime dependency check. The v2 validator already proved each dependency landed on the
+    # pinned base; an active reservation still blocks to prevent racing a not-yet-disposed slice.
+    if [ -n "$DEPS" ]; then
+      act="$(active_feature_names)"
+      while IFS= read -r d; do [ -z "$d" ] && continue
+        if printf '%s\n' "$act" | grep -qxF "$d"; then
+          halt_gate DEP_MISSING "prerequisite '$d' is still active (in-flight|ready), not landed on the pinned base"
+        fi
+      done <<< "$DEPS"
+    fi
+    # (a2) Fast interface-presence check. The v2 validator additionally proves unique-symbol
+    # absence on the dependency base and presence at landed_sha + downstream base_sha.
+    if [ -n "$DEP_CHECKS" ]; then
+      git rev-parse --verify -q "$BASE_REF^{commit}" >/dev/null \
+        || halt_gate DEP_MISSING "base_ref '$BASE_REF' not found locally (git fetch first)"
+      while IFS="$(printf '\t')" read -r f sym; do [ -z "$f" ] && continue
+        blob="$(git show "$BASE_REF:$f" 2>/dev/null)" \
+          || halt_gate DEP_MISSING "'$FEATURE' expects '$f' on $BASE_REF but the file is absent"
+        grep -qF -- "$sym" <<< "$blob" \
+          || halt_gate DEP_MISSING "symbol '$sym' absent from $BASE_REF:$f; re-derive from landed code"
+      done <<< "$DEP_CHECKS"
+    fi
+    # (b) collision check: scope file OR invariant intersects another active feature
+    cf="$(comm -12 <(printf '%s\n' "$SCOPE" | sort -u) <(active_others scope))"
+    ci="$(comm -12 <(printf '%s\n' "$INVARIANTS" | sort -u) <(active_others invariants))"
+    if [ -n "$cf$ci" ]; then
+      halt_gate SCOPE_COLLISION "'$FEATURE' intersects active scope/invariants; files=$(printf '%s' "$cf" | tr '\n' ',') invariants=$(printf '%s' "$ci" | tr '\n' ',')"
+    fi
+    drop_my_block; append_block in-flight
+    # Step-1 state is mechanical, not prompt discipline. Preserve existing counters on resume,
+    # but guarantee both breaker files exist before implementation or review begins.
+    TASK_STATE="$WORKTREE_ROOT/.autopilot/state/$FEATURE"
+    mkdir -p "$TASK_STATE"
+    [ -f "$TASK_STATE/fix-round-count.txt" ] || printf '0\n' > "$TASK_STATE/fix-round-count.txt"
+    [ -f "$TASK_STATE/regions.log" ] || : > "$TASK_STATE/regions.log"
+    if [ "$MANIFEST_SCHEMA_VERSION" = "level3-operational-v2" ]; then
+      node -e 'const fs=require("fs"),c=require("crypto");const b=fs.readFileSync(process.argv[1]);process.stdout.write(c.createHash("sha256").update(b).digest("hex")+"\n")' \
+        "$MANABS" > "$TASK_STATE/registered-manifest.sha256"
+    fi
+    echo "registered: $FEATURE (in-flight)"
+    ;;
+  ready)
+    # A ready lifecycle is terminal. Refuse a second ready attempt before the validator can remove
+    # READY.txt/gate-result.json, otherwise the registry could remain `ready` while its proof vanishes.
+    acquire_ready
+    acquire
+    [ -f "$INFLIGHT" ] || printf '# Autopilot in-flight registry\n\n---\n' > "$INFLIGHT"
+    me_status="$(awk -v me="$FEATURE" '
+      # No reset on the header line: this awk accumulates ONE named feature and prints at END, so
+      # clearing on every later header erases the answer unless me is the LAST block in the registry.
+      # The per-block scanner further up DOES reset, correctly, because it evaluates each block in turn.
+      # Same idiom, opposite requirement. Rationale in the v20 header note.
+      /^## feature:/{cur=$3}
+      /^status:/{if(cur==me)st=$2}
+      END{print st}
+    ' "$INFLIGHT")"
+    if [ "$me_status" != "in-flight" ]; then
+      # A terminal READY already has its signal; an absent lifecycle was never admitted. Reject
+      # either invalid invocation without creating a conflicting HALT file.
+      echo "REJECT READY_LIFECYCLE_INVALID: '$FEATURE' status is '${me_status:-absent}', expected in-flight." >&2
+      echo "  → never re-run ready on a terminal lifecycle; create a fresh successor task when more work is required." >&2
+      exit 1
+    fi
+    release
+    # Run the potentially long verify + Codex gate BEFORE taking the shared registry lock. The gate
+    # binds its attestation to HEAD + current base SHA + diff hash; ap-finish verifies it again.
+    REVIEW_GATE="$WORKTREE_ROOT/scripts/autopilot-review-readiness.mjs"
+    REVIEW_REQUIRED=0
+    [ "$MANIFEST_SCHEMA_VERSION" = "level3-operational-v2" ] && REVIEW_REQUIRED=1
+    [ -n "$REVIEW_GATE_VERSION" ] && REVIEW_REQUIRED=1
+    git cat-file -e "$BASE_REF:scripts/autopilot-review-readiness.mjs" 2>/dev/null && REVIEW_REQUIRED=1 || true
+    if [ "$REVIEW_REQUIRED" = 1 ] && [ -f "$REVIEW_GATE" ]; then
+      node "$REVIEW_GATE" ready --manifest "$MANABS"
+    elif [ "$REVIEW_REQUIRED" = 1 ]; then
+      halt_gate REVIEW_GATE_MISSING "$REVIEW_GATE"
+    else
+      echo "WARN: legacy manifest without automatic review-readiness; applying registry-only transition" >&2
+    fi
+    acquire
+    [ -f "$INFLIGHT" ] || printf '# Autopilot in-flight registry\n\n---\n' > "$INFLIGHT"
+    # Require a prior active block: ready must follow a successful register.
+    me_status="$(awk -v me="$FEATURE" '
+      # No reset on the header line: this awk accumulates ONE named feature and prints at END, so
+      # clearing on every later header erases the answer unless me is the LAST block in the registry.
+      # The per-block scanner further up DOES reset, correctly, because it evaluates each block in turn.
+      # Same idiom, opposite requirement. Rationale in the v20 header note.
+      /^## feature:/{cur=$3}
+      /^status:/{if(cur==me)st=$2}
+      END{print st}
+    ' "$INFLIGHT")"
+    if [ "$me_status" != "in-flight" ]; then
+      halt_gate READY_LIFECYCLE_CHANGED "'$FEATURE' changed to '${me_status:-absent}' while readiness was running; gate result is non-authoritative"
+    fi
+    # Re-check collisions: another feature may have registered between our register and ready calls.
+    # kit v34 review round 1 finding 1: declared $SCOPE is no longer guaranteed to equal the diff
+    # (autopilot-review-readiness.mjs's derive1 change removed that enforcement) -- comparing only
+    # declared scope here could miss a genuine collision on a file the slice actually touched but
+    # never declared, while collision detection for OTHER active features still only sees what THEY
+    # declared. Compare the CERTIFIED file list instead.
+    # kit v34 review rounds 2-5 converged on one property, each round closing one half and reopening
+    # the other, until this shape: trust NOTHING diff-related from gate-result.json (a gitignored,
+    # writer-mutable file), only two independently-obtainable coordinates -- and verify one of them
+    # against it rather than reading it.
+    #   Round 2: reading gate-result.json's diff_files trusted a writer-mutable field outright.
+    #   Round 3: verifying head_sha/manifest_sha256 first still left diff_files itself unbound --
+    #     switched to recomputing the file list from a FRESH `git rev-parse HEAD`.
+    #   Round 4: that fresh HEAD re-read was not bound to what the validator actually reviewed -- a
+    #     commit or reset between the validator's exit and this line would certify an unreviewed HEAD
+    #     (and bypass SELF_CERTIFYING_GATE_CHANGE for it). Switched to verifying gate-result.json's
+    #     head_sha against live HEAD before trusting anything, then reading diff_base_sha from the
+    #     now-identity-verified file.
+    #   Round 5: identity-verifying head_sha/manifest_sha256 does not bind diff_base_sha -- an attacker
+    #     could change ONLY that field (to head_sha itself) to force an empty recomputed diff, silently
+    #     bypassing collision detection and writing an empty certified scope into the registry.
+    # The fix is not a fourth patch to gate-result.json trust, but removing the dependency: base_ref
+    # resolves to a live SHA the same way liveDiffState() itself does, with no file in between to
+    # tamper. Safe even if base_ref legitimately advanced since the validator ran -- three-dot diff
+    # notation resolves through merge-base, so the window is still exactly this slice's own commits as
+    # long as HEAD (verified against gate-result.json below) has not moved; the same reasoning the
+    # v25/v26 fix already established for why the live base ref, not a frozen pin, is correct here.
+    GATE_RESULT="$WORKTREE_ROOT/.autopilot/state/$FEATURE/gate-result.json"
+    LIVE_HEAD_SHA="$(git rev-parse HEAD)"
+    REGISTERED_MANIFEST_SHA256="$(cat "$WORKTREE_ROOT/.autopilot/state/$FEATURE/registered-manifest.sha256" 2>/dev/null || true)"
+    node -e '
+      const fs = require("fs");
+      const [gateResultPath, expectedHeadSha, expectedManifestSha256] = process.argv.slice(1);
+      const data = JSON.parse(fs.readFileSync(gateResultPath, "utf8"));
+      if (data.head_sha !== expectedHeadSha) {
+        throw new Error(`gate-result head_sha ${data.head_sha} does not match live HEAD ${expectedHeadSha} -- HEAD moved after the validator exited`);
+      }
+      if (!expectedManifestSha256 || data.manifest_sha256 !== expectedManifestSha256) {
+        throw new Error("gate-result manifest_sha256 does not match this registration'"'"'s hash-lock");
+      }
+    ' "$GATE_RESULT" "$LIVE_HEAD_SHA" "$REGISTERED_MANIFEST_SHA256" \
+      || halt_gate READY_HEAD_DRIFT "worktree HEAD or manifest changed between the validator's exit and the post-readiness collision recheck"
+    COLLISION_DIFF_BASE_SHA="$(git rev-parse "$BASE_REF^{commit}")"
+    ACTUAL_FILES="$(git diff --name-only --no-renames "$COLLISION_DIFF_BASE_SHA...$LIVE_HEAD_SHA")"
+    cf="$(comm -12 <(printf '%s\n' "$ACTUAL_FILES" | sort -u) <(active_others scope))"
+    ci="$(comm -12 <(printf '%s\n' "$INVARIANTS" | sort -u) <(active_others invariants))"
+    if [ -n "$cf$ci" ]; then
+      halt_gate SCOPE_COLLISION "'$FEATURE' acquired a collision while readiness ran; files=$(printf '%s' "$cf" | tr '\n' ',') invariants=$(printf '%s' "$ci" | tr '\n' ',')"
+    fi
+    drop_my_block
+    # kit v34 review round 2 finding 1b: append_block reads $SCOPE, which is DECLARED intent -- once
+    # this feature reaches ready, its registry entry should reflect what it actually CERTIFIED, so a
+    # future feature's collision check (which compares against active_others scope, i.e. this entry)
+    # sees the real file list rather than a possibly-narrower declaration. Not used again after this
+    # block: safe to overwrite here rather than threading a second variable through append_block.
+    SCOPE="$ACTUAL_FILES"
+    append_block ready
+    TASK_STATE="$WORKTREE_ROOT/.autopilot/state/$FEATURE"
+    mkdir -p "$TASK_STATE"
+    printf 'READY: readiness gate passed for %s\n' "$FEATURE" > "$TASK_STATE/READY.txt"
+    release
+    release_ready
+    echo "ready: $FEATURE" ;;
+  cleanup)
+    RECORD=""
+    [ -s "$ROOT/.autopilot/landings/$FEATURE.json" ] \
+      && RECORD="$ROOT/.autopilot/landings/$FEATURE.json"
+    [ -z "$RECORD" ] && [ -s "$ROOT/.autopilot/dispositions/$FEATURE.json" ] \
+      && RECORD="$ROOT/.autopilot/dispositions/$FEATURE.json"
+    [ -n "$RECORD" ] \
+      || { echo "REJECT CLEANUP_PROOF_MISSING: use scripts/ap-finish.sh; raw reservation cleanup is forbidden." >&2; exit 1; }
+    command -v node >/dev/null 2>&1 \
+      || { echo "REJECT CLEANUP_PROOF_INVALID: node is required to validate $RECORD" >&2; exit 1; }
+    if ! node - "$RECORD" "$FEATURE" <<'NODE'
+const fs = require("fs");
+const [file, feature] = process.argv.slice(2);
+const value = JSON.parse(fs.readFileSync(file, "utf8"));
+if (
+  value.schema_version !== "level3-disposition-v1"
+  || value.feature !== feature
+  || !["landed", "authorized_close"].includes(value.status)
+) process.exit(1);
+NODE
+    then
+      echo "REJECT CLEANUP_PROOF_INVALID: $RECORD" >&2
+      exit 1
+    fi
+    acquire
+    [ -f "$INFLIGHT" ] || printf '# Autopilot in-flight registry\n\n---\n' > "$INFLIGHT"
+    drop_my_block; echo "cleaned: $FEATURE" ;;
+  *) echo "usage: autopilot-scope-gate <register|ready|cleanup> --manifest <path>   (or: cleanup --feature <slug>)" >&2; exit 2 ;;
+esac
