@@ -1,6 +1,9 @@
 import asyncio
 import json
+import time
 import gspread
+from gspread.exceptions import APIError
+from gspread.http_client import HTTPClient
 from google.oauth2.service_account import Credentials
 from datetime import datetime, date, timezone
 import pytz
@@ -24,12 +27,37 @@ _tx_rows_cache: dict = {"ts": 0.0, "rows": None}
 _TX_CACHE_TTL = 30.0  # seconds
 
 
+class QuotaBackoffHTTPClient(HTTPClient):
+    """Retry only transient Google Sheets read/write quota responses.
+
+    The built-in gspread backoff client keeps retrying at its maximum delay,
+    which can leave a webhook request blocked forever when a quota problem is
+    persistent.  Keep this retry budget deliberately short: the caches below
+    remove the avoidable reads; this is only a grace period while quota refills.
+    """
+
+    _QUOTA_STATUS = 429
+    _RETRY_DELAYS = (1, 2, 4, 8)
+
+    def request(self, *args, **kwargs):
+        for attempt in range(len(self._RETRY_DELAYS) + 1):
+            try:
+                return super().request(*args, **kwargs)
+            except APIError as error:
+                if (getattr(error, "code", None) != self._QUOTA_STATUS
+                        or attempt == len(self._RETRY_DELAYS)):
+                    raise
+                delay = self._RETRY_DELAYS[attempt]
+                print(f"[sheets] Google API quota hit; retrying in {delay}s "
+                      f"({attempt + 1}/{len(self._RETRY_DELAYS)})")
+                time.sleep(delay)
+
+
 def _get_tx_rows(force_refresh: bool = False) -> list:
     """Đọc tất cả row của Transactions sheet với cache TTL ngắn.
     Dùng thay cho `_sheet(S.TRANSACTIONS).get_all_values()[1:]` ở những chỗ
     cần đọc nhiều lần liên tiếp.
     """
-    import time
     now = time.time()
     if (not force_refresh
             and _tx_rows_cache["rows"] is not None
@@ -74,7 +102,7 @@ def _get_spreadsheet():
             creds = Credentials.from_service_account_info(info, scopes=SCOPES)
         else:
             creds = Credentials.from_service_account_file(CREDS_FILE, scopes=SCOPES)
-        _gc = gspread.authorize(creds)
+        _gc = gspread.authorize(creds, http_client=QuotaBackoffHTTPClient)
         _ss = _gc.open_by_key(SHEET_ID)
     return _ss
 
@@ -2423,6 +2451,10 @@ def update_keyword_rule(row_num: int, *, keyword: str | None = None,
 # Cache trust = process là single source of truth (Railway 1 dyno, 1 user),
 # nên get_state luôn đọc từ cache trừ khi state vừa được update.
 _state_cache: dict = {}  # chat_id (str) -> dict | None
+# Row location travels with the state value.  Once a message has loaded its
+# state, subsequent set_state() calls update that known row without first
+# rereading the whole Bot State worksheet.
+_state_row_cache: dict = {}  # chat_id (str) -> 1-based sheet row
 
 
 def get_state(chat_id: str) -> dict | None:
@@ -2434,8 +2466,9 @@ def get_state(chat_id: str) -> dict | None:
     # Cache miss → đọc sheet 1 lần, cache lại
     ws = _sheet(S.BOT_STATE)
     rows = ws.get_all_values()[1:]
-    for r in rows:
+    for index, r in enumerate(rows, start=2):
         if len(r) >= 2 and str(r[0]) == chat_id_s:
+            _state_row_cache[chat_id_s] = index
             try:
                 state = json.loads(r[1])
                 _state_cache[chat_id_s] = state
@@ -2452,18 +2485,28 @@ def set_state(chat_id: str, obj: dict):
     import json
     chat_id_s = str(chat_id)
     ws = _sheet(S.BOT_STATE)
-    rows = ws.get_all_values()[1:]
     payload = json.dumps(obj, ensure_ascii=False)
     now_str = datetime.utcnow().isoformat()
 
-    for i, r in enumerate(rows):
-        if len(r) >= 1 and str(r[0]) == chat_id_s:
-            # Batch B:C trong 1 update thay vì 2 update_cell
-            ws.update(f"B{i + 2}:C{i + 2}", [[payload, now_str]])
+    row_num = _state_row_cache.get(chat_id_s)
+    if row_num is None:
+        # A cold write still needs one lookup to decide update vs append, but
+        # warm command/callback flows avoid this full-sheet read entirely.
+        rows = ws.get_all_values()[1:]
+        for index, r in enumerate(rows, start=2):
+            if len(r) >= 1 and str(r[0]) == chat_id_s:
+                row_num = index
+                break
+        if row_num is None:
+            row_num = len(rows) + 2
+            ws.append_row([chat_id_s, payload, now_str])
+            _state_row_cache[chat_id_s] = row_num
             _state_cache[chat_id_s] = obj
             return
 
-    ws.append_row([chat_id_s, payload, now_str])
+    # Batch B:C trong 1 update thay vì 2 update_cell
+    ws.update(f"B{row_num}:C{row_num}", [[payload, now_str]])
+    _state_row_cache[chat_id_s] = row_num
     _state_cache[chat_id_s] = obj
 
 
