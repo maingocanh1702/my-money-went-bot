@@ -58,6 +58,7 @@ const BANK_SENDERS = [
 // Cấu trúc: { "<gmailMessageId>": <epochMillisKhiXuLy>, ... }
 // Tự prune entry cũ hơn LOOKBACK_DAYS để không phình vô hạn.
 const PROCESSED_PROP_KEY = "processed_msg_ids";
+const FAILED_PROP_KEY = "failed_msg_retries";
 const SCAN_OFFSET_PROP_KEY = "bank_email_scan_offset";
 
 // Số ngày giữ lại message ID trong tập processed (đủ rộng để cover bot down).
@@ -97,6 +98,7 @@ function checkBankEmails() {
     console.log(`[checkBankEmails] found ${threads.length} thread(s) at offset=${offset}`);
 
     const processed = _loadProcessed();
+    const failed = _loadFailed();
     const label = VISUAL_LABEL ? _getOrCreateLabel(VISUAL_LABEL) : null;
 
     let processedCount = 0;
@@ -112,6 +114,7 @@ function checkBankEmails() {
 
         // Dedup theo message ID, KHÔNG theo thread.
         if (processed[msgId]) {
+          delete failed[msgId];
           skippedCount++;
           return;
         }
@@ -124,12 +127,19 @@ function checkBankEmails() {
           processMessage(msg);
           // Chỉ đánh dấu processed SAU KHI webhook trả 200.
           processed[msgId] = Date.now();
+          delete failed[msgId];
           processedCount++;
           threadHadSuccess = true;
         } catch (err) {
           console.error(`[checkBankEmails] error processing msg ${msgId}: ${err}`);
           errorCount++;
-          // Không đánh dấu processed → retry lần chạy sau.
+          // Keep retry history, but never let one poison message pin the
+          // cursor on this page and starve older backlog messages.
+          const prior = failed[msgId] || {};
+          failed[msgId] = {
+            attempts: Number(prior.attempts || 0) + 1,
+            lastFailedAt: Date.now(),
+          };
         }
       });
 
@@ -145,12 +155,13 @@ function checkBankEmails() {
 
     // Lưu lại tập processed (kèm prune entry cũ).
     _saveProcessed(processed);
+    _saveFailed(failed);
     // Advance over a full page so an outage/backlog cannot strand older
-    // unprocessed messages behind the newest 30 threads. Reset after the tail.
-    // Do not skip a page that had an unacknowledged message.
+    // unprocessed messages behind the newest 30 threads. Failed messages are
+    // retried after the scan wraps; they never pin the cursor on one page.
     props.setProperty(
       SCAN_OFFSET_PROP_KEY,
-      errorCount === 0 && threads.length === 30 ? String(offset + 30) : "0"
+      threads.length === 30 ? String(offset + threads.length) : "0"
     );
 
     console.log(`[checkBankEmails] done — processed=${processedCount} ` +
@@ -267,6 +278,34 @@ function _saveProcessed(map) {
 }
 
 /**
+ * Read retry metadata for messages that have not yet received a durable bot
+ * acknowledgment. It remains separate from `processed`: a failure must stay
+ * eligible for retry while the cursor continues scanning older messages.
+ */
+function _loadFailed() {
+  const raw = PropertiesService.getScriptProperties().getProperty(FAILED_PROP_KEY);
+  if (!raw) return {};
+  try {
+    const obj = JSON.parse(raw);
+    return (obj && typeof obj === "object") ? obj : {};
+  } catch (e) {
+    console.error(`[_loadFailed] corrupt JSON, resetting: ${e}`);
+    return {};
+  }
+}
+
+/** Prune retry metadata on the same retention boundary as processed IDs. */
+function _saveFailed(map) {
+  const cutoff = Date.now() - LOOKBACK_DAYS * 86400 * 1000;
+  for (const id in map) {
+    const retry = map[id];
+    if (!retry || Number(retry.lastFailedAt || 0) < cutoff) delete map[id];
+  }
+  PropertiesService.getScriptProperties()
+    .setProperty(FAILED_PROP_KEY, JSON.stringify(map));
+}
+
+/**
  * Lấy hoặc tạo Gmail label (chỉ dùng cho hiển thị trực quan).
  */
 function _getOrCreateLabel(name) {
@@ -369,5 +408,7 @@ function bootstrapProcessed() {
  */
 function resetProcessed() {
   PropertiesService.getScriptProperties().deleteProperty(PROCESSED_PROP_KEY);
+  PropertiesService.getScriptProperties().deleteProperty(FAILED_PROP_KEY);
+  PropertiesService.getScriptProperties().deleteProperty(SCAN_OFFSET_PROP_KEY);
   console.log(`[resetProcessed] cleared processed message-id store`);
 }

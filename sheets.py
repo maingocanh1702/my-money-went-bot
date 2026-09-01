@@ -2072,20 +2072,36 @@ def compute_and_record_cashback(tx_row_num: int) -> dict:
         row = get_transaction_row(tx_row_num)
         if not row or len(row) < 8:
             return _empty_cashback_result()
+        tx_date = row[1] if len(row) > 1 else ""
+        account_id = (row[16] if len(row) > 16 else "").strip()
+        account = find_account_by_id(account_id) if account_id else None
+        config = get_card_config(account_id) if account else None
+        # A date determines the cashback cycle. If a historical/manual Sheet
+        # edit made it unparsable, preserve its last auditable ledger result
+        # instead of voiding it or attempting an unknown-cycle recomputation.
+        # The date must be repaired before a derived money value can change.
+        if (account and account.get("type") == "credit" and config
+                and config.get("active", False) and _parse_tx_date(tx_date) is None):
+            print(f"[cashback] skipped row={tx_row_num}: invalid transaction date={tx_date!r}")
+            return _empty_cashback_result()
+        description = row[5] if len(row) > 5 else ""
+        amount = _parse_amount(row[7]) if len(row) > 7 and row[7] else 0.0
+        ledger_tx_type = (row[17] if len(row) > 17 else "expense").strip() or "expense"
+
+        # Calendar-month rules rebuild every source row in their cycle. Route
+        # there before voiding so the cycle replacement remains atomic.
+        if (account and config and config.get("active", False)
+                and config.get("cap_period") == "calendar_month"
+                and ledger_tx_type == "expense" and amount > 0
+                and row_currency(row) == "VND"):
+            return recompute_cashback_for_tx(tx_row_num)
         # Idempotent: void any prior lines for this tx up front, so every early
         # return below (now non-expense / non-VND / no config) also clears stale
         # cashback rows instead of leaving them active. The state reads below all
         # exclude this tx anyway, so voiding early doesn't change their results.
         void_cashback_for_tx(tx_row_num)
-        description = row[5] if len(row) > 5 else ""
-        amount = _parse_amount(row[7]) if len(row) > 7 and row[7] else 0.0
-        tx_date = row[1] if len(row) > 1 else ""
-        account_id = (row[16] if len(row) > 16 else "").strip()
-        ledger_tx_type = (row[17] if len(row) > 17 else "expense").strip() or "expense"
-
         if not account_id:
             return _empty_cashback_result()
-        account = find_account_by_id(account_id)
         if not account or account.get("type") != "credit":
             return _empty_cashback_result()
         if ledger_tx_type != "expense":   # skip cc_payment / income / transfer
@@ -2105,15 +2121,8 @@ def compute_and_record_cashback(tx_row_num: int) -> dict:
         #     statement cycle (cross-day MCC-cap dependents stay stale);
         #   - rule effective_from/effective_to windows are not enforced (§4.3
         #     field; §4.6 compute path omits it; Cake doesn't use it).
-        config = get_card_config(account_id)
         if not config or not config.get("active", False):
             return _empty_cashback_result()
-
-        # Calendar-month rules received a new, collision-free namespace. Rebuild
-        # the month from source transactions so legacy statement-cycle lines
-        # cannot participate in its caps or activation gate.
-        if config.get("cap_period") == "calendar_month":
-            return recompute_cashback_for_tx(tx_row_num)
 
         mcc_match = resolve_mcc_or_exclusion(description)
         mcc = mcc_match["mcc_code"] if mcc_match else ""
@@ -2190,7 +2199,7 @@ def recompute_cashback_for_tx(tx_row_num: int) -> dict:
     row = get_transaction_row(tx_row_num)
     account_id = (row[16] if row and len(row) > 16 else "").strip()
     tx_date = row[1] if row and len(row) > 1 else ""
-    if not account_id or _parse_tx_date(tx_date) is None:
+    if not account_id:
         return compute_and_record_cashback(tx_row_num)
 
     account = find_account_by_id(account_id)
@@ -2198,6 +2207,11 @@ def recompute_cashback_for_tx(tx_row_num: int) -> dict:
         return compute_and_record_cashback(tx_row_num)  # non-credit → per-tx (voids + empty)
     statement_day = account.get("statement_day")
     config = get_card_config(account_id)
+    if config and config.get("active", False) and _parse_tx_date(tx_date) is None:
+        print(f"[cashback] skipped rebuild row={tx_row_num}: invalid transaction date={tx_date!r}")
+        return _empty_cashback_result()
+    if _parse_tx_date(tx_date) is None:
+        return compute_and_record_cashback(tx_row_num)
     cycle = cashback_cycle_id(account_id, tx_date, account, config)
     # Read-once rebuild (Sheets 429 fix): read Transactions + ledger ONCE and
     # replay the cycle in memory instead of O(N) per-row ledger reads. Holds the
