@@ -25,10 +25,10 @@ review-integrity — independent review, breaker and readiness evidence
 delegation-safety — worktree, writer ownership and child-agent boundaries
 audit-integrity — task evidence, provenance and learning history
 merge-authority — landing and optional separately-authorized automation
-schema-migrations — Postgres schema, Alembic migrations, constraints, and migration execution policy
+storage-schema — Google Sheet tab schemas, canonical field mappings, and backward-compatible data evolution
 transaction-ledger — transaction identity, financial direction, amount, balance, voiding, and idempotency
 cashback-ledger — cashback rules, qualification, cycle caps, accrued rewards, and cashback audit entries
-sheet-projection — Google Sheet schema, one-way Postgres-to-Sheet projection, and reconciliation markers
+sheet-projection — Google Sheet layout, row mappings, synchronization boundaries, and reconciliation markers
 external-webhooks — SePay, email, and other inbound webhook authentication, parsing, and replay protection
 account-identity — accounts, cards, source keys, owner mappings, and identity resolution
 bot-state — Telegram and Zalo interaction state, callbacks, pending choices, and expiry handling
@@ -36,7 +36,7 @@ reporting — reports, allocation views, summaries, and derived display totals
 telegram-transport — Telegram commands, handlers, messages, and callback adapters
 zalo-transport — Zalo commands, menus, messages, and adapter-specific routing
 shared-finance-core — transport-agnostic categorization, account, transaction, cashback, and reporting decisions
-test-chain — Python test runners, fixtures, database setup, and CI registration
+test-chain — Python test runners, fixtures, backing-store isolation, and CI registration
 build-config — dependency manifests, runtime packaging, deployment configuration, and tooling
 <!-- catalog:end -->
 
