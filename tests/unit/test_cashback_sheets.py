@@ -5,6 +5,8 @@ on real merchant format, statement-cycle boundaries, eligible-spend / daily
 counters with exclusion, orchestrator idempotency + activation gate + promote,
 and recompute reshuffling the supermarket daily limit.
 """
+from datetime import datetime, timedelta, timezone
+
 import pytest
 import sheets as sh
 from config import SHEETS as S
@@ -102,6 +104,52 @@ def test_add_get_cashback_rule(fake_ss):
     assert r["monthly_cap"] == 200000
     assert r["max_eligible_tx_per_day"] == 1
     assert r["active"] is True
+
+
+def test_cashback_rule_rejects_non_finite_money_values(fake_ss):
+    with pytest.raises(ValueError, match="finite"):
+        sh.add_cashback_rule("cake", "Broken", "mcc", "5411", rate=float("inf"))
+    with pytest.raises(ValueError, match="finite"):
+        sh.upsert_card_config("cake", cashback_rate=float("nan"))
+
+
+def test_durable_claim_blocks_fresh_processing_and_reclaims_stale_claim(fake_ss):
+    _setup_tx_tab()
+    sh._processed_refs.clear()
+
+    assert sh.tx_exists("exclusive-claim") is False
+    assert sh.tx_exists("exclusive-claim") is True
+
+    processed = sh._ensure_processed_refs_tab()
+    stale = (datetime.now(timezone.utc) - timedelta(
+        seconds=sh.PROCESSED_REF_CLAIM_TTL_SECONDS + 1
+    )).isoformat()
+    processed.update("C2:C2", [[stale]])
+    sh._processed_refs.clear()
+
+    assert sh.tx_exists("exclusive-claim") is False
+
+
+def test_fuzzy_dedup_reads_canonical_datetime_written_to_transactions(fake_ss):
+    _setup_tx_tab()
+    tx_date = datetime(2026, 9, 1, 14, 0, tzinfo=timezone(timedelta(hours=7)))
+    sh.append_transaction(tx_date, "Coffee", 50_000, "first-ref", "2026-09", tx_type="Tiền ra")
+
+    assert sh.find_recent_duplicate(50_000, "out", tx_date.isoformat()) is True
+
+
+def test_calendar_month_cap_period_ignores_statement_day(fake_ss):
+    _setup_tx_tab()
+    sh.add_account(
+        account_id="tcb", name="TCB", acc_type="credit", currency="VND",
+        source_keys=["email_tcb:tcb"], statement_day=15,
+    )
+    sh.upsert_card_config(
+        "tcb", cashback_rate=0.01, min_eligible_spend=0,
+        cap_period="calendar_month", alert_pct=0.8, active=True,
+    )
+    assert sh.cashback_cycle_id("tcb", "2026-06-20") == "tcb_2026-06"
+    assert sh.cashback_cycle_id("tcb", "2026-07-01") == "tcb_2026-07"
 
 
 def test_soft_delete_cashback_rule(fake_ss):

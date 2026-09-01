@@ -153,6 +153,11 @@ class TestValidation:
         errors = validate_template(tpl)
         assert any("cashback_rate" in e for e in errors)
 
+    def test_non_finite_financial_values_are_rejected(self):
+        tpl = CardTemplate(card_id="t", card_name="T", bank="B",
+                           config=CardConfig(cashback_rate=float("nan")))
+        assert any("cashback_rate" in error for error in validate_template(tpl))
+
     def test_duplicate_mcc(self):
         tpl = CardTemplate(card_id="t", card_name="T", bank="B",
                            rules=[

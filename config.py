@@ -43,19 +43,21 @@ if _missing and not BOT_TOKEN.startswith("test:"):
 GOOGLE_CREDS_JSON = os.environ.get("GOOGLE_CREDS_JSON")        # JSON string
 CREDS_FILE        = os.environ.get("GOOGLE_CREDS", "credentials.json")  # file path fallback
 
-# Optional: SePay webhook secret — nếu set, bot sẽ reject webhook không khớp token
+# Required in production: SePay webhook secret. The bot rejects requests that
+# do not match this token.
 # Điền giá trị này vào SePay dashboard → Webhook → API Key
 SEPAY_SECRET = os.environ.get("SEPAY_SECRET", "")
 
-# Optional: Telegram webhook secret — nếu set, /webhook sẽ reject update thiếu
+# Required in production: Telegram webhook secret. /webhook rejects updates
+# that do not include the matching header.
 # header X-Telegram-Bot-Api-Secret-Token khớp. Kích hoạt bằng cách đăng ký lại
 # webhook với cùng giá trị:
 #   curl -X POST "https://api.telegram.org/bot<TOKEN>/setWebhook" \
 #     -d "url=https://<domain>/webhook" -d "secret_token=<value>"
 TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "")
 
-# Optional: Cron trigger secret — nếu set, các endpoint /trigger/* yêu cầu
-# ?secret=<value> (xem crontab.txt). Không set → giữ hành vi cũ (mở).
+# Required in production: cron trigger secret. The /trigger/* endpoints
+# require ?secret=<value> (xem crontab.txt).
 CRON_SECRET = os.environ.get("CRON_SECRET", "")
 
 # Email webhook secret — Google Apps Script gửi kèm để xác thực
@@ -66,7 +68,7 @@ EMAIL_SECRET = os.environ.get("EMAIL_SECRET", "")
 # skipped — chặn SePay replay lịch sử cũ khi mới setup webhook. Tăng lên nếu
 # bot có thể down lâu hơn (SePay retry đến muộn sẽ bị bỏ qua ngoài cửa sổ này).
 TX_MAX_AGE_MINUTES = _env_int("TX_MAX_AGE_MINUTES", 10, min_value=1)
-EMAIL_TX_MAX_AGE_MINUTES = _env_int("EMAIL_TX_MAX_AGE_MINUTES", 1440, min_value=1)
+EMAIL_TX_MAX_AGE_MINUTES = _env_int("EMAIL_TX_MAX_AGE_MINUTES", 7 * 24 * 60, min_value=1)
 
 # Zalo Bot Platform — enable to receive transaction notifications on Zalo
 # Tạo bot tại: mở Zalo → tìm "Zalo Bot Manager" → Tạo bot
@@ -74,10 +76,33 @@ EMAIL_TX_MAX_AGE_MINUTES = _env_int("EMAIL_TX_MAX_AGE_MINUTES", 1440, min_value=
 ZALO_ENABLED = _env_bool("ZALO_ENABLED")
 ZALO_BOT_TOKEN = os.environ.get("ZALO_BOT_TOKEN", "")  # Bot token from Zalo Bot Manager
 ZALO_SECRET_TOKEN = os.environ.get("ZALO_SECRET_TOKEN", "")  # Webhook secret for X-Bot-Api-Secret-Token header
-ZALO_ALLOW_UNVERIFIED_WEBHOOK = _env_bool("ZALO_ALLOW_UNVERIFIED_WEBHOOK")
+# An unsigned Zalo webhook is useful only for isolated test processes. Never
+# let a production environment flag re-open this public endpoint.
+ZALO_ALLOW_UNVERIFIED_WEBHOOK = BOT_TOKEN.startswith("test:") and _env_bool("ZALO_ALLOW_UNVERIFIED_WEBHOOK")
 ZALO_CHAT_ID = os.environ.get("ZALO_CHAT_ID", "")  # chat.id of the Zalo user
 ZALO_TEXT_LIMIT = _env_int("ZALO_TEXT_LIMIT", 2000, min_value=100)
-ZALO_INLINE_KEYBOARD = _env_bool("ZALO_INLINE_KEYBOARD", default=False)  # Off by default: Zalo callbacks route into Telegram handlers. Enable only after adding channel-aware callback routing.
+# Zalo callbacks must not enter Telegram's state and transport handlers. Keep
+# the numbered text flow until a separate, channel-safe callback core exists.
+ZALO_INLINE_KEYBOARD = False
+
+# Production has public financial webhooks, so every authentication secret is
+# mandatory. Test mode uses the dummy token supplied by tests/conftest.py.
+if not BOT_TOKEN.startswith("test:"):
+    _required = {
+        "BOT_TOKEN": BOT_TOKEN,
+        "CHAT_ID": CHAT_ID,
+        "SHEET_ID": SHEET_ID,
+        "GOOGLE_CREDS_JSON": GOOGLE_CREDS_JSON,
+        "SEPAY_SECRET": SEPAY_SECRET,
+        "TELEGRAM_WEBHOOK_SECRET": TELEGRAM_WEBHOOK_SECRET,
+        "EMAIL_SECRET": EMAIL_SECRET,
+        "CRON_SECRET": CRON_SECRET,
+    }
+    if ZALO_ENABLED:
+        _required["ZALO_SECRET_TOKEN"] = ZALO_SECRET_TOKEN
+    _missing = [name for name, value in _required.items() if not value]
+    if _missing:
+        raise RuntimeError("Missing required production environment variables: " + ", ".join(_missing))
 
 # Sheet tab names
 class SHEETS:
@@ -97,3 +122,4 @@ class SHEETS:
     CASHBACK_CONFIG  = "Cashback Card Config"
     CASHBACK_LEDGER  = "Cashback Ledger"
     MCC_MAP          = "MCC Map"
+    PROCESSED_REFS   = "Processed Refs"

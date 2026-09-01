@@ -173,19 +173,22 @@ Một số bank (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) dùng **API 
 git clone https://github.com/maingocanh1702/my-money-went-bot.git
 cd my-money-went-bot
 cp .env.example .env
-# Sửa .env: BOT_TOKEN, CHAT_ID, SHEET_ID, GOOGLE_CREDS_JSON (hoặc GOOGLE_CREDS)
+# Điền các biến bắt buộc: BOT_TOKEN, CHAT_ID, SHEET_ID, GOOGLE_CREDS_JSON,
+# SEPAY_SECRET, TELEGRAM_WEBHOOK_SECRET, CRON_SECRET, EMAIL_SECRET
+# (và ZALO_SECRET_TOKEN nếu ZALO_ENABLED=true)
 ```
 
 **Railway** (khuyến nghị):
 
 1. Push fork của bạn lên GitHub.
 2. [railway.app](https://railway.app) → New Project → Deploy from GitHub repo.
-3. Add env vars trong Railway dashboard. Với `GOOGLE_CREDS_JSON`, paste toàn bộ JSON thành 1 dòng.
+3. Add tất cả env var bắt buộc trong Railway dashboard. Với `GOOGLE_CREDS_JSON`, paste toàn bộ JSON thành 1 dòng; tạo một chuỗi random dài, riêng biệt cho từng biến `*_SECRET`. Nếu bật Zalo, thêm `ZALO_SECRET_TOKEN`.
 4. Railway cấp URL `*.up.railway.app` — dùng URL này làm SePay webhook URL.
 5. Đăng ký Telegram webhook:
    ```bash
    curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
-     -d "url=https://<your-app>.up.railway.app/webhook"
+     -d "url=https://<your-app>.up.railway.app/webhook" \
+     -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>"
    ```
 
 **VPS** (Ubuntu 22.04):
@@ -313,16 +316,16 @@ chmod 600 .env credentials.json
 
 Không bao giờ commit lên GitHub — `.gitignore` đã block sẵn.
 
-**2. Webhook auth opt-in — nên bật HẾT.** Mỗi endpoint nhận request đều có secret riêng (không set = endpoint đó mở, app sẽ log warning lúc startup):
+**2. Webhook authentication là bắt buộc ở production.** App sẽ từ chối khởi động nếu thiếu bất kỳ secret nào bên dưới, để không vô tình public webhook tài chính.
 
 | Env var | Bảo vệ | Không set thì sao |
 |---|---|---|
-| `SEPAY_SECRET` | `/webhook` (payload SePay) | Ai cũng log được tx giả |
-| `TELEGRAM_WEBHOOK_SECRET` | `/webhook` (update Telegram) | Ai biết URL đều điều khiển được bot (gửi `/manage`, xóa category, ...) |
-| `CRON_SECRET` | `/trigger/*` | Ai cũng spam được report / phá state wizard |
-| `EMAIL_SECRET` | `/webhook/email` | Ai cũng inject được tx email giả |
+| `SEPAY_SECRET` | `/webhook` (payload SePay) | App không khởi động |
+| `TELEGRAM_WEBHOOK_SECRET` | `/webhook` (update Telegram) | App không khởi động |
+| `CRON_SECRET` | `/trigger/*` | App không khởi động |
+| `EMAIL_SECRET` | `/webhook/email` | App không khởi động |
 
-Với `TELEGRAM_WEBHOOK_SECRET`, đăng ký lại webhook với cùng giá trị (`setWebhook` + `secret_token` — xem `.env.example`). Với `CRON_SECRET`, thêm `?secret=<value>` vào URL trong `crontab.txt`. **Khuyến nghị:** set đủ 4 secret + đặt Cloudflare (hoặc WAF) trước Railway app.
+Với `TELEGRAM_WEBHOOK_SECRET`, đăng ký lại webhook với cùng giá trị (`setWebhook` + `secret_token` — xem `.env.example`). Với `CRON_SECRET`, thêm `?secret=<value>` vào URL trong `crontab.txt`. Giữ Cloudflare (hoặc WAF) trước Railway app như một lớp bảo vệ mạng bổ sung.
 
 **3. Dùng SSH key, không dùng password.** Nếu deploy VPS, password SSH có thể brute-force:
 

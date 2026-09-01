@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+import math
 
 _UNIT_MULTIPLIERS = {
     "k":     1_000,
@@ -67,7 +68,8 @@ def parse_money(text: str) -> float | None:
     norm = re.sub(r"\s+", "", norm)
     shorthand = _parse_shorthand(norm)
     if shorthand is not None:
-        return -shorthand if negative else shorthand
+        value = -shorthand if negative else shorthand
+        return value if math.isfinite(value) else None
 
     # ── Plain-number pass: separators + decimals ──
     # Strict: after normalization (currency suffix + whitespace removed) the
@@ -100,7 +102,8 @@ def parse_money(text: str) -> float | None:
         return None
     try:
         value = float(s)
-        return -value if negative else value
+        value = -value if negative else value
+        return value if math.isfinite(value) else None
     except ValueError:
         return None
 
@@ -112,6 +115,6 @@ def parse_budget_amount(text: str) -> int | None:
     Returns int VND or None. Used by /allocate, /manage and the Zalo
     equivalents — '0' stays valid (tracking-only)."""
     val = parse_money(text)
-    if val is None or val < 0:
+    if val is None or not math.isfinite(val) or val < 0:
         return None
     return int(round(val))
