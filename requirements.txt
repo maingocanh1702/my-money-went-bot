@@ -1,5 +1,5 @@
 fastapi==0.136.1
-uvicorn[standard]==0.46.0
+uvicorn[standard]==0.52.4
 gspread==6.2.1
 google-auth==2.49.2
 httpx==0.28.1
