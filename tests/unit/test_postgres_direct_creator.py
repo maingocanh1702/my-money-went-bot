@@ -365,3 +365,138 @@ def test_system_tls_root_gets_a_private_absent_crl_path(
     finally:
         postgres._delete_tls_root(root)
     assert not private_directory.exists()
+
+
+def test_dbapi_parameters_pin_the_endpoint_credentials_and_timeout(tmp_path: Path) -> None:
+    url = postgres.require_postgres_url(
+        "postgresql://app:pw@db.example:6543/money?sslmode=verify-full",
+        environ={},
+    )
+    private_directory = tmp_path / "private"
+    private_directory.mkdir(mode=0o700)
+    parameters = postgres._dbapi_parameters(
+        url,
+        postgres._TlsRoot(value="system", contents=None, directory=private_directory),
+    )
+    assert parameters["host"] == "db.example"
+    assert parameters["port"] == 6543
+    assert parameters["dbname"] == "money"
+    assert parameters["user"] == "app"
+    assert parameters["password"] == "pw"
+    assert postgres._CONNECT_TIMEOUT_SECONDS > 0
+    assert parameters["connect_timeout"] == postgres._CONNECT_TIMEOUT_SECONDS
+
+
+def test_private_ca_rejects_a_certificate_owned_by_another_user(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "ca.crt"
+    source.write_text("root")
+    source.chmod(0o644)
+    monkeypatch.setattr(postgres, "_require_trusted_directory", lambda _directory: None)
+    monkeypatch.setattr(
+        postgres, "_trusted_uids", lambda: frozenset({source.stat().st_uid + 1})
+    )
+    with pytest.raises(ValueError, match="owned by root or by this process"):
+        postgres._read_tls_root({postgres.POSTGRES_SSL_ROOT_CERT_ENV: str(source)})
+
+
+@pytest.mark.parametrize("mode", ["foreign_owner", "world_writable"])
+def test_private_ca_rejects_an_untrusted_certificate_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+) -> None:
+    directory = tmp_path / "ca"
+    directory.mkdir()
+    source = directory / "ca.crt"
+    source.write_text("root")
+    source.chmod(0o644)
+    if mode == "foreign_owner":
+        monkeypatch.setattr(
+            postgres, "_trusted_uids", lambda: frozenset({directory.stat().st_uid + 1})
+        )
+        expected = "directory must be owned by root"
+    else:
+        directory.chmod(0o777)
+        expected = "directory must not be group- or world-writable"
+    with pytest.raises(ValueError, match=expected):
+        postgres._read_tls_root({postgres.POSTGRES_SSL_ROOT_CERT_ENV: str(source)})
+
+
+def test_private_ca_accepts_a_sticky_shared_directory(tmp_path: Path) -> None:
+    directory = tmp_path / "shared"
+    directory.mkdir()
+    directory.chmod(0o1777)
+    source = directory / "ca.crt"
+    source.write_text("root")
+    source.chmod(0o644)
+    root = postgres._read_tls_root({postgres.POSTGRES_SSL_ROOT_CERT_ENV: str(source)})
+    assert root.contents == b"root"
+
+
+def test_creator_forwards_the_dialect_adapters_map(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, object]] = []
+    sentinel = object()
+
+    def connect(**parameters: object) -> object:
+        calls.append(parameters)
+        return sentinel
+
+    monkeypatch.setattr(postgres.psycopg, "connect", connect)
+    engine = postgres.create_postgres_engine(
+        "postgresql://app:pw@db.example/money?sslmode=verify-full",
+        environ={},
+    )
+    try:
+        # Every pool connection must carry the dialect's own AdaptersMap, so a
+        # type registered on the first connection is honoured by the next one.
+        assert engine.pool._creator() is sentinel
+        assert calls[-1]["context"] is engine.dialect._psycopg_adapters_map
+        replacement = object()
+        engine.dialect._psycopg_adapters_map = replacement
+        assert engine.pool._creator() is sentinel
+        assert calls[-1]["context"] is replacement
+        assert calls[-1]["sslmode"] == "verify-full"
+    finally:
+        engine.dispose()
+
+
+def test_creator_omits_context_when_the_dialect_has_no_adapters_map(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+    sentinel = object()
+
+    def connect(**parameters: object) -> object:
+        calls.append(parameters)
+        return sentinel
+
+    monkeypatch.setattr(postgres.psycopg, "connect", connect)
+    engine = postgres.create_postgres_engine(
+        "postgresql://app:pw@db.example/money?sslmode=verify-full",
+        environ={},
+    )
+    try:
+        engine.dialect._psycopg_adapters_map = None
+        assert engine.pool._creator() is sentinel
+        assert "context" not in calls[-1]
+    finally:
+        engine.dispose()
+
+
+def test_creator_rejects_an_environment_override_added_after_construction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(postgres.psycopg, "connect", lambda **_parameters: object())
+    engine = postgres.create_postgres_engine(
+        "postgresql://app:pw@db.example/money?sslmode=verify-full",
+        environ={},
+    )
+    try:
+        monkeypatch.setenv("PGSSLMODE", "disable")
+        with pytest.raises(ValueError, match="overrides"):
+            engine.pool._creator()
+    finally:
+        engine.dispose()
