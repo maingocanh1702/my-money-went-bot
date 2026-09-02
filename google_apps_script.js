@@ -29,8 +29,11 @@
  */
 
 // ─── Config — SỬA 2 DÒNG NÀY ────────────────────────────────────────────────
-const WEBHOOK_URL = "https://YOUR-APP.up.railway.app/webhook/email";  // ← thay bằng URL Railway của bạn
-const WEBHOOK_SECRET = "YOUR_EMAIL_SECRET_HERE";  // phải khớp với EMAIL_SECRET trong Railway
+// This placeholder is deliberately non-routable. Never send bank-email data
+// until it is replaced with the /webhook/email URL of YOUR Railway service.
+const WEBHOOK_URL = "SET_YOUR_RAILWAY_WEBHOOK_EMAIL_URL";
+// Set this manually in Apps Script and Railway; never commit a real secret.
+const WEBHOOK_SECRET = "SET_EMAIL_SECRET_IN_APPS_SCRIPT";
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Danh sách sender email ngân hàng cần theo dõi.
@@ -55,6 +58,8 @@ const BANK_SENDERS = [
 // Cấu trúc: { "<gmailMessageId>": <epochMillisKhiXuLy>, ... }
 // Tự prune entry cũ hơn LOOKBACK_DAYS để không phình vô hạn.
 const PROCESSED_PROP_KEY = "processed_msg_ids";
+const FAILED_PROP_KEY = "failed_msg_retries";
+const SCAN_OFFSET_PROP_KEY = "bank_email_scan_offset";
 
 // Số ngày giữ lại message ID trong tập processed (đủ rộng để cover bot down).
 const LOOKBACK_DAYS = 7;
@@ -82,14 +87,18 @@ function checkBankEmails() {
     const query = buildGmailQuery();
     console.log(`[checkBankEmails] query: ${query}`);
 
-    const threads = GmailApp.search(query, 0, 30);  // tối đa 30 thread mỗi lần
+    const props = PropertiesService.getScriptProperties();
+    const offset = Math.max(0, Number(props.getProperty(SCAN_OFFSET_PROP_KEY) || "0"));
+    const threads = GmailApp.search(query, offset, 30);
     if (threads.length === 0) {
+      props.setProperty(SCAN_OFFSET_PROP_KEY, "0");
       console.log(`[checkBankEmails] 0 threads matched query`);
       return;
     }
-    console.log(`[checkBankEmails] found ${threads.length} thread(s)`);
+    console.log(`[checkBankEmails] found ${threads.length} thread(s) at offset=${offset}`);
 
     const processed = _loadProcessed();
+    const failed = _loadFailed();
     const label = VISUAL_LABEL ? _getOrCreateLabel(VISUAL_LABEL) : null;
 
     let processedCount = 0;
@@ -105,6 +114,7 @@ function checkBankEmails() {
 
         // Dedup theo message ID, KHÔNG theo thread.
         if (processed[msgId]) {
+          delete failed[msgId];
           skippedCount++;
           return;
         }
@@ -117,12 +127,19 @@ function checkBankEmails() {
           processMessage(msg);
           // Chỉ đánh dấu processed SAU KHI webhook trả 200.
           processed[msgId] = Date.now();
+          delete failed[msgId];
           processedCount++;
           threadHadSuccess = true;
         } catch (err) {
           console.error(`[checkBankEmails] error processing msg ${msgId}: ${err}`);
           errorCount++;
-          // Không đánh dấu processed → retry lần chạy sau.
+          // Keep retry history, but never let one poison message pin the
+          // cursor on this page and starve older backlog messages.
+          const prior = failed[msgId] || {};
+          failed[msgId] = {
+            attempts: Number(prior.attempts || 0) + 1,
+            lastFailedAt: Date.now(),
+          };
         }
       });
 
@@ -138,6 +155,14 @@ function checkBankEmails() {
 
     // Lưu lại tập processed (kèm prune entry cũ).
     _saveProcessed(processed);
+    _saveFailed(failed);
+    // Advance over a full page so an outage/backlog cannot strand older
+    // unprocessed messages behind the newest 30 threads. Failed messages are
+    // retried after the scan wraps; they never pin the cursor on one page.
+    props.setProperty(
+      SCAN_OFFSET_PROP_KEY,
+      threads.length === 30 ? String(offset + threads.length) : "0"
+    );
 
     console.log(`[checkBankEmails] done — processed=${processedCount} ` +
                 `skipped=${skippedCount} errors=${errorCount}`);
@@ -148,9 +173,11 @@ function checkBankEmails() {
 
 /**
  * Xử lý 1 email — extract data và gọi bot webhook.
- * Throw nếu bot trả non-200 → caller sẽ KHÔNG đánh dấu processed (để retry).
+ * Throw nếu bot không trả exact JSON acknowledgment → caller sẽ KHÔNG đánh
+ * dấu processed (để retry). A generic 200 page is never durable success.
  */
 function processMessage(msg) {
+  _requireWebhookConfig();
   const from = msg.getFrom();
   const subject = msg.getSubject();
   const body = msg.getPlainBody();
@@ -183,6 +210,24 @@ function processMessage(msg) {
   if (code !== 200) {
     // Throw để caller không đánh dấu processed → retry lần sau.
     throw new Error(`non-200 from bot: ${code} ${respBody}`);
+  }
+  let acknowledgment;
+  try {
+    acknowledgment = JSON.parse(respBody);
+  } catch (err) {
+    throw new Error(`invalid JSON acknowledgment from bot: ${respBody}`);
+  }
+  if (!acknowledgment || acknowledgment.ok !== true) {
+    throw new Error(`negative acknowledgment from bot: ${respBody}`);
+  }
+}
+
+function _requireWebhookConfig() {
+  if (!WEBHOOK_URL.startsWith("https://") || WEBHOOK_URL.includes("SET_YOUR_")) {
+    throw new Error("Set WEBHOOK_URL to your own Railway /webhook/email URL before enabling this trigger.");
+  }
+  if (!WEBHOOK_SECRET || WEBHOOK_SECRET.startsWith("SET_")) {
+    throw new Error("Set WEBHOOK_SECRET to the EMAIL_SECRET configured in your Railway service.");
   }
 }
 
@@ -230,6 +275,34 @@ function _saveProcessed(map) {
   }
   PropertiesService.getScriptProperties()
     .setProperty(PROCESSED_PROP_KEY, JSON.stringify(map));
+}
+
+/**
+ * Read retry metadata for messages that have not yet received a durable bot
+ * acknowledgment. It remains separate from `processed`: a failure must stay
+ * eligible for retry while the cursor continues scanning older messages.
+ */
+function _loadFailed() {
+  const raw = PropertiesService.getScriptProperties().getProperty(FAILED_PROP_KEY);
+  if (!raw) return {};
+  try {
+    const obj = JSON.parse(raw);
+    return (obj && typeof obj === "object") ? obj : {};
+  } catch (e) {
+    console.error(`[_loadFailed] corrupt JSON, resetting: ${e}`);
+    return {};
+  }
+}
+
+/** Prune retry metadata on the same retention boundary as processed IDs. */
+function _saveFailed(map) {
+  const cutoff = Date.now() - LOOKBACK_DAYS * 86400 * 1000;
+  for (const id in map) {
+    const retry = map[id];
+    if (!retry || Number(retry.lastFailedAt || 0) < cutoff) delete map[id];
+  }
+  PropertiesService.getScriptProperties()
+    .setProperty(FAILED_PROP_KEY, JSON.stringify(map));
 }
 
 /**
@@ -335,5 +408,7 @@ function bootstrapProcessed() {
  */
 function resetProcessed() {
   PropertiesService.getScriptProperties().deleteProperty(PROCESSED_PROP_KEY);
+  PropertiesService.getScriptProperties().deleteProperty(FAILED_PROP_KEY);
+  PropertiesService.getScriptProperties().deleteProperty(SCAN_OFFSET_PROP_KEY);
   console.log(`[resetProcessed] cleared processed message-id store`);
 }

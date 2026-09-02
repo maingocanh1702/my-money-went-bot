@@ -14,7 +14,6 @@ from config import (
     CHAT_ID,
     CRON_SECRET,
     EMAIL_SECRET,
-    SEPAY_SECRET,
     TELEGRAM_WEBHOOK_SECRET,
     ZALO_ALLOW_UNVERIFIED_WEBHOOK,
     ZALO_CHAT_ID,
@@ -26,8 +25,8 @@ from utils import parse_money as _utils_parse_money, parse_budget_amount
 import messenger
 import sheets as sh
 import telegram_api as tg
-from handlers.sepay        import handle_sepay_webhook
-from handlers.email_parser import parse_email
+from handlers.sepay        import handle_sepay_webhook, handle_trusted_email_transaction, has_valid_sepay_secret
+from handlers.email_parser import is_transaction_shaped_bank_email, parse_email
 from handlers.transaction import handle_parent_selected, handle_sub_selected, handle_freetext_sub, handle_recategorize, handle_inline_new_cat_name, handle_learn_rule
 from handlers.allocation  import (
     start_monthly_allocation, handle_alloc_callback,
@@ -84,18 +83,6 @@ async def _set_telegram_commands_safe():
 async def on_startup():
     import os
     print(f"[startup] running on port {os.environ.get('PORT', 8000)}")
-    # Security posture nudge — every webhook secret is optional (so existing
-    # deployments keep working), but running open on a public URL is risky.
-    _unset = [name for name, val in (
-        ("SEPAY_SECRET", SEPAY_SECRET),
-        ("TELEGRAM_WEBHOOK_SECRET", TELEGRAM_WEBHOOK_SECRET),
-        ("CRON_SECRET", CRON_SECRET),
-        ("EMAIL_SECRET", EMAIL_SECRET),
-    ) if not val]
-    if _unset:
-        print(f"[startup] ⚠️ SECURITY: unset secrets: {', '.join(_unset)} — "
-              f"the matching endpoints accept unauthenticated requests. "
-              f"See .env.example for how to enable them.")
     asyncio.create_task(_set_telegram_commands_safe())
 
 
@@ -104,33 +91,49 @@ async def on_startup():
 async def webhook(request: Request, bg: BackgroundTasks):
     """
     Single endpoint handling both SePay and Telegram payloads.
-    Returns 200 immediately — processing runs in background.
+    Telegram updates return 200 immediately and process in the background.
+    SePay events authenticate and finish their financial write before the
+    response, so a transient error receives a retry rather than losing money
+    data to an early acknowledgement.
 
     Security:
-      - Telegram updates ("update_id" in body): when TELEGRAM_WEBHOOK_SECRET is
-        set, the X-Telegram-Bot-Api-Secret-Token header must match (register
-        the webhook with the same secret_token — see .env.example). Unset →
-        legacy open behavior, warned at startup.
-      - SePay payloads: validated inside handle_sepay_webhook via SEPAY_SECRET.
+      - Telegram updates ("update_id" in body): the
+        X-Telegram-Bot-Api-Secret-Token header must match.
+      - SePay payloads: the body credential must match SEPAY_SECRET before
+        processing.
     """
     try:
         body = await request.json()
     except Exception:
-        return JSONResponse({"ok": True})
+        return JSONResponse({"ok": False, "error": "invalid JSON"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"ok": False, "error": "JSON object required"}, status_code=400)
 
-    if "update_id" in body and TELEGRAM_WEBHOOK_SECRET:
+    if "update_id" in body:
         tg_secret = request.headers.get("x-telegram-bot-api-secret-token", "")
         if not hmac_mod.compare_digest(tg_secret, TELEGRAM_WEBHOOK_SECRET):
             print("[webhook] rejected: invalid Telegram webhook secret")
             return JSONResponse({"ok": True})  # 200 to avoid Telegram retries
+        bg.add_task(_process, body)
+        return JSONResponse({"ok": True})
 
-    bg.add_task(_process, body)
-    return JSONResponse({"ok": True})          # ← 200 right away, no 302
+    if not has_valid_sepay_secret(body, allow_unconfigured=False):
+        print("[webhook] rejected: invalid SePay webhook secret")
+        return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
+    if "data" in body and not isinstance(body["data"], dict):
+        return JSONResponse({"ok": False, "error": "invalid SePay payload"}, status_code=400)
+    try:
+        await handle_sepay_webhook(body)
+    except Exception:
+        import traceback
+        print("ERROR [sepay webhook]:", traceback.format_exc())
+        return JSONResponse({"ok": False, "error": "retryable processing failure"}, status_code=503)
+    return JSONResponse({"ok": True})
 
 
 # ─── Email webhook (Google Apps Script → bot) ────────────────
 @app.post("/webhook/email")
-async def webhook_email(request: Request, bg: BackgroundTasks):
+async def webhook_email(request: Request):
     """
     Nhận email payload từ Google Apps Script.
     Payload: { secret, from, subject, body, date }
@@ -138,14 +141,17 @@ async def webhook_email(request: Request, bg: BackgroundTasks):
     try:
         body = await request.json()
     except Exception:
-        return JSONResponse({"ok": True})
+        return JSONResponse({"ok": False, "error": "invalid JSON"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"ok": False, "error": "JSON object required"}, status_code=400)
 
     # Validate secret
-    if EMAIL_SECRET and body.get("secret") != EMAIL_SECRET:
+    if not hmac_mod.compare_digest(str(body.get("secret") or ""), EMAIL_SECRET):
         print(f"[email webhook] rejected: invalid secret")
         return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
 
-    bg.add_task(_process_email, body)
+    if not await _process_email(body):
+        return JSONResponse({"ok": False, "error": "retryable processing failure"}, status_code=503)
     return JSONResponse({"ok": True})
 
 
@@ -158,13 +164,23 @@ async def _process_email(payload: dict):
             date=payload.get("date", ""),
         )
         if parsed is None:
-            print(f"[email] skipped — not a transaction email or unknown format")
-            return
+            if not is_transaction_shaped_bank_email(
+                payload.get("from", ""), payload.get("subject", ""), payload.get("body", "")
+            ):
+                print("[email] ignored: non-transaction or unsupported sender")
+                return True
+            print("[email] retrying — transaction-shaped email had an unknown format")
+            return False
         print(f"[email] parsed: {parsed.get('_source')} amount={parsed.get('transferAmount')} type={parsed.get('transferType')}")
-        await handle_sepay_webhook(parsed)
-    except Exception as e:
+        # The EMAIL_SECRET was verified at the HTTP boundary. The payload must
+        # never be treated as an untrusted SePay delivery just because it lacks
+        # SEPAY_SECRET.
+        await handle_trusted_email_transaction(parsed)
+        return True
+    except Exception:
         import traceback
         print("ERROR [email]:", traceback.format_exc())
+        return False
 
 
 # ─── Zalo Bot Platform webhook ────────────────────────────────
@@ -567,60 +583,12 @@ async def _handle_zalo_text(body: dict):
 
 
 async def _handle_zalo_callback(cb: dict):
-    """Handle Zalo inline keyboard callback_query — mirrors Telegram _handle_callback.
-
-    When Zalo Bot API supports inline_keyboard, button taps arrive as
-    callback_query events with the same callback_data format as Telegram.
-    We reuse the existing Telegram callback handlers directly.
-
-    Expected cb format: {"id": "...", "data": "p_5_daily", "message": {"chat": {"id": "..."}, "message_id": "..."}}
-    """
-    try:
-        data = cb.get("data", "")
-        chat_id = str(cb.get("message", {}).get("chat", {}).get("id", ""))
-        message_id = cb.get("message", {}).get("message_id")
-
-        # Admin check
-        if ZALO_CHAT_ID and chat_id != ZALO_CHAT_ID:
-            print(f"[zalo] callback rejected non-admin: {chat_id}")
-            return
-
-        # Answer callback (best-effort, ignore errors)
-        try:
-            await _zalo_answer_callback(cb.get("id", ""))
-        except Exception:
-            pass
-
-        parts = data.split("_")
-        prefix = parts[0]
-
-        if prefix == "p":
-            await handle_parent_selected(parts, message_id)
-        elif prefix == "s":
-            await handle_sub_selected(parts, message_id)
-        elif prefix == "al":
-            await handle_alloc_callback(parts, message_id)
-        elif prefix == "recat":
-            await handle_recategorize(parts, message_id)
-        elif prefix == "mg":
-            await handle_manage_callback(parts, message_id)
-        elif prefix == "kw":
-            await handle_keywords_callback(parts, message_id)
-        elif prefix == "cb":
-            await handle_cashback_callback(parts, message_id)
-        elif prefix == "acc":
-            await handle_accounts_callback(parts, message_id)
-        elif prefix == "asg":
-            await handle_assign_callback(parts, message_id)
-        elif prefix == "rpt":
-            await handle_report_callback(parts, message_id)
-        elif prefix == "lang":
-            await handle_lang_callback(parts, message_id)
-        elif prefix == "lr":
-            await handle_learn_rule(parts, message_id)
-    except Exception:
-        import traceback
-        print(f"ERROR [zalo callback]: {traceback.format_exc()}")
+    """Fail closed until Zalo gets its own callback state and transport flow."""
+    chat_id = str(cb.get("message", {}).get("chat", {}).get("id", ""))
+    if ZALO_CHAT_ID and chat_id != ZALO_CHAT_ID:
+        print(f"[zalo] callback rejected non-admin: {chat_id}")
+        return
+    print("[zalo] inline callback ignored: channel-safe callback routing is not implemented")
 
 
 async def _zalo_answer_callback(callback_query_id: str) -> None:

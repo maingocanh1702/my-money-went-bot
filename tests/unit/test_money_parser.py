@@ -39,7 +39,7 @@ def test_parse_money_accepts_shorthand(text, expected):
     assert main._parse_money(text) == expected
 
 
-@pytest.mark.parametrize("text", ["", "   ", "abc", "tr", "k", "5tr/tháng", None])
+@pytest.mark.parametrize("text", ["", "   ", "abc", "tr", "k", "5tr/tháng", "1e9999", None])
 def test_parse_money_rejects_garbage(text):
     assert parse_money(text) is None
 

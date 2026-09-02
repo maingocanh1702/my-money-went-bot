@@ -468,7 +468,7 @@ def render_cashback_section(period_code: str = "m") -> str:
         cfg = sh.get_card_config(card["id"])
         if not cfg or not cfg.get("active"):
             continue
-        cycle = sh.cycle_id(card["id"], now, card.get("statement_day"))
+        cycle = sh.cashback_cycle_id(card["id"], now, card, cfg)
         ledger = [l for l in sh.get_cashback_ledger(card["id"], cycle) if l["status"] != "void"]
         rules = {r["match_value"]: r for r in sh.get_cashback_rules(card["id"])}
 

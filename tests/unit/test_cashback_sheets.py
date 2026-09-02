@@ -5,6 +5,8 @@ on real merchant format, statement-cycle boundaries, eligible-spend / daily
 counters with exclusion, orchestrator idempotency + activation gate + promote,
 and recompute reshuffling the supermarket daily limit.
 """
+from datetime import datetime, timedelta, timezone
+
 import pytest
 import sheets as sh
 from config import SHEETS as S
@@ -102,6 +104,121 @@ def test_add_get_cashback_rule(fake_ss):
     assert r["monthly_cap"] == 200000
     assert r["max_eligible_tx_per_day"] == 1
     assert r["active"] is True
+
+
+def test_cashback_rule_rejects_non_finite_money_values(fake_ss):
+    with pytest.raises(ValueError, match="finite"):
+        sh.add_cashback_rule("cake", "Broken", "mcc", "5411", rate=float("inf"))
+    with pytest.raises(ValueError, match="finite"):
+        sh.upsert_card_config("cake", cashback_rate=float("nan"))
+
+
+def test_durable_claim_blocks_fresh_processing_and_reclaims_stale_claim(fake_ss):
+    _setup_tx_tab()
+    sh._processed_refs.clear()
+
+    assert sh.tx_exists("exclusive-claim") is False
+    with pytest.raises(sh.TransactionClaimInProgressError):
+        sh.tx_exists("exclusive-claim")
+
+    processed = sh._ensure_processed_refs_tab()
+    stale = (datetime.now(timezone.utc) - timedelta(
+        seconds=sh.PROCESSED_REF_CLAIM_TTL_SECONDS + 1
+    )).isoformat()
+    processed.update("C2:C2", [[stale]])
+    sh._processed_refs.clear()
+
+    assert sh.tx_exists("exclusive-claim") is False
+
+
+def test_durable_claim_expands_processed_refs_past_initial_sheet_capacity(fake_ss, monkeypatch):
+    _setup_tx_tab()
+    processed = sh._ensure_processed_refs_tab()
+    processed._row_count = 500
+    processed.update(
+        "A2:C500",
+        [[f"old-{index}", "committed", "2026-09-01T00:00:00+00:00"] for index in range(499)],
+    )
+    sh._processed_refs.clear()
+    monkeypatch.setattr(sh, "_ref_in_sheet", lambda _ref_code: False)
+
+    assert sh.tx_exists("claim-after-capacity") is False
+    assert processed.row_count >= 501
+    assert processed.row_values(501)[0] == "claim-after-capacity"
+
+
+def test_fuzzy_dedup_reads_canonical_datetime_written_to_transactions(fake_ss):
+    _setup_tx_tab()
+    tx_date = datetime(2026, 9, 1, 14, 0, tzinfo=timezone(timedelta(hours=7)))
+    sh.append_transaction(tx_date, "Coffee", 50_000, "first-ref", "2026-09", tx_type="Tiền ra")
+
+    assert sh.find_recent_duplicate(50_000, "out", tx_date.isoformat()) is True
+
+
+def test_calendar_month_cap_period_ignores_statement_day(fake_ss):
+    _setup_tx_tab()
+    sh.add_account(
+        account_id="tcb", name="TCB", acc_type="credit", currency="VND",
+        source_keys=["email_tcb:tcb"], statement_day=15,
+    )
+    sh.upsert_card_config(
+        "tcb", cashback_rate=0.01, min_eligible_spend=0,
+        cap_period="calendar_month", alert_pct=0.8, active=True,
+    )
+    assert sh.cashback_cycle_id("tcb", "2026-06-20") == "tcb_calendar_2026-06"
+    assert sh.cashback_cycle_id("tcb", "2026-07-01") == "tcb_calendar_2026-07"
+    assert sh.normalize_cashback_cycle_id("tcb", "2026-06") == "tcb_calendar_2026-06"
+    assert sh.normalize_cashback_cycle_id("tcb", "tcb_2026-06") == "tcb_calendar_2026-06"
+
+
+def test_calendar_month_versioning_isolates_legacy_statement_cycle_rows(fake_ss):
+    _setup_tx_tab()
+    _seed_credit(account_id="tcb", statement_day=15)
+    _seed_tiers()
+    _seed_rules(account_id="tcb")
+    _seed_mcc()
+
+    june = _add_tx("tcb", "WCM_WINMART June", 300_000, "2026-06-20T09:00:00")
+    # Simulate the old statement-cycle writer before calendar-month support.
+    sh.compute_and_record_cashback(june)
+    assert sh.get_cashback_ledger("tcb")[0]["cycle"] == "tcb_2026-07"
+
+    sh.upsert_card_config("tcb", cap_period="calendar_month")
+    july = _add_tx("tcb", "WCM_WINMART July", 300_000, "2026-07-01T09:00:00")
+    result = sh.compute_and_record_cashback(july)
+
+    assert result["cycle"] == "tcb_calendar_2026-07"
+    july_lines = [line for line in sh.get_cashback_ledger("tcb", result["cycle"])
+                  if line["status"] != "void"]
+    assert len(july_lines) == 1
+    assert july_lines[0]["tx_row_num"] == july
+    assert july_lines[0]["cashback_amount"] == 50_000
+
+
+def test_invalid_calendar_date_preserves_existing_cashback_until_repaired(fake_ss):
+    _setup_tx_tab()
+    _seed_credit(account_id="tcb", statement_day=15)
+    _seed_tiers()
+    _seed_rules(account_id="tcb")
+    _seed_mcc()
+    sh.upsert_card_config("tcb", cap_period="calendar_month")
+
+    row_num = _add_tx("tcb", "WCM_WINMART June", 300_000, "2026-06-20T09:00:00")
+    computed = sh.compute_and_record_cashback(row_num)
+    assert computed["lines"][0]["cashback_amount"] == 50_000
+
+    # A manual Sheet edit can make the date unparsable after cashback has been
+    # recorded. Derived money must stay intact until the source date is fixed.
+    tx_ws = sh._sheet(S.TRANSACTIONS)
+    tx_ws.update_cell(row_num, 2, "not-a-date")
+    sh._invalidate_tx_rows_cache()
+
+    assert sh.recompute_cashback_for_tx(row_num)["lines"] == []
+    assert sh.compute_and_record_cashback(row_num)["lines"] == []
+    active = [line for line in sh.get_cashback_ledger("tcb") if line["status"] != "void"]
+    assert len(active) == 1
+    assert active[0]["tx_row_num"] == row_num
+    assert active[0]["cashback_amount"] == 50_000
 
 
 def test_soft_delete_cashback_rule(fake_ss):

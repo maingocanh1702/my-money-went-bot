@@ -117,12 +117,12 @@ def seed_cake_card(account_id: str) -> dict:
 
 def current_cycle(account_id: str) -> str:
     acc = sh.find_account_by_id(account_id)
-    sd = acc.get("statement_day") if acc else None
-    return sh.cycle_id(account_id, datetime.now(pytz.timezone(TIMEZONE)), sd)
+    cfg = sh.get_card_config(account_id)
+    return sh.cashback_cycle_id(account_id, datetime.now(pytz.timezone(TIMEZONE)), acc, cfg)
 
 
 def recompute_cycle(account_id: str, cycle: str | None = None) -> int:
-    """Recompute cashback for every tx in a statement cycle. Returns rows touched.
+    """Recompute cashback for every tx in a configured cashback cycle. Returns rows touched.
 
     Finds the account's expense tx, groups by cycle, and rebuilds the target
     cycle via recompute_cashback_for_tx (which rebuilds the whole cycle from one
@@ -131,10 +131,9 @@ def recompute_cycle(account_id: str, cycle: str | None = None) -> int:
     cycle = cycle or current_cycle(account_id)
     # Accept the short month label users see (2026-06) as well as the internal
     # account-prefixed id (cake_cc_2026-06).
-    if cycle and not cycle.startswith(f"{account_id}_"):
-        cycle = f"{account_id}_{cycle}"
     acc = sh.find_account_by_id(account_id)
-    sd = acc.get("statement_day") if acc else None
+    cfg = sh.get_card_config(account_id)
+    cycle = sh.normalize_cashback_cycle_id(account_id, cycle, acc, cfg)
     try:
         ws = sh._sheet(sh.S.TRANSACTIONS)
     except Exception:
@@ -147,7 +146,7 @@ def recompute_cycle(account_id: str, cycle: str | None = None) -> int:
             continue
         if ((r[17] if len(r) > 17 else "").strip() or "expense") != "expense":
             continue
-        if sh.cycle_id(account_id, r[1] if len(r) > 1 else "", sd) != cycle:
+        if sh.cashback_cycle_id(account_id, r[1] if len(r) > 1 else "", acc, cfg) != cycle:
             continue
         rep_row = i + 2
         touched += 1

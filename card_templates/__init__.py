@@ -14,6 +14,7 @@ Usage:
 from __future__ import annotations
 
 import os
+import math
 from pathlib import Path
 
 import yaml  # type: ignore[import-untyped]
@@ -128,17 +129,23 @@ def validate_template(tpl: CardTemplate) -> list[str]:
         errors.append("card_name is required")
     if not tpl.bank:
         errors.append("bank is required")
-    if tpl.config.cashback_rate < 0 or tpl.config.cashback_rate > 1:
+    def finite(value) -> bool:
+        try:
+            return math.isfinite(float(value))
+        except (TypeError, ValueError):
+            return False
+
+    if not finite(tpl.config.cashback_rate) or tpl.config.cashback_rate < 0 or tpl.config.cashback_rate > 1:
         errors.append(f"cashback_rate must be 0-1, got {tpl.config.cashback_rate}")
-    if tpl.config.min_eligible_spend < 0:
+    if not finite(tpl.config.min_eligible_spend) or tpl.config.min_eligible_spend < 0:
         errors.append("min_eligible_spend cannot be negative")
 
     for i, tier in enumerate(tpl.tiers):
-        if tier.per_tx_cap <= 0:
+        if not finite(tier.per_tx_cap) or tier.per_tx_cap <= 0:
             errors.append(f"tiers[{i}].per_tx_cap must be > 0")
-        if tier.tx_min < 0:
+        if not finite(tier.tx_min) or tier.tx_min < 0:
             errors.append(f"tiers[{i}].tx_min cannot be negative")
-        if tier.tx_max is not None and tier.tx_max < tier.tx_min:
+        if tier.tx_max is not None and (not finite(tier.tx_max) or tier.tx_max < tier.tx_min):
             errors.append(f"tiers[{i}].tx_max < tx_min")
 
     mcc_codes = set()
@@ -150,11 +157,11 @@ def validate_template(tpl: CardTemplate) -> list[str]:
         if rule.mcc in mcc_codes:
             errors.append(f"rules[{i}].mcc '{rule.mcc}' is duplicate")
         mcc_codes.add(rule.mcc)
-        if rule.rate is not None and (rule.rate < 0 or rule.rate > 1):
+        if rule.rate is not None and (not finite(rule.rate) or rule.rate < 0 or rule.rate > 1):
             errors.append(f"rules[{i}].rate must be 0-1 or null, got {rule.rate}")
-        if rule.monthly_cap < 0:
+        if not finite(rule.monthly_cap) or rule.monthly_cap < 0:
             errors.append(f"rules[{i}].monthly_cap cannot be negative")
-        if rule.daily_limit < 0:
+        if not finite(rule.daily_limit) or int(rule.daily_limit) < 0:
             errors.append(f"rules[{i}].daily_limit cannot be negative")
 
     # Warn if patterns reference MCC codes not in rules

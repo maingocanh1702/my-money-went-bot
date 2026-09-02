@@ -3,6 +3,8 @@ handlers/sepay.py — SePay webhook handler
 Triggered when a bank transaction arrives.
 """
 import hashlib
+import hmac
+import math
 from datetime import datetime
 import pytz
 
@@ -45,19 +47,56 @@ async def _ensure_buckets(month_key: str) -> tuple[list[dict], int]:
         return buckets, created
 
 
+async def _append_claimed_transaction(ref_code: str, *args, **kwargs) -> int:
+    """Write one transaction and settle its durable claim state.
+
+    A timeout after Google Sheets commits is ambiguous. Re-read the exact
+    reference before releasing the claim so a delivery retry cannot append a
+    duplicate row during the transaction-cache TTL.
+    """
+    try:
+        row_num = sh.append_transaction(*args, **kwargs)
+    except Exception:
+        committed_row = sh.find_transaction_row_by_ref(ref_code, force_refresh=True)
+        if committed_row is not None:
+            sh.mark_ref_committed(ref_code)
+            return committed_row
+        sh.mark_ref_failed(ref_code)
+        raise
+    sh.mark_ref_committed(ref_code)
+    return row_num
+
+
+async def handle_trusted_email_transaction(payload: dict):
+    """Process an EMAIL_SECRET-authenticated payload without SePay credentials."""
+    await _handle_transaction(payload, trusted_email=True)
+
+
 async def handle_sepay_webhook(payload: dict):
-    # Optional: validate SePay webhook secret
-    # Set SEPAY_SECRET in .env to match the token configured in SePay dashboard
-    if SEPAY_SECRET:
-        incoming_secret = (
-            payload.get("apikey")
-            or payload.get("token")
-            or payload.get("secret")
-            or (payload.get("data") or {}).get("apikey")
-        )
-        if incoming_secret != SEPAY_SECRET:
-            print(f"[sepay] rejected: invalid secret")
-            return
+    await _handle_transaction(payload, trusted_email=False)
+
+
+def has_valid_sepay_secret(payload: dict, *, allow_unconfigured: bool = True) -> bool:
+    """Validate a SePay payload without logging or processing its bank data."""
+    if not isinstance(payload, dict):
+        return False
+    if not SEPAY_SECRET:
+        return allow_unconfigured
+    nested_data = payload.get("data")
+    nested_data = nested_data if isinstance(nested_data, dict) else {}
+    incoming_secret = (
+        payload.get("apikey")
+        or payload.get("token")
+        or payload.get("secret")
+        or nested_data.get("apikey")
+    )
+    return hmac.compare_digest(str(incoming_secret or ""), SEPAY_SECRET)
+
+
+async def _handle_transaction(payload: dict, *, trusted_email: bool):
+    if not trusted_email and not has_valid_sepay_secret(payload):
+        print("[sepay] rejected: invalid secret")
+        return
 
     data = payload.get("data") if "data" in payload else payload
 
@@ -73,13 +112,21 @@ async def handle_sepay_webhook(payload: dict):
     if raw_amount is None:
         print("[sepay] skipping: no amount field found")
         return
-    amount = abs(float(raw_amount))
+    try:
+        raw_amount_number = float(raw_amount)
+    except (TypeError, ValueError):
+        print(f"[sepay] skipping invalid amount={raw_amount!r}")
+        return
+    if not math.isfinite(raw_amount_number):
+        print(f"[sepay] skipping non-finite amount={raw_amount!r}")
+        return
+    amount = abs(raw_amount_number)
 
     tx_type_raw = str(data.get("transferType") or data.get("transfer_type") or data.get("type") or "").lower()
 
     # Determine direction: outgoing (debit) vs incoming (credit)
-    is_outgoing = "out" in tx_type_raw or "debit" in tx_type_raw or float(raw_amount) < 0
-    is_incoming = "in" in tx_type_raw or "credit" in tx_type_raw or (not is_outgoing and float(raw_amount) > 0)
+    is_outgoing = "out" in tx_type_raw or "debit" in tx_type_raw or raw_amount_number < 0
+    is_incoming = "in" in tx_type_raw or "credit" in tx_type_raw or (not is_outgoing and raw_amount_number > 0)
 
     if not is_outgoing and not is_incoming:
         print(f"[sepay] skipping unknown tx type={tx_type_raw!r}")
@@ -99,11 +146,6 @@ async def handle_sepay_webhook(payload: dict):
         or data.get("reference_number")
         or hashlib.md5(f"{raw_amount}|{description}|{raw_date}".encode()).hexdigest()[:16]
     )
-
-    # Idempotency: skip duplicate webhook deliveries from SePay
-    if sh.tx_exists(ref_code):
-        print(f"DEBUG: duplicate webhook ignored, ref_code={ref_code!r}")
-        return
 
     tz = pytz.timezone(TIMEZONE)
     if raw_date:
@@ -146,9 +188,17 @@ async def handle_sepay_webhook(payload: dict):
     resolved = resolve_account(data)
     resolved_account_id = resolved.account_id or ""
 
+    # Claim immediately before a financial write. Every authenticated source
+    # must retry if this state cannot be made durable; acknowledging a SePay
+    # failure here would lose a real transaction just as surely as email would.
+    if sh.tx_exists(ref_code):
+        print(f"DEBUG: duplicate webhook ignored, ref_code={ref_code!r}")
+        return
+
     # ─── INCOMING (Tiền vào) ──────────────────────────────────
     if is_incoming:
-        row_num = sh.append_transaction(
+        row_num = await _append_claimed_transaction(
+            ref_code,
             tx_date, description, amount, ref_code, month_key,
             tx_type="Tiền vào",
             currency=currency,
@@ -209,7 +259,8 @@ async def handle_sepay_webhook(payload: dict):
         return
 
     # ─── OUTGOING (Tiền ra) ───────────────────────────────────
-    row_num = sh.append_transaction(
+    row_num = await _append_claimed_transaction(
+        ref_code,
         tx_date, description, amount, ref_code, month_key,
         currency=currency,
         account_id=resolved_account_id,
