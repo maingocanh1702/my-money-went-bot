@@ -686,15 +686,43 @@ def find_recent_duplicate(amount: float, tx_type: str, tx_date: str, currency: s
 # -----------------------------------------------------
 _processed_refs: dict[str, tuple[str, float]] = {}  # ref_code → (processing|committed, timestamp)
 PROCESSED_REF_CLAIM_TTL_SECONDS = 5 * 60
+# A settled entry is redundant once the Transactions row exists — tx_exists
+# consults that row first — so it is kept only as an audit trail and its row is
+# recycled afterwards. Without this the ledger grows without bound and every
+# lookup reads a larger tab.
+PROCESSED_REF_RETENTION_SECONDS = 7 * 24 * 60 * 60
+PROCESSED_REFS_HEADER = ["ref_code", "status", "updated_at"]
+_PROCESSED_REF_SETTLED = ("committed", "failed")
+
+# The ledger sits on the synchronous webhook path, so every avoidable Google
+# Sheets call is latency the sender pays for and quota the next delivery loses.
+# The worksheet handle, the ref → row index and the next free row are therefore
+# held in memory: a claim costs one read plus one write, and settling it costs a
+# write against the row the claim already found. All three are dropped whenever
+# a call fails, so a recreated or resized tab is never addressed from stale state.
+_processed_refs_ws = None
+_processed_ref_index: dict[str, tuple[int, str, str]] = {}  # ref → (row, status, updated_at)
+_processed_ref_next_row = 2
+
+
+def _reset_processed_ref_cache() -> None:
+    """Forget the ledger handle and index after any failed Sheets call."""
+    global _processed_refs_ws, _processed_ref_next_row
+    _processed_refs_ws = None
+    _processed_ref_index.clear()
+    _processed_ref_next_row = 2
 
 
 def _ensure_processed_refs_tab():
     """Return the durable transaction reservation ledger, creating it once."""
-    return _ensure_tab_with_header(
-        S.PROCESSED_REFS,
-        ["ref_code", "status", "updated_at"],
-        rows=500,
-    )
+    global _processed_refs_ws
+    if _processed_refs_ws is None:
+        _processed_refs_ws = _ensure_tab_with_header(
+            S.PROCESSED_REFS,
+            PROCESSED_REFS_HEADER,
+            rows=500,
+        )
+    return _processed_refs_ws
 
 
 class RetryableTransactionClaimError(RuntimeError):
@@ -705,35 +733,105 @@ class TransactionClaimInProgressError(RetryableTransactionClaimError):
     """A prior write may still be in progress, so the sender must retry."""
 
 
+def _processed_ref_age_seconds(updated_at: str) -> float | None:
+    """Age of a reservation timestamp, or None when it cannot be parsed."""
+    try:
+        stamped = datetime.fromisoformat(updated_at)
+    except (TypeError, ValueError):
+        return None
+    if stamped.tzinfo is None:
+        # Old rows used utcnow().isoformat(); retain their UTC meaning.
+        stamped = stamped.replace(tzinfo=timezone.utc)
+    else:
+        stamped = stamped.astimezone(timezone.utc)
+    return (datetime.now(timezone.utc) - stamped).total_seconds()
+
+
+def _load_processed_ref_index() -> None:
+    """Rebuild the ref → row index from one authoritative read of the ledger.
+
+    Always a fresh read: another worker may hold a claim this process has never
+    seen, and answering that from a cache would permit a duplicate append.
+    """
+    global _processed_ref_next_row
+    try:
+        rows = _ensure_processed_refs_tab().get_all_values()[1:]
+    except Exception as e:
+        _reset_processed_ref_cache()
+        print(f"[dedup] processed-ref lookup error (FAIL-CLOSED): {e}")
+        raise RetryableTransactionClaimError("processed-ref lookup failed") from e
+    _processed_ref_index.clear()
+    next_row = 2
+    for row_num, row in enumerate(rows, start=2):
+        ref = row[0].strip() if row and row[0] else ""
+        next_row = row_num + 1
+        if not ref:
+            continue
+        status = row[1].strip().lower() if len(row) > 1 and row[1] else "processing"
+        updated_at = row[2].strip() if len(row) > 2 and row[2] else ""
+        _processed_ref_index[ref] = (row_num, status, updated_at)
+    _processed_ref_next_row = next_row
+
+
+def _recyclable_processed_ref_row() -> tuple[int, str] | None:
+    """Oldest settled entry past its retention window, so the tab stops growing."""
+    oldest: tuple[int, str, float] | None = None
+    for ref, (row_num, status, updated_at) in _processed_ref_index.items():
+        if status not in _PROCESSED_REF_SETTLED:
+            continue
+        age = _processed_ref_age_seconds(updated_at)
+        if age is None or age <= PROCESSED_REF_RETENTION_SECONDS:
+            continue
+        if oldest is None or age > oldest[2]:
+            oldest = (row_num, ref, age)
+    if oldest is None:
+        return None
+    return oldest[0], oldest[1]
+
+
+def _write_processed_ref(ref_code: str, status: str) -> None:
+    """Persist a reservation state, reusing the row the index already knows."""
+    global _processed_ref_next_row
+    try:
+        ws = _ensure_processed_refs_tab()
+        stamp = datetime.now(timezone.utc).isoformat()
+        existing = _processed_ref_index.get(ref_code)
+        if existing is not None:
+            row_num = existing[0]
+            ws.update(f"B{row_num}:C{row_num}", [[status, stamp]])
+        else:
+            recycled = _recyclable_processed_ref_row()
+            if recycled is not None:
+                row_num, evicted = recycled
+                _processed_ref_index.pop(evicted, None)
+            else:
+                row_num = _processed_ref_next_row
+                _auto_expand(ws, row_num)
+                _processed_ref_next_row = row_num + 1
+            ws.update(f"A{row_num}:C{row_num}", [[ref_code, status, stamp]])
+        _processed_ref_index[ref_code] = (row_num, status, stamp)
+    except Exception:
+        _reset_processed_ref_cache()
+        raise
+
+
 def _get_processed_ref(ref_code: str) -> tuple[str | None, int | None, str]:
     """Return durable status, row number, and timestamp; lookup errors fail closed."""
     if not ref_code:
         return None, None, ""
-    try:
-        rows = _ensure_processed_refs_tab().get_all_values()[1:]
-        for row_num, row in enumerate(rows, start=2):
-            if row and row[0] == ref_code:
-                status = row[1].strip().lower() if len(row) > 1 and row[1] else "processing"
-                updated_at = row[2].strip() if len(row) > 2 and row[2] else ""
-                return status, row_num, updated_at
+    _load_processed_ref_index()
+    entry = _processed_ref_index.get(ref_code)
+    if entry is None:
         return None, None, ""
-    except Exception as e:
-        print(f"[dedup] processed-ref lookup error (FAIL-CLOSED): {e}")
-        raise RetryableTransactionClaimError("processed-ref lookup failed") from e
+    row_num, status, updated_at = entry
+    return status, row_num, updated_at
 
 
 def _processing_claim_is_fresh(updated_at: str) -> bool:
     """Treat malformed reservation times as active so idempotency fails closed."""
-    try:
-        stamped = datetime.fromisoformat(updated_at)
-        if stamped.tzinfo is None:
-            # Old rows used utcnow().isoformat(); retain their UTC meaning.
-            stamped = stamped.replace(tzinfo=timezone.utc)
-        else:
-            stamped = stamped.astimezone(timezone.utc)
-    except (TypeError, ValueError):
+    age = _processed_ref_age_seconds(updated_at)
+    if age is None:
         return True
-    age = (datetime.now(timezone.utc) - stamped).total_seconds()
     return age <= PROCESSED_REF_CLAIM_TTL_SECONDS
 
 def tx_exists(ref_code: str) -> bool:
@@ -779,14 +877,7 @@ def tx_exists(ref_code: str) -> bool:
         if status == "processing" and _processing_claim_is_fresh(updated_at):
             raise TransactionClaimInProgressError("transaction claim is still processing")
         try:
-            ws = _ensure_processed_refs_tab()
-            stamp = datetime.now(timezone.utc).isoformat()
-            if row_num is None:
-                row_num = _next_row(ws, col=1)
-                _auto_expand(ws, row_num)
-                ws.update(f"A{row_num}:C{row_num}", [[ref_code, "processing", stamp]])
-            else:
-                ws.update(f"B{row_num}:C{row_num}", [["processing", stamp]])
+            _write_processed_ref(ref_code, "processing")
         except Exception as e:
             print(f"[dedup] reservation write error (FAIL-CLOSED): {e}")
             raise RetryableTransactionClaimError("processed-ref reservation failed") from e
@@ -799,15 +890,11 @@ def mark_ref_committed(ref_code: str):
     if not ref_code:
         return
     try:
-        _status, row_num, _updated_at = _get_processed_ref(ref_code)
-        ws = _ensure_processed_refs_tab()
-        stamp = datetime.now(timezone.utc).isoformat()
-        if row_num is None:
-            row_num = _next_row(ws, col=1)
-            _auto_expand(ws, row_num)
-            ws.update(f"A{row_num}:C{row_num}", [[ref_code, "committed", stamp]])
-        else:
-            ws.update(f"B{row_num}:C{row_num}", [["committed", stamp]])
+        # The claim populated the index, so settling it normally costs one write.
+        # Only a process that lost that state has to re-read the ledger.
+        if ref_code not in _processed_ref_index:
+            _load_processed_ref_index()
+        _write_processed_ref(ref_code, "committed")
         _processed_refs[ref_code] = ("committed", time.time())
     except Exception as e:
         print(f"[dedup] commit marker error (FAIL-CLOSED): {e}")
@@ -819,15 +906,9 @@ def mark_ref_failed(ref_code: str):
         return
     _processed_refs.pop(ref_code, None)
     try:
-        _status, row_num, _updated_at = _get_processed_ref(ref_code)
-        ws = _ensure_processed_refs_tab()
-        stamp = datetime.now(timezone.utc).isoformat()
-        if row_num is None:
-            row_num = _next_row(ws, col=1)
-            _auto_expand(ws, row_num)
-            ws.update(f"A{row_num}:C{row_num}", [[ref_code, "failed", stamp]])
-        else:
-            ws.update(f"B{row_num}:C{row_num}", [["failed", stamp]])
+        if ref_code not in _processed_ref_index:
+            _load_processed_ref_index()
+        _write_processed_ref(ref_code, "failed")
     except Exception as e:
         print(f"[dedup] failure marker error: {e}")
 
