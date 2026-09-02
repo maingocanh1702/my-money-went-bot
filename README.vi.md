@@ -331,7 +331,8 @@ Tx sau từ cùng account auto-route. Setup `/keywords` rules để auto-categor
 ├── crontab.txt                   # Cron jobs mẫu (tham chiếu VPS; prod = GitHub Actions)
 ├── setup.sh                      # VPS bootstrap script
 ├── railway.toml                  # Railway deploy config
-└── requirements.txt
+├── requirements.txt        # dependency runtime
+└── requirements-dev.txt    # runtime + test
 ```
 
 ---
@@ -419,7 +420,7 @@ ingestion (TCB / Cake / Hang Seng), account ngoại tệ (HKD), và kênh Zalo.
 ## Development
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # runtime + test dependencies
 pytest tests/unit/ -v
 ```
 
