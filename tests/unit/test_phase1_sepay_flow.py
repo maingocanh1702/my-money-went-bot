@@ -40,6 +40,11 @@ def fake_world(monkeypatch, fake_ss):
     # Stub all telegram async calls (we just want to check sheet state)
     import telegram_api as tg
 
+    # These tests exercise the post-auth transaction flow. Authentication has
+    # its own boundary tests, and a developer's local .env must not alter this
+    # fake Sheets contract.
+    monkeypatch.setattr(sepay, "SEPAY_SECRET", "")
+
     async def _noop(*a, **k):
         return {"ok": True, "result": {"message_id": 1}}
 
@@ -69,7 +74,7 @@ def _basic_payload(amount=50000, ref="REFX", account="1903999888",
     from datetime import datetime
     import pytz
     tz = pytz.timezone("Asia/Ho_Chi_Minh")
-    return {
+    payload = {
         "transferType": tx_type,
         "transferAmount": amount,
         "description": desc,
@@ -78,6 +83,12 @@ def _basic_payload(amount=50000, ref="REFX", account="1903999888",
         "referenceCode": ref,
         "accountNumber": account,
     }
+    # Keep these contract tests hermetic when a developer's shell has a real
+    # SePay secret configured.
+    from config import SEPAY_SECRET
+    if SEPAY_SECRET:
+        payload["apikey"] = SEPAY_SECRET
+    return payload
 
 
 # ── Resolver wiring ────────────────────────────────────────────
@@ -164,6 +175,53 @@ async def test_sepay_replay_does_not_double_write(fake_world):
     rows = sh._sheet(S.TRANSACTIONS).get_all_values()
     # header + exactly one tx row
     assert len(rows) == 2
+
+
+@pytest.mark.asyncio
+async def test_sepay_claim_store_failure_is_retryable(fake_world, monkeypatch):
+    payload = _basic_payload(ref="CLAIM_STORE_DOWN")
+
+    def unavailable(_ref_code):
+        raise sh.RetryableTransactionClaimError("claim store unavailable")
+
+    monkeypatch.setattr(sh, "_ref_in_sheet", unavailable)
+    with pytest.raises(sh.RetryableTransactionClaimError):
+        await sepay.handle_sepay_webhook(payload)
+
+
+@pytest.mark.asyncio
+async def test_claimed_append_recovers_remote_commit_after_timeout(fake_world, monkeypatch):
+    """A Sheets timeout after a remote write must not release a duplicate claim."""
+    ref_code = "COMMIT_THEN_TIMEOUT"
+    original_append = sh.append_transaction
+
+    def remote_commit_then_timeout(*args, **kwargs):
+        original_append(*args, **kwargs)
+        # Model the client not reaching its normal post-write cache invalidation.
+        import time
+        sh._tx_rows_cache.update({"ts": time.time(), "rows": []})
+        raise TimeoutError("connection closed after write")
+
+    monkeypatch.setattr(sh, "append_transaction", remote_commit_then_timeout)
+    assert sh.tx_exists(ref_code) is False
+
+    row_num = await sepay._append_claimed_transaction(
+        ref_code,
+        "2026-09-01T10:00:00+07:00", "merchant", 50_000, ref_code, "2026-09",
+    )
+
+    assert row_num == 2
+    rows = sh._sheet(S.TRANSACTIONS).get_all_values()
+    assert [row[8] for row in rows[1:]].count(ref_code) == 1
+    assert sh.tx_exists(ref_code) is True
+
+
+@pytest.mark.asyncio
+async def test_sepay_rejects_non_finite_amount_without_writing(fake_world):
+    payload = _basic_payload(amount="NaN", ref="NAN_AMOUNT")
+    await sepay.handle_sepay_webhook(payload)
+    # Fake world creates the Transactions schema first; there must be no data row.
+    assert len(sh._sheet(S.TRANSACTIONS).get_all_values()) == 1
 
 
 # ── Idempotency: ledger write is itself idempotent (per-row apply) ─

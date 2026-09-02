@@ -369,6 +369,20 @@ def test_recompute_cycle_accepts_short_cycle_label(fake_ss):
     assert line["cashback_amount"] == 50000
 
 
+def test_recompute_cycle_uses_calendar_month_for_a_card_with_statement_day(fake_ss):
+    _setup_tx_tab()
+    _seed_card()
+    cb.seed_cake_card("cake_cc")
+    sh.upsert_card_config("cake_cc", cap_period="calendar_month")
+    row = sh.append_transaction("2026-06-20T09:00:00", "WCM_WINMART HCM", 300000,
+                                "CAL", "2026-06", account_id="cake_cc",
+                                ledger_tx_type="expense")
+
+    assert cb.recompute_cycle("cake_cc", "2026-06") == 1
+    line = next(l for l in sh.get_cashback_ledger("cake_cc") if l["tx_row_num"] == row)
+    assert line["cycle"] == "cake_cc_calendar_2026-06"
+
+
 @pytest.mark.asyncio
 async def test_zalo_cashback_uses_sender_chat(monkeypatch, fake_ss):
     # Codex round 02 [P2]: replies must go to the requesting chat, not the
