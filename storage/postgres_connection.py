@@ -22,6 +22,10 @@ POSTGRES_SSL_ROOT_CERT_ENV = "POSTGRES_SSL_ROOT_CERT"
 POSTGRES_APP_SCHEMA = "my_money_went"
 POSTGRES_SAFE_SEARCH_PATH = f"{POSTGRES_APP_SCHEMA},pg_temp"
 _MAX_CERTIFICATE_BYTES = 1024 * 1024
+# libpq leaves the connection attempt unbounded when connect_timeout is
+# absent, so a blackholed TCP/TLS/auth handshake would block synchronous
+# pool creation forever. PG* overrides are rejected, so pin it here.
+_CONNECT_TIMEOUT_SECONDS = 10
 _TCP_HOSTNAME = re.compile(
     r"^(?=.{1,253}\.?$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}"
     r"[A-Za-z0-9])?\.)*[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.?$"
@@ -80,6 +84,33 @@ def _require_url_text(value: object | None, field: str) -> str:
     return text
 
 
+def _trusted_uids() -> frozenset[int]:
+    """Owners allowed to supply a trust anchor: root or this process."""
+    return frozenset({0, os.geteuid()})
+
+
+def _require_trusted_directory(directory: Path) -> None:
+    """Reject a certificate an untrusted user could replace by rename."""
+    try:
+        info = os.stat(directory)
+    except OSError as exc:
+        raise ValueError(
+            f"{POSTGRES_SSL_ROOT_CERT_ENV} must live in a readable directory"
+        ) from exc
+    if not stat.S_ISDIR(info.st_mode):
+        raise ValueError(f"{POSTGRES_SSL_ROOT_CERT_ENV} must live in a directory")
+    if info.st_uid not in _trusted_uids():
+        raise ValueError(
+            f"{POSTGRES_SSL_ROOT_CERT_ENV} directory must be owned by root or by this process"
+        )
+    # The sticky bit is what makes a shared writable directory safe: only an
+    # entry's owner may unlink or rename it there.
+    if info.st_mode & (stat.S_IWGRP | stat.S_IWOTH) and not info.st_mode & stat.S_ISVTX:
+        raise ValueError(
+            f"{POSTGRES_SSL_ROOT_CERT_ENV} directory must not be group- or world-writable"
+        )
+
+
 def _read_tls_root(environ: Mapping[str, str]) -> _TlsRoot:
     configured = environ.get(POSTGRES_SSL_ROOT_CERT_ENV, "")
     if not configured:
@@ -89,6 +120,7 @@ def _read_tls_root(environ: Mapping[str, str]) -> _TlsRoot:
         raise ValueError(f"{POSTGRES_SSL_ROOT_CERT_ENV} must be an absolute certificate path")
     if not hasattr(os, "O_NOFOLLOW"):
         raise ValueError("secure PostgreSQL certificate handling requires O_NOFOLLOW")
+    _require_trusted_directory(path.parent)
 
     descriptor = None
     try:
@@ -97,6 +129,10 @@ def _read_tls_root(environ: Mapping[str, str]) -> _TlsRoot:
         if not stat.S_ISREG(before.st_mode) or before.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
             raise ValueError(
                 f"{POSTGRES_SSL_ROOT_CERT_ENV} must reference a non-group-writable regular file"
+            )
+        if before.st_uid not in _trusted_uids():
+            raise ValueError(
+                f"{POSTGRES_SSL_ROOT_CERT_ENV} must be owned by root or by this process"
             )
         if not 0 < before.st_size <= _MAX_CERTIFICATE_BYTES:
             raise ValueError(
@@ -241,6 +277,7 @@ def _dbapi_parameters(url: URL, tls_root: _TlsRoot) -> dict[str, str | int]:
         "sslcertmode": "disable",
         "gssencmode": "disable",
         "require_auth": "scram-sha-256",
+        "connect_timeout": _CONNECT_TIMEOUT_SECONDS,
         "options": f"-c search_path={POSTGRES_SAFE_SEARCH_PATH}",
     }
 
@@ -258,11 +295,30 @@ def create_postgres_engine(
         root = _seal_tls_root(_read_tls_root(environment))
         parameters = _dbapi_parameters(url, root)
 
+        # The dialect is captured after construction so the creator can read
+        # the AdaptersMap SQLAlchemy builds during initialize(). Holding the
+        # dialect (not the Engine) keeps the Engine collectable, so the
+        # finalizer below still deletes the sealed certificate.
+        dialect_holder: list[object] = []
+
         def creator():
             _verify_effective_environment(environment)
-            return psycopg.connect(**parameters)
+            connect_parameters = dict(parameters)
+            # SQLAlchemy registers dynamically discovered types (hstore among
+            # them) on the dialect's AdaptersMap and passes it to psycopg as
+            # ``context``. A terminal creator must forward the same map or a
+            # later pool connection decodes values differently from the first.
+            adapters_map = (
+                getattr(dialect_holder[0], "_psycopg_adapters_map", None)
+                if dialect_holder
+                else None
+            )
+            if adapters_map is not None:
+                connect_parameters["context"] = adapters_map
+            return psycopg.connect(**connect_parameters)
 
         engine = create_engine(url, creator=creator, pool_pre_ping=True)
+        dialect_holder.append(engine.dialect)
     except Exception:
         if root is not None:
             _delete_tls_root(root)
