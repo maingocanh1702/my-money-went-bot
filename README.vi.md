@@ -6,6 +6,8 @@
 
 [🇬🇧 English](README.md)
 
+![My Money Went Bot — a Telegram bot that catches every Vietnamese bank transaction and writes it to your Google Sheet](docs/screenshots/banner.png)
+
 > 🙏 **Credits:** xây dựng dựa trên các pattern từ [`maddyle8124/spend-less-bot`](https://github.com/maddyle8124/spend-less-bot). Cảm ơn Maddy rất nhiều — không có repo gốc này thì My Money Went cũng không có.
 
 ---
@@ -92,6 +94,24 @@ Chi tiết từng tính năng:
 
 ## Screenshots
 
+<table>
+  <tr>
+    <td><img src="docs/screenshots/auto-categorize.png" alt="Auto-categorizing a Bach Hoa Xanh transaction" /></td>
+    <td><img src="docs/screenshots/report-monthly.png" alt="Monthly report with budget bars and tracking buckets" /></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/report-monthly-category-telegram.png" alt="Category-lens report with budgets and tracking buckets" /></td>
+    <td><img src="docs/screenshots/report-monthly-account-telegram.png" alt="Account-lens report with a budget warning" /></td>
+  </tr>
+</table>
+
+Các luồng tương tự trên Zalo, dạng menu đánh số:
+
+![My Money Went Bot on Zalo — numbered category picker](docs/screenshots/zalo-bot.PNG)
+
+![My Money Went Bot demo preview](docs/media/my-money-went-bot-demo-preview.gif)
+
+[Xem demo 54 giây có tiếng](https://raw.githubusercontent.com/maingocanh1702/my-money-went-bot/main/docs/media/my-money-went-bot-demo.mp4) — một giao dịch đi qua Telegram, phân loại và báo cáo.
 
 ---
 
@@ -125,6 +145,17 @@ Một số bank (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) dùng **API 
 | Tài khoản Google | Cho Google Sheets + Google Cloud |
 | Server có HTTPS public | [Railway](https://railway.app) đơn giản nhất (free tier OK). Hoặc Ubuntu VPS + [ngrok](https://ngrok.com) cho test. |
 | Python 3.11+ | Trên server / Railway |
+
+---
+
+## Tài liệu
+
+- [Giới thiệu nhanh](docs/QUICK_INTRO.md) — bot làm gì, đọc trong 5 phút.
+- [Hướng dẫn setup bằng AI](docs/AI_SETUP.md) — copy một prompt vào Claude, ChatGPT hoặc Cursor để được dắt qua từng bước.
+- Không rành kỹ thuật? Bắt đầu ở [Setup cho người không rành kỹ thuật](https://github.com/maingocanh1702/my-money-went-bot/wiki/Setup-cho-nguoi-khong-ranh-ky-thuat).
+- [Wiki](https://github.com/maingocanh1702/my-money-went-bot/wiki) đầy đủ: [Google Sheets](https://github.com/maingocanh1702/my-money-went-bot/wiki/Google-Sheets-Setup) · [SePay](https://github.com/maingocanh1702/my-money-went-bot/wiki/SePay-Setup) · [Deploy Railway](https://github.com/maingocanh1702/my-money-went-bot/wiki/Railway-Deployment) · [Zalo](https://github.com/maingocanh1702/my-money-went-bot/wiki/Zalo-Setup) · [Test giao dịch đầu tiên](https://github.com/maingocanh1702/my-money-went-bot/wiki/First-Transaction-Test) · [Danh sách lệnh](https://github.com/maingocanh1702/my-money-went-bot/wiki/Command-Reference) · [Troubleshooting](https://github.com/maingocanh1702/my-money-went-bot/wiki/Troubleshooting) · [Bảo mật và quyền riêng tư](https://github.com/maingocanh1702/my-money-went-bot/wiki/Security-and-Privacy) · [Developer guide](https://github.com/maingocanh1702/my-money-went-bot/wiki/Developer-Guide)
+
+Nội dung wiki được version trong repo ở `docs/wiki/` — sửa ở đó rồi gửi pull request.
 
 ---
 

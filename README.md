@@ -5,13 +5,15 @@
 
 [🇻🇳 Tiếng Việt](README.vi.md)
 
+![My Money Went Bot — a Telegram bot that catches every Vietnamese bank transaction and writes it to your Google Sheet](docs/screenshots/banner.png)
+
 > 🙏 **Credits:** built on top of patterns from [`maddyle8124/spend-less-bot`](https://github.com/maddyle8124/spend-less-bot). Big thanks to Maddy — without that seed this wouldn't exist.
 
 ---
 
 ## What it does
 
-
+![How it works — bank transaction, SePay webhook, bot processes, write to Google Sheet, Telegram report](docs/screenshots/how-it-works.png)
 
 **My Money Went Bot is a personal expense tracker that lives in your Telegram chat.** Every time a Vietnamese bank sends a transaction notification (via [SePay](https://sepay.vn)), the bot logs it to a Google Sheet *you own* and asks you to tap a category — or skips that step entirely if you've taught it a keyword rule. Type `/report` anytime to see where your money went, sliced by account, category, and time period.
 
@@ -63,7 +65,7 @@ Most personal finance apps (Money Lover, Misa, MoneyKeeper, ...) want your bank 
 
 ## Features
 
-
+![Feature overview — features, system architecture, supported banks, and the command list](docs/screenshots/features-architecture.png)
 
 The full feature breakdown:
 
@@ -91,7 +93,26 @@ The full feature breakdown:
 
 ---
 
+## Screenshots
 
+<table>
+  <tr>
+    <td><img src="docs/screenshots/auto-categorize.png" alt="Auto-categorizing a Bach Hoa Xanh transaction" /></td>
+    <td><img src="docs/screenshots/report-monthly.png" alt="Monthly report with budget bars and tracking buckets" /></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/report-monthly-category-telegram.png" alt="Category-lens report with budgets and tracking buckets" /></td>
+    <td><img src="docs/screenshots/report-monthly-account-telegram.png" alt="Account-lens report with a budget warning" /></td>
+  </tr>
+</table>
+
+The same flows on Zalo, as numbered text menus:
+
+![My Money Went Bot on Zalo — numbered category picker](docs/screenshots/zalo-bot.PNG)
+
+![My Money Went Bot demo preview](docs/media/my-money-went-bot-demo-preview.gif)
+
+[Watch the 54-second demo with audio](https://raw.githubusercontent.com/maingocanh1702/my-money-went-bot/main/docs/media/my-money-went-bot-demo.mp4) — one transaction flowing through Telegram, categorization and reporting.
 
 ---
 
@@ -125,6 +146,17 @@ A subset (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) use **direct API in
 | Google account | For Google Sheets + Google Cloud |
 | Server with public HTTPS | [Railway](https://railway.app) is simplest (free tier OK). Or Ubuntu VPS + [ngrok](https://ngrok.com) for testing. |
 | Python 3.11+ | On your server / Railway |
+
+---
+
+## Documentation
+
+- [Quick intro](docs/QUICK_INTRO.md) — what the bot is, in five minutes.
+- [AI assistant setup guide](docs/AI_SETUP.md) — paste one prompt into Claude, ChatGPT or Cursor and be walked through the whole setup.
+- Not technical? Start with [Setup for non-technical users](https://github.com/maingocanh1702/my-money-went-bot/wiki/Setup-for-Non-Technical-Users).
+- Full [wiki](https://github.com/maingocanh1702/my-money-went-bot/wiki): [Google Sheets](https://github.com/maingocanh1702/my-money-went-bot/wiki/Google-Sheets-Setup) · [SePay](https://github.com/maingocanh1702/my-money-went-bot/wiki/SePay-Setup) · [Railway deployment](https://github.com/maingocanh1702/my-money-went-bot/wiki/Railway-Deployment) · [Zalo](https://github.com/maingocanh1702/my-money-went-bot/wiki/Zalo-Setup) · [First transaction test](https://github.com/maingocanh1702/my-money-went-bot/wiki/First-Transaction-Test) · [Command reference](https://github.com/maingocanh1702/my-money-went-bot/wiki/Command-Reference) · [Troubleshooting](https://github.com/maingocanh1702/my-money-went-bot/wiki/Troubleshooting) · [Security and privacy](https://github.com/maingocanh1702/my-money-went-bot/wiki/Security-and-Privacy) · [Developer guide](https://github.com/maingocanh1702/my-money-went-bot/wiki/Developer-Guide)
+
+The wiki pages are versioned in this repo under `docs/wiki/` — edit them there and send a pull request.
 
 ---
 
