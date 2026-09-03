@@ -93,28 +93,6 @@ The full feature breakdown:
 
 ---
 
-## Screenshots
-
-<table>
-  <tr>
-    <td><img src="docs/screenshots/auto-categorize.png" alt="Auto-categorizing a Bach Hoa Xanh transaction" /></td>
-    <td><img src="docs/screenshots/report-monthly.png" alt="Monthly report with budget bars and tracking buckets" /></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/report-monthly-category-telegram.png" alt="Category-lens report with budgets and tracking buckets" /></td>
-    <td><img src="docs/screenshots/report-monthly-account-telegram.png" alt="Account-lens report with a budget warning" /></td>
-  </tr>
-</table>
-
-The same flows on Zalo, as numbered text menus:
-
-![My Money Went Bot on Zalo — numbered category picker](docs/screenshots/zalo-bot.PNG)
-
-![My Money Went Bot demo preview](docs/media/my-money-went-bot-demo-preview.gif)
-
-[Watch the 54-second demo with audio](https://raw.githubusercontent.com/maingocanh1702/my-money-went-bot/main/docs/media/my-money-went-bot-demo.mp4) — one transaction flowing through Telegram, categorization and reporting.
-
----
 
 ## Supported banks
 
