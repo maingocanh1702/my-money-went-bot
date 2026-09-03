@@ -1,10 +1,10 @@
 """Regression: wizard _commit must AUTO-LINK source to existing account
 when user re-onboards an account whose slug already exists.
 
-Production bug (2026-05-25): user created `tpb_2601` via `/accounts add`
-(no source). Later a SePay tx for sepay:02635252601 arrived → resolver
+Production bug (2026-05-25): user created `bank_3456` via `/accounts add`
+(no source). Later a SePay tx for sepay:1900123456 arrived → resolver
 returned new_identifier → prompt fired → user ran wizard naming the
-account "TPB 2601" again → slug `tpb_2601` collision → _commit cancelled.
+account "TPB 2601" again → slug `bank_3456` collision → _commit cancelled.
 The right action is to bind the new source_key to the existing account.
 """
 import pytest
@@ -28,7 +28,7 @@ async def test_commit_slug_exists_with_source_links_to_existing(
 ):
     # Pre-existing account with empty source_keys (user did /accounts add)
     sh.add_account(
-        account_id="tpb_2601", name="TPB 2601", acc_type="bank",
+        account_id="bank_3456", name="TPB 2601", acc_type="bank",
         currency="VND", source_keys=[],
     )
     sh.invalidate_accounts_cache()
@@ -39,17 +39,17 @@ async def test_commit_slug_exists_with_source_links_to_existing(
     monkeypatch.setattr(accounts.tg, "send_text", fake_send)
 
     # Simulate wizard state at the moment _commit is called: a SePay tx
-    # triggered new_identifier for sepay:02635252601, user re-typed the
+    # triggered new_identifier for sepay:1900123456, user re-typed the
     # same account name.
     state = {
         "step": "await_new_account_balance",
-        "pending_source_key": "sepay:02635252601",
+        "pending_source_key": "sepay:1900123456",
         "pending_setup_key":  "",
-        "pending_identifier": "02635252601",
+        "pending_identifier": "1900123456",
         "new_acct_row_num":   0,
         "pending_account": {
             "name": "TPB 2601",
-            "id":   "tpb_2601",  # slug collides with existing
+            "id":   "bank_3456",  # slug collides with existing
             "type": "bank",
             "currency": "VND",
             "starting_balance": 0,
@@ -67,14 +67,14 @@ async def test_commit_slug_exists_with_source_links_to_existing(
 
     # The existing account now has the source_key bound
     sh.invalidate_accounts_cache()
-    acc = sh.find_account_by_id("tpb_2601")
-    assert "sepay:02635252601" in acc["source_keys"]
+    acc = sh.find_account_by_id("bank_3456")
+    assert "sepay:1900123456" in acc["source_keys"]
 
     # And resolver now matches future tx for this source
     from handlers.account_resolver import resolve_account
-    res = resolve_account({"accountNumber": "02635252601"})
+    res = resolve_account({"accountNumber": "1900123456"})
     assert res.status == "matched"
-    assert res.account_id == "tpb_2601"
+    assert res.account_id == "bank_3456"
 
 
 @pytest.mark.asyncio
@@ -84,7 +84,7 @@ async def test_commit_slug_exists_without_source_still_errors(
     """Manual /accounts add path (no pending source_key) — slug collision
     is genuine 'pick another name' case, not a link opportunity."""
     sh.add_account(
-        account_id="tpb_2601", name="TPB 2601", acc_type="bank",
+        account_id="bank_3456", name="TPB 2601", acc_type="bank",
         currency="VND", source_keys=[],
     )
     sh.invalidate_accounts_cache()
@@ -102,7 +102,7 @@ async def test_commit_slug_exists_without_source_still_errors(
         "new_acct_row_num":   0,
         "pending_account": {
             "name": "TPB 2601",
-            "id":   "tpb_2601",
+            "id":   "bank_3456",
             "type": "bank",
             "currency": "VND",
             "starting_balance": 0,

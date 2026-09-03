@@ -99,7 +99,7 @@ async def prompt_new_account(source_key: str, identifier: str, tx_row_num: int):
     masked = _mask(identifier)
     # Plain parens around backtick code — `_(...)_` italic-wrap silently fails
     # in Telegram legacy Markdown when the code segment contains underscores
-    # (e.g. source_key="sepay:02635252601" or "email_cake:cake_cc").
+    # (e.g. source_key="sepay:1900123456" or "email_cake:cake_cc").
     msg = t("ac.unmapped", masked=masked, source=source_key)
     buttons = [[
         {"text": t("ac.btn_setup"), "callback_data": f"acc_setup_{setup_key}"},
@@ -614,7 +614,7 @@ async def _cmd_accounts_assign(slug: str):
     if not slug:
         await tg.send_text(
             "Usage: `/accounts assign <slug>`\n"
-            "Vd: `/accounts assign tpb_2601`\n\n"
+            "Vd: `/accounts assign bank_3456`\n\n"
             "Gán tất cả tx (cùng currency) chưa map account → account này.\n"
             "Dùng /accounts để xem list slug."
         )

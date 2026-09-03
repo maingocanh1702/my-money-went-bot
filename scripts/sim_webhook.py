@@ -9,7 +9,7 @@ Examples
   python scripts/sim_webhook.py sepay --amount 200000 --type in --desc "salary"
   python scripts/sim_webhook.py email-tcb --account "****1234" --amount 500000 --type out --desc "winmart"
   python scripts/sim_webhook.py email-cake --amount 50000 --type out --desc "PAYOO BHX"
-  python scripts/sim_webhook.py email-hangseng --account "218-763999-888" --amount 300 --currency HKD
+  python scripts/sim_webhook.py email-hangseng --account "123-456999-789" --amount 300 --currency HKD
   python scripts/sim_webhook.py replay <ref_code>
   python scripts/sim_webhook.py transfer --from tcb_main --to cake_main --amount 1000000
 
@@ -123,9 +123,9 @@ def cmd_email_hangseng(args) -> dict:
     body = (
         "你已成功轉賬（未登記收款人）\n"
         "Your transfer is successful (Non-registered payee)\n"
-        f"由 From: {args.account or '218-763999-888'}\n"
+        f"由 From: {args.account or '123-456999-789'}\n"
         f"{cur}{args.amount:.2f}\n"
-        f"至 To: {args.to or '11XXXX876'}\n"
+        f"至 To: {args.to or '99XXXX111'}\n"
         f"轉賬日期 Transfer date: {datetime.now().strftime('%Y-%m-%d')}\n"
         f"交易號碼 Transaction ID: HD{int(datetime.now().timestamp())}\n"
     )

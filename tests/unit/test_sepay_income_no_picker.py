@@ -73,7 +73,7 @@ async def test_incoming_tx_emits_notification_not_picker(
         "transferAmount": 10_000_000,
         "content":        "BankAPINotify LUONG THANG 5",
         "referenceCode":  "FT26145890185611",
-        "accountNumber":  "02635252601",
+        "accountNumber":  "1900123456",
         "transactionDate": "2026-05-25 14:00:00",
     }
     await sepay.handle_sepay_webhook(payload)
