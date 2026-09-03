@@ -1,7 +1,7 @@
 """Phase C — col U account_source_key + auto-backfill.
 
 When a tx for an un-onboarded account arrives, append_transaction now
-stores the raw source_key (e.g. "sepay:02635252601") in col U even
+stores the raw source_key (e.g. "sepay:1900123456") in col U even
 though col Q (account_id) is empty. Once the user onboards the account
 later, sh.backfill_account_id_by_source_key matches col U and fills
 col Q on all the orphan rows. The slug-auto-link path in _commit calls
@@ -47,12 +47,12 @@ def test_append_transaction_writes_source_key_to_col_u(fake_ss):
         month_key="2026-05",
         tx_type="Tiền ra", currency="VND",
         account_id="",  # un-onboarded
-        account_source_key="sepay:02635252601",
+        account_source_key="sepay:1900123456",
     )
     ws = sh._sheet(S.TRANSACTIONS)
     row = ws.row_values(2)
     assert row[16] == ""                      # account_id still empty
-    assert row[20] == "sepay:02635252601"     # but col U has source_key
+    assert row[20] == "sepay:1900123456"     # but col U has source_key
 
 
 def test_append_transaction_lowercases_source_key(fake_ss):
@@ -85,23 +85,23 @@ def test_append_transaction_default_source_key_empty(fake_ss):
 
 def test_backfill_assigns_account_id_to_matching_rows(fake_ss):
     _seed_tx_table(fake_ss)
-    # 3 rows for sepay:02635252601 (no account_id yet) +
+    # 3 rows for sepay:1900123456 (no account_id yet) +
     # 1 row already mapped + 1 row with different source
     sh.append_transaction(
         tx_date="2026-05-20T10:00:00", description="a", amount=100,
         ref_code="r1", month_key="2026-05",
-        account_source_key="sepay:02635252601",
+        account_source_key="sepay:1900123456",
     )
     sh.append_transaction(
         tx_date="2026-05-21T10:00:00", description="b", amount=200,
         ref_code="r2", month_key="2026-05",
-        account_source_key="sepay:02635252601",
+        account_source_key="sepay:1900123456",
     )
     sh.append_transaction(
         tx_date="2026-05-22T10:00:00", description="c", amount=300,
         ref_code="r3", month_key="2026-05",
         account_id="already_mapped",
-        account_source_key="sepay:02635252601",
+        account_source_key="sepay:1900123456",
     )
     sh.append_transaction(
         tx_date="2026-05-23T10:00:00", description="d", amount=400,
@@ -110,14 +110,14 @@ def test_backfill_assigns_account_id_to_matching_rows(fake_ss):
     )
 
     n = sh.backfill_account_id_by_source_key(
-        account_id="tpb_2601",
-        source_key="sepay:02635252601",
+        account_id="bank_3456",
+        source_key="sepay:1900123456",
     )
     assert n == 2  # only the 2 unmapped rows with matching source
 
     rows = sh._sheet(S.TRANSACTIONS).get_all_values()
-    assert rows[1][16] == "tpb_2601"           # was empty → filled
-    assert rows[2][16] == "tpb_2601"           # was empty → filled
+    assert rows[1][16] == "bank_3456"           # was empty → filled
+    assert rows[2][16] == "bank_3456"           # was empty → filled
     assert rows[3][16] == "already_mapped"     # not overwritten
     assert rows[4][16] == ""                   # different source — skipped
 
@@ -167,12 +167,12 @@ async def test_commit_with_source_backfills_historical_tx(
     sh.append_transaction(
         tx_date="2026-05-20T10:00:00", description="a", amount=100,
         ref_code="r1", month_key="2026-05",
-        account_source_key="sepay:02635252601",
+        account_source_key="sepay:1900123456",
     )
     sh.append_transaction(
         tx_date="2026-05-21T10:00:00", description="b", amount=200,
         ref_code="r2", month_key="2026-05",
-        account_source_key="sepay:02635252601",
+        account_source_key="sepay:1900123456",
     )
 
     sent = []
@@ -182,12 +182,12 @@ async def test_commit_with_source_backfills_historical_tx(
 
     state = {
         "step": "await_new_account_balance",
-        "pending_source_key": "sepay:02635252601",
+        "pending_source_key": "sepay:1900123456",
         "pending_setup_key":  "",
-        "pending_identifier": "02635252601",
+        "pending_identifier": "1900123456",
         "new_acct_row_num":   0,
         "pending_account": {
-            "name": "TPB 2601", "id": "tpb_2601",
+            "name": "TPB 2601", "id": "bank_3456",
             "type": "bank", "currency": "VND",
             "starting_balance": 0,
         },
@@ -198,11 +198,11 @@ async def test_commit_with_source_backfills_historical_tx(
 
     # Account created
     sh.invalidate_accounts_cache()
-    acc = sh.find_account_by_id("tpb_2601")
+    acc = sh.find_account_by_id("bank_3456")
     assert acc is not None
-    assert "sepay:02635252601" in acc["source_keys"]
+    assert "sepay:1900123456" in acc["source_keys"]
 
     # Historical tx now bear the account_id
     rows = sh._sheet(S.TRANSACTIONS).get_all_values()
-    assert rows[1][16] == "tpb_2601"
-    assert rows[2][16] == "tpb_2601"
+    assert rows[1][16] == "bank_3456"
+    assert rows[2][16] == "bank_3456"

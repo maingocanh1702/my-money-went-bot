@@ -93,6 +93,29 @@ The full feature breakdown:
 
 ---
 
+## Screenshots
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/auto-categorize.png" alt="A transaction auto-categorized from a keyword rule, with the budget bar updating" /></td>
+    <td><img src="docs/screenshots/report-monthly.png" alt="Monthly report with budget bars and tracking buckets" /></td>
+  </tr>
+</table>
+
+The same report on Zalo, and the keyword rules that drive auto-categorization:
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/report-monthly-category-telegram.png" alt="Category-lens monthly report" /></td>
+    <td><img src="docs/screenshots/zalo-bot.PNG" alt="Keyword rules and an auto-categorized transaction on Zalo" /></td>
+  </tr>
+</table>
+
+![Demo preview](docs/media/my-money-went-bot-demo-preview.gif)
+
+[Watch the 54-second demo with audio](https://raw.githubusercontent.com/maingocanh1702/my-money-went-bot/main/docs/media/my-money-went-bot-demo.mp4) — one transaction flowing through Telegram, categorization and reporting.
+
+---
 
 ## Supported banks
 

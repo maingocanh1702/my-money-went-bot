@@ -41,8 +41,8 @@ def test_setup_key_differs_per_source_key():
 def test_add_pending_writes_row(fake_ss):
     _ensure_pending_tab(fake_ss)
     setup_key = sh.add_pending_account(
-        source_key="sepay:02635252601",
-        identifier="02635252601",
+        source_key="sepay:1900123456",
+        identifier="1900123456",
         tx_row_num=42,
     )
     assert setup_key
@@ -51,8 +51,8 @@ def test_add_pending_writes_row(fake_ss):
     # header + 1 row
     assert len(rows) == 2
     assert rows[1][0] == setup_key
-    assert rows[1][1] == "sepay:02635252601"
-    assert rows[1][2] == "02635252601"
+    assert rows[1][1] == "sepay:1900123456"
+    assert rows[1][2] == "1900123456"
     assert rows[1][3] == "42"
     assert rows[1][4] == "pending"
 
@@ -147,7 +147,7 @@ def test_stale_pending_row_is_flipped_and_new_row_appended(fake_ss):
     _ensure_pending_tab(fake_ss)
 
     # Day -12: prompt sent, row pending, user never tapped
-    setup_key = sh.add_pending_account("sepay:02635252601", "02635252601", tx_row_num=1)
+    setup_key = sh.add_pending_account("sepay:1900123456", "1900123456", tx_row_num=1)
 
     # Backdate created_at to 12 days ago (way past 24h TTL)
     ws = sh._sheet(S.PENDING_ACCOUNTS)
@@ -160,7 +160,7 @@ def test_stale_pending_row_is_flipped_and_new_row_appended(fake_ss):
     assert rows[1][4] == "pending"
 
     # Today: new tx for same source → add_pending_account must NOT reuse
-    setup_key_2 = sh.add_pending_account("sepay:02635252601", "02635252601", tx_row_num=99)
+    setup_key_2 = sh.add_pending_account("sepay:1900123456", "1900123456", tx_row_num=99)
     assert setup_key_2 == setup_key  # md5 deterministic
 
     # Sheet now: old row flipped to expired + new pending row appended
@@ -281,7 +281,7 @@ async def test_prompt_new_account_writes_sheet_not_state(fake_ss, monkeypatch):
     monkeypatch.setattr(tg, "send_with_buttons", fake_send)
 
     from handlers.accounts import prompt_new_account
-    await prompt_new_account("sepay:02635252601", "02635252601", tx_row_num=2)
+    await prompt_new_account("sepay:1900123456", "1900123456", tx_row_num=2)
 
     # Sheet has the row
     rows = sh._sheet(S.PENDING_ACCOUNTS).get_all_values()

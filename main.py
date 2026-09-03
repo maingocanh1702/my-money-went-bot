@@ -1601,7 +1601,7 @@ async def _zalo_cmd_accounts_assign(chat_id: str, slug: str, state_key: str):
         await _zalo_send(
             chat_id,
             "Usage: /accounts assign <slug>\n"
-            "Vd: /accounts assign tpb_2601\n\n"
+            "Vd: /accounts assign bank_3456\n\n"
             "Gán tất cả tx cùng currency chưa map account vào account này.",
         )
         return

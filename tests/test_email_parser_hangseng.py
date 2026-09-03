@@ -157,7 +157,7 @@ Your transfer is successful (Non-registered payee)
 HKD278.00
 
 至 To
-+852-6655****
++852-1234****
 
 交易狀況
 Transfer status: 已成功轉賬至收款人
@@ -207,14 +207,14 @@ def test_forwarded_hangseng_amount_correct():
 
 
 def test_forwarded_hangseng_phone_payee():
-    """'+852-6655****' (HK mobile FPS) phải được capture vào description."""
+    """'+852-1234****' (HK mobile FPS) phải được capture vào description."""
     result = parse_email(
         from_addr="your-forwarder@gmail.com",
         subject="Fwd: 你已成功轉賬",
         body=HANGSENG_FORWARDED_BODY,
         date="2026-05-01T20:31:00+08:00",
     )
-    assert "+852-6655" in result["description"], \
+    assert "+852-1234" in result["description"], \
         f"phone payee missing in desc: {result['description']!r}"
 
 

@@ -76,8 +76,8 @@ def test_resolver_email_cake_cc_hint(fake_ss):
 
 def test_resolver_email_hangseng(fake_ss):
     _seed_account(fake_ss, "hsbc_main",
-                  ["email_hangseng:218-763999-888"], currency="HKD")
-    res = resolve_account({"_source": "email_hangseng", "_account_hint": "218-763999-888"})
+                  ["email_hangseng:123-456999-789"], currency="HKD")
+    res = resolve_account({"_source": "email_hangseng", "_account_hint": "123-456999-789"})
     assert res.status == "matched"
     assert res.account_id == "hsbc_main"
 

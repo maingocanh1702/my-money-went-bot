@@ -289,7 +289,7 @@ def _parse_cake(subject: str, body: str, date: str) -> dict | None:
       Giao dịch:   Thanh toán POS
       Giá trị:     45.000 đ
       Vào lúc:     12:34 03/05/2026
-      Tại:         PAYOO*BACHHOAXANH_9272 TP THU DUC VN
+      Tại:         PAYOO*SIEUTHIABC_1234 TP HCM VN
       Tình trạng:  Thành công
     """
     subject_lower = subject.lower()
@@ -448,18 +448,18 @@ def _parse_hangseng(subject: str, body: str, date: str) -> dict | None:
     Reference body (outgoing transfer to non-registered payee):
       你已成功轉賬（未登記收款人）
       Your transfer is successful (Non-registered payee)
-      由 From: 218-763XXX-888
-      HKD300.00
-      至 To: 11XXXX876
+      由 From: 123-456XXX-789
+      HKD250.00
+      至 To: 99XXXX111
       交易狀況 Transfer status: 已成功轉賬至收款人 / Successfully transferred to payee
-      轉賬日期 Transfer date: 2026-05-06
+      轉賬日期 Transfer date: 2026-01-15
       收款銀行 Receiving bank: The Hongkong and Shanghai Banking Corporation Limited
       預設銀行 Default bank: Y
-      交易號碼 Transaction ID: HD12650698975039
-      參考編號 Reference number: N50651066103
+      交易號碼 Transaction ID: HD12000000000001
+      參考編號 Reference number: N50000000002
 
     Hiện chỉ hỗ trợ outgoing transfer (chuyển đi). Incoming/credit-card emails
-    chưa có mẫu — sẽ thêm khi anh forward sample.
+    chưa có mẫu — bổ sung khi có sample.
     """
     # Confirm đây là email giao dịch (subject hoặc body phải chứa marker)
     blob_lower = f"{subject}\n{body}".lower()
@@ -468,10 +468,10 @@ def _parse_hangseng(subject: str, body: str, date: str) -> dict | None:
         return None
 
     # ── Amount + currency ─────────────────────────────────────────
-    # Hang Seng format số tiền có dạng "HKD300.00" (currency liền số) —
+    # Hang Seng format số tiền có dạng "HKD250.00" (currency liền số) —
     # khác hẳn TCB/Cake (số trước, đơn vị sau). Regex bắt cả 2 thứ tự cho an toàn.
     amount_patterns = [
-        r'(HKD|USD|CNY|EUR|GBP|JPY)\s*([\d,]+\.\d{1,2})',  # "HKD300.00"
+        r'(HKD|USD|CNY|EUR|GBP|JPY)\s*([\d,]+\.\d{1,2})',  # "HKD250.00"
         r'(HKD|USD|CNY|EUR|GBP|JPY)\s*([\d,]+)',           # "HKD 300"
         r'([\d,]+\.\d{1,2})\s*(HKD|USD|CNY|EUR|GBP|JPY)',  # fallback "300.00 HKD"
     ]
@@ -523,8 +523,8 @@ def _parse_hangseng(subject: str, body: str, date: str) -> dict | None:
             break
 
     # Tài khoản đích — Hang Seng có nhiều format:
-    #   "至 To: 11XXXX876"           — masked account number
-    #   "至 To: +852-6655****"        — Hong Kong mobile (FPS payment)
+    #   "至 To: 99XXXX111"           — masked account number
+    #   "至 To: +852-1234****"        — Hong Kong mobile (FPS payment)
     #   "至 To: john@example.com"    — FPS email proxy
     # Charset: digits, +, -, *, X, @, ., _ (allow most identifiers)
     to_match = re.search(
@@ -567,7 +567,7 @@ def _parse_hangseng(subject: str, body: str, date: str) -> dict | None:
     )
 
     # ── Account hint (sender side) ────────────────────────────────
-    # "由 From: 218-763999-888" → "218-763999-888"
+    # "由 From: 123-456999-789" → "123-456999-789"
     from_match = re.search(
         r'(?:由\s*)?From[:\s]+([+\dA-Z\-X*@._]+)',
         body, re.IGNORECASE,
@@ -590,7 +590,7 @@ def _parse_hangseng(subject: str, body: str, date: str) -> dict | None:
 def _parse_hangseng_date(body: str) -> str | None:
     """Hang Seng emails dùng ISO format 'YYYY-MM-DD' cho Transfer date."""
     patterns = [
-        # "Transfer date: 2026-05-06" hoặc "轉賬日期 Transfer date: 2026-05-06"
+        # "Transfer date: 2026-01-15" hoặc "轉賬日期 Transfer date: 2026-01-15"
         r'(?:轉賬日期[\s\S]*?|Transfer date[:\s]+)(\d{4}-\d{2}-\d{2})',
         # Fallback: bất kỳ ISO date nào trong body
         r'(\d{4}-\d{2}-\d{2})',

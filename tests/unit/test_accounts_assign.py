@@ -47,7 +47,7 @@ def bot_state_tab(fake_ss):
 async def test_assign_shows_preview_with_buttons(
     fake_ss, bot_state_tab, monkeypatch,
 ):
-    _seed_account(fake_ss, "tpb_2601", currency="VND")
+    _seed_account(fake_ss, "bank_3456", currency="VND")
     _seed_tx(fake_ss, [
         # 3 unmapped VND tx — eligible
         ["t1", "2026-05-01T10:00:00", "", "", "", "x", "Tiền ra", "100000",
@@ -70,20 +70,20 @@ async def test_assign_shows_preview_with_buttons(
         sent["buttons"] = buttons
     monkeypatch.setattr(accounts.tg, "send_with_buttons", fake_send)
 
-    await accounts._cmd_accounts_assign("tpb_2601")
+    await accounts._cmd_accounts_assign("bank_3456")
 
-    assert "tpb_2601" in sent["text"]
+    assert "bank_3456" in sent["text"]
     assert "3 tx" in sent["text"]   # only the 3 eligible ones
     assert "+500.000đ" in sent["text"]  # in total
     assert "-150.000đ" in sent["text"]  # out total
     cbs = [b["callback_data"] for row in sent["buttons"] for b in row]
-    assert "asg_yes_tpb_2601" in cbs
+    assert "asg_yes_bank_3456" in cbs
     assert "asg_no" in cbs
 
     # State stashed the candidate rows for the callback
     state = sh.get_state(CHAT_ID) or {}
     assert state.get("step") == "await_assign_confirm"
-    assert state.get("assign_slug") == "tpb_2601"
+    assert state.get("assign_slug") == "bank_3456"
     assert sorted(state.get("assign_rows")) == [2, 3, 4]  # rows for t1, t2, t3
 
 
@@ -91,17 +91,17 @@ async def test_assign_shows_preview_with_buttons(
 async def test_assign_no_candidates_when_all_mapped(
     fake_ss, bot_state_tab, monkeypatch,
 ):
-    _seed_account(fake_ss, "tpb_2601")
+    _seed_account(fake_ss, "bank_3456")
     _seed_tx(fake_ss, [
         ["t1", "2026-05-01T10:00:00", "", "", "", "x", "Tiền ra", "100000",
-         "r1", "0", "", "", "FALSE", "FALSE", "2026-05", "VND", "tpb_2601"],
+         "r1", "0", "", "", "FALSE", "FALSE", "2026-05", "VND", "bank_3456"],
     ])
     sent = []
     async def fake_send(text, chat_id=None):
         sent.append(text)
     monkeypatch.setattr(accounts.tg, "send_text", fake_send)
 
-    await accounts._cmd_accounts_assign("tpb_2601")
+    await accounts._cmd_accounts_assign("bank_3456")
     assert any("không cần backfill" in t for t in sent)
 
 
@@ -122,7 +122,7 @@ async def test_assign_rejects_unknown_slug(fake_ss, bot_state_tab, monkeypatch):
 async def test_assign_confirm_writes_account_id_to_rows(
     fake_ss, bot_state_tab, monkeypatch,
 ):
-    _seed_account(fake_ss, "tpb_2601")
+    _seed_account(fake_ss, "bank_3456")
     _seed_tx(fake_ss, [
         ["t1", "2026-05-01T10:00:00", "", "", "", "x", "Tiền ra", "100000",
          "r1", "0", "", "", "FALSE", "FALSE", "2026-05", "VND", ""],
@@ -133,7 +133,7 @@ async def test_assign_confirm_writes_account_id_to_rows(
     # Prime state as if the user just saw the preview
     sh.set_state(CHAT_ID, {
         "step":        "await_assign_confirm",
-        "assign_slug": "tpb_2601",
+        "assign_slug": "bank_3456",
         "assign_rows": [2, 3],
     })
 
@@ -142,13 +142,13 @@ async def test_assign_confirm_writes_account_id_to_rows(
         edited["text"] = text
     monkeypatch.setattr(accounts.tg, "edit_message", fake_edit)
 
-    await accounts.handle_assign_callback(["asg", "yes", "tpb_2601"], message_id=99)
+    await accounts.handle_assign_callback(["asg", "yes", "bank_3456"], message_id=99)
 
     ws = sh._sheet(S.TRANSACTIONS)
     rows = ws.get_all_values()
-    # Col Q (index 16) on rows 2 and 3 should now be "tpb_2601"
-    assert rows[1][16] == "tpb_2601"
-    assert rows[2][16] == "tpb_2601"
+    # Col Q (index 16) on rows 2 and 3 should now be "bank_3456"
+    assert rows[1][16] == "bank_3456"
+    assert rows[2][16] == "bank_3456"
     assert "2 tx" in edited["text"]
     # State cleared
     state = sh.get_state(CHAT_ID)
@@ -161,7 +161,7 @@ async def test_assign_callback_no_cancels_and_clears_state(
 ):
     sh.set_state(CHAT_ID, {
         "step":        "await_assign_confirm",
-        "assign_slug": "tpb_2601",
+        "assign_slug": "bank_3456",
         "assign_rows": [2],
     })
     edited = {}
