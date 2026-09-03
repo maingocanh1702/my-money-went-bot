@@ -163,6 +163,7 @@ def fake_ss(monkeypatch):
     sh._buckets_cache = {}
     sh._tx_rows_cache.update({"ts": 0.0, "rows": None})
     sh._processed_refs.clear()
+    sh._reset_processed_ref_cache()
     sh._keyword_rules_cache = None
     sh._state_cache.clear()
     sh._state_row_cache.clear()
