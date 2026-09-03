@@ -15,6 +15,9 @@ from handlers.email_parser import parse_email, _parse_hangseng
 
 # Body từ 2 screenshot — viewport phía trên (header + amount block) + viewport
 # phía dưới (transfer status block). Ghép lại như Gmail render plain-text.
+# Fixtures are synthetic. The Hang Seng layout is real; every amount, date,
+# account fragment and transaction id in it is made up. Never paste a real
+# bank email into this repository — it is public.
 HANGSENG_OUTGOING_BODY = """\
 如未能正常顯示電郵內容，請你設定電郵瀏覽程式至支援 HTML 格式的電郵。
 If you cannot view this email properly, please configure your email programme so that it can support HTML formatted emails.
@@ -25,19 +28,19 @@ If you cannot view this email properly, please configure your email programme so
 Your transfer is successful (Non-registered payee)
 
 由 From
-218-763XXX-888
+123-456XXX-789
 
-HKD300.00
+HKD250.00
 
 至 To
-11XXXX876
+99XXXX111
 
 交易狀況
 Transfer status: 已成功轉賬至收款人
 Successfully transferred to payee
 
 轉賬日期
-Transfer date: 2026-05-06
+Transfer date: 2026-01-15
 
 收款銀行
 Receiving bank: The Hongkong and Shanghai Banking Corporation Limited
@@ -46,10 +49,10 @@ Receiving bank: The Hongkong and Shanghai Banking Corporation Limited
 Default bank: Y
 
 交易號碼
-Transaction ID: HD12650698975039
+Transaction ID: HD12000000000001
 
 參考編號
-Reference number: N50651066103
+Reference number: N50000000002
 
 多謝選用我們的服務
 Thank you for using our service
@@ -57,7 +60,7 @@ Thank you for using our service
 
 HANGSENG_FROM = "Hang Seng Bank <hangseng@infoservices.hangseng.com>"
 HANGSENG_SUBJECT = "Your transfer is successful"
-HANGSENG_DATE = "2026-05-06T12:04:00+08:00"
+HANGSENG_DATE = "2026-01-15T12:04:00+08:00"
 
 
 def test_hangseng_outgoing_basic():
@@ -69,7 +72,7 @@ def test_hangseng_outgoing_basic():
 
 def test_hangseng_amount_and_currency():
     result = parse_email(HANGSENG_FROM, HANGSENG_SUBJECT, HANGSENG_OUTGOING_BODY, HANGSENG_DATE)
-    assert result["transferAmount"] == 300.00, f"amount wrong: {result['transferAmount']}"
+    assert result["transferAmount"] == 250.00, f"amount wrong: {result['transferAmount']}"
     assert result["currency"] == "HKD", f"currency wrong: {result['currency']}"
 
 
@@ -82,19 +85,19 @@ def test_hangseng_outgoing_direction():
 def test_hangseng_reference_code():
     """Ưu tiên Transaction ID (HD…) làm referenceCode."""
     result = parse_email(HANGSENG_FROM, HANGSENG_SUBJECT, HANGSENG_OUTGOING_BODY, HANGSENG_DATE)
-    assert result["referenceCode"] == "HD12650698975039", f"ref wrong: {result['referenceCode']}"
+    assert result["referenceCode"] == "HD12000000000001", f"ref wrong: {result['referenceCode']}"
 
 
 def test_hangseng_transaction_date():
     result = parse_email(HANGSENG_FROM, HANGSENG_SUBJECT, HANGSENG_OUTGOING_BODY, HANGSENG_DATE)
     # _parse_hangseng_date converts 'YYYY-MM-DD' → ISO with noon time
-    assert "2026-05-06" in result["transactionDate"], f"date wrong: {result['transactionDate']}"
+    assert "2026-01-15" in result["transactionDate"], f"date wrong: {result['transactionDate']}"
 
 
 def test_hangseng_description_includes_payee_and_bank():
     result = parse_email(HANGSENG_FROM, HANGSENG_SUBJECT, HANGSENG_OUTGOING_BODY, HANGSENG_DATE)
     desc = result["description"]
-    assert "11XXXX876" in desc, f"missing payee account in desc: {desc!r}"
+    assert "99XXXX111" in desc, f"missing payee account in desc: {desc!r}"
     assert "Hongkong and Shanghai" in desc or "Hong Kong" in desc.replace("k", "K"), \
         f"missing receiving bank in desc: {desc!r}"
 
@@ -149,7 +152,7 @@ If you cannot view this email properly, please configure your email programme so
 Your transfer is successful (Non-registered payee)
 
 由 From
-218-763XXX-888
+123-456XXX-789
 
 HKD278.00
 
@@ -268,7 +271,7 @@ def test_tcb_still_works():
         "automail@techcombank.com.vn",
         "Biến động số dư",
         tcb_body,
-        "2026-05-06T14:30:25+07:00",
+        "2026-01-15T14:30:25+07:00",
     )
     assert result is not None
     assert result["currency"] == "VND"
