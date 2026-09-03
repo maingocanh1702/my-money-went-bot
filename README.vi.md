@@ -430,6 +430,10 @@ pytest tests/unit/ -v
 
 ## Contributing
 
+Xem **[CONTRIBUTING.md](CONTRIBUTING.md)** để biết cách setup và kỳ vọng khi mở PR, và **[SECURITY.md](SECURITY.md)** để biết cách báo lỗ hổng cũng như cách tự giữ secret cho deployment của bạn.
+
+Đóng góp hữu ích nhất lại không cần biết Python: thẻ cashback là file YAML trong `card_templates/`, nên thêm thẻ cho một ngân hàng chưa ai làm là một pull request chứ không phải sửa code.
+
 Welcome contributions — issue / PR / fork. Hãy có quan điểm rõ ràng về scope: bot này cố tình giữ minimal. Tính năng ngoài [Roadmap](#roadmap-deferred) khó có khả năng được merge nhưng vẫn vui vẻ thảo luận.
 
 Khi mở PR:

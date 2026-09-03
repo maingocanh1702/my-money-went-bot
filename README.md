@@ -448,6 +448,10 @@ pytest tests/unit/ -v
 
 ## Contributing
 
+See **[CONTRIBUTING.md](CONTRIBUTING.md)** for setup and pull-request expectations, and **[SECURITY.md](SECURITY.md)** for how to report a vulnerability and how to keep your own deployment's secrets safe.
+
+The most useful contribution needs no Python: cashback cards are YAML in `card_templates/`, so adding one for a bank nobody has covered is a pull request, not a code change.
+
 Contributions welcome — issue / PR / fork. Be opinionated about scope: this bot is intentionally minimal. Features outside the [Roadmap](#roadmap-deferred) are unlikely to be merged but happy to discuss.
 
 When opening a PR:
