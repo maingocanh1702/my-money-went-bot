@@ -26,5 +26,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
+      - name: No personal data in the repository
+        run: python3 scripts/check_no_personal_data.py
+
       - name: Run tests
         run: pytest tests/ -v --tb=short
