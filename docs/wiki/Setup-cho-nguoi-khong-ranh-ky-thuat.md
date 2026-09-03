@@ -44,6 +44,7 @@ Trang này là bản tiếng Việt của flow setup khuyến nghị. Nếu bạ
 | `GOOGLE_CREDS_JSON` | Nội dung file `credentials.json` | Railway variable `GOOGLE_CREDS_JSON` |
 | `SEPAY_SECRET` | Một chuỗi ngẫu nhiên dài | Railway variable `SEPAY_SECRET` và SePay API Key |
 | `TELEGRAM_WEBHOOK_SECRET` | Một chuỗi ngẫu nhiên dài khác | Railway variable `TELEGRAM_WEBHOOK_SECRET` và Telegram `setWebhook` |
+| `EMAIL_SECRET` | Một chuỗi ngẫu nhiên dài khác | Railway variable `EMAIL_SECRET` và `WEBHOOK_SECRET` trong `google_apps_script.js` |
 | `CRON_SECRET` | Một chuỗi ngẫu nhiên dài khác | Railway variable `CRON_SECRET` |
 
 ## Vì sao cần nhiều biến
@@ -54,9 +55,11 @@ Bot có 3 nhóm cấu hình:
 |---|---|---|
 | Định danh | `BOT_TOKEN`, `CHAT_ID`, `SHEET_ID` | Cho app biết dùng bot nào, nói chuyện với ai, ghi vào Sheet nào. |
 | Quyền Google | `GOOGLE_CREDS_JSON` | Cho app quyền ghi vào Google Sheet trên Railway. |
-| Bảo mật | `SEPAY_SECRET`, `TELEGRAM_WEBHOOK_SECRET`, `CRON_SECRET` | Chặn webhook ngân hàng giả, Telegram update giả, và trigger cron trái phép. |
+| Bảo mật | `SEPAY_SECRET`, `TELEGRAM_WEBHOOK_SECRET`, `EMAIL_SECRET`, `CRON_SECRET` | Chặn webhook ngân hàng giả, Telegram update giả, email ngân hàng giả, và trigger cron trái phép. |
 
-`BOT_TOKEN` / `CHAT_ID` / `TELEGRAM_WEBHOOK_SECRET` là **kênh Telegram**. Nếu dùng **Zalo** (hoặc Zalo-only), dùng các biến `ZALO_*` thay thế — xem [Zalo Setup](Zalo-Setup). `SHEET_ID`, Google credentials, `SEPAY_SECRET`, `CRON_SECRET` cần cho bất kỳ kênh nào.
+**Cả 8 biến đều bắt buộc.** Bot xử lý tiền qua webhook công khai, nên thiếu một biến là nó không khởi động, thay vì chạy với endpoint không xác thực. Cứ set `EMAIL_SECRET` kể cả khi bạn không dùng luồng email.
+
+Zalo là kênh **bổ sung** bên cạnh Telegram, không phải thay thế — xem [Zalo Setup](Zalo-Setup) để lấy các biến `ZALO_*`.
 
 ## Đặt Telegram webhook không cần terminal
 
@@ -87,7 +90,7 @@ Nếu thành công, Telegram sẽ trả về JSON có `"ok": true`.
 - [ ] Đã tải `credentials.json`.
 - [ ] Đã share Google Sheet cho `client_email` trong `credentials.json` với quyền Editor.
 - [ ] Đã tạo Railway project.
-- [ ] Đã thêm đủ các biến Railway (Google Sheet + secret bảo mật + biến của kênh bạn chọn).
+- [ ] Đã thêm đủ 8 biến Railway: `BOT_TOKEN`, `CHAT_ID`, `SHEET_ID`, `GOOGLE_CREDS_JSON`, `SEPAY_SECRET`, `TELEGRAM_WEBHOOK_SECRET`, `EMAIL_SECRET`, `CRON_SECRET`.
 - [ ] Đã tắt SePay native Google Sheets integration.
 
 ## Checklist thành công

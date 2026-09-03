@@ -30,7 +30,7 @@ You need:
 3. Create a new Google Sheet and copy `SHEET_ID`.
 4. Create a Google service account, download `credentials.json`, and share the Sheet with the service-account email as Editor.
 5. Deploy the repo on Railway.
-6. Add all Railway variables.
+6. Add all eight Railway variables (see the table below — a missing one stops the app from starting).
 7. Set SePay webhook URL to the Railway `/webhook` URL.
 8. Set Telegram webhook with `TELEGRAM_WEBHOOK_SECRET`.
 9. Send `/today` to the bot.
@@ -46,6 +46,7 @@ You need:
 | `GOOGLE_CREDS_JSON` | Contents of `credentials.json` | Railway variable `GOOGLE_CREDS_JSON` |
 | `SEPAY_SECRET` | A long random string | Railway variable `SEPAY_SECRET` and SePay API Key |
 | `TELEGRAM_WEBHOOK_SECRET` | A different long random string | Railway variable `TELEGRAM_WEBHOOK_SECRET` and Telegram `setWebhook` |
+| `EMAIL_SECRET` | Another long random string | Railway variable `EMAIL_SECRET` and the `WEBHOOK_SECRET` in `google_apps_script.js` |
 | `CRON_SECRET` | Another long random string | Railway variable `CRON_SECRET` |
 
 ## Why there are several variables
@@ -56,9 +57,11 @@ The bot has three groups of settings:
 |---|---|---|
 | Identity | `BOT_TOKEN`, `CHAT_ID`, `SHEET_ID` | Tell the app which bot, user, and Sheet to use. |
 | Google access | `GOOGLE_CREDS_JSON` | Lets the app write to your Google Sheet on Railway. |
-| Security | `SEPAY_SECRET`, `TELEGRAM_WEBHOOK_SECRET`, `CRON_SECRET` | Blocks fake bank webhooks, fake Telegram updates, and unauthorized cron triggers. |
+| Security | `SEPAY_SECRET`, `TELEGRAM_WEBHOOK_SECRET`, `EMAIL_SECRET`, `CRON_SECRET` | Blocks fake bank webhooks, fake Telegram updates, fake bank emails, and unauthorized cron triggers. |
 
-`BOT_TOKEN` / `CHAT_ID` / `TELEGRAM_WEBHOOK_SECRET` are the **Telegram channel**. For a **Zalo** (or Zalo-only) setup, use the `ZALO_*` variables instead — see [Zalo Setup](Zalo-Setup). `SHEET_ID`, Google credentials, `SEPAY_SECRET`, and `CRON_SECRET` are needed for any channel.
+**All eight are mandatory.** The bot handles money over public webhooks, so it refuses to start if any one is missing rather than running with an unauthenticated endpoint. Set `EMAIL_SECRET` even if you never use the email pipeline.
+
+Zalo is an optional **extra** channel on top of Telegram, not a replacement — see [Zalo Setup](Zalo-Setup) for the `ZALO_*` variables.
 
 ## Pre-deploy checklist
 
@@ -73,7 +76,7 @@ The bot has three groups of settings:
 - [ ] `credentials.json` downloaded.
 - [ ] Google Sheet shared with the service-account `client_email` as Editor.
 - [ ] Railway project created.
-- [ ] All required Railway variables added (Google Sheet + security secrets + your chosen channel's variables).
+- [ ] All eight required Railway variables added: `BOT_TOKEN`, `CHAT_ID`, `SHEET_ID`, `GOOGLE_CREDS_JSON`, `SEPAY_SECRET`, `TELEGRAM_WEBHOOK_SECRET`, `EMAIL_SECRET`, `CRON_SECRET`.
 - [ ] SePay native Google Sheets integration disabled.
 
 ## Success checklist
