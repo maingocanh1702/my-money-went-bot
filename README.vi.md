@@ -92,28 +92,6 @@ Chi tiết từng tính năng:
 
 ---
 
-## Screenshots
-
-<table>
-  <tr>
-    <td><img src="docs/screenshots/auto-categorize.png" alt="Auto-categorizing a Bach Hoa Xanh transaction" /></td>
-    <td><img src="docs/screenshots/report-monthly.png" alt="Monthly report with budget bars and tracking buckets" /></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/report-monthly-category-telegram.png" alt="Category-lens report with budgets and tracking buckets" /></td>
-    <td><img src="docs/screenshots/report-monthly-account-telegram.png" alt="Account-lens report with a budget warning" /></td>
-  </tr>
-</table>
-
-Các luồng tương tự trên Zalo, dạng menu đánh số:
-
-![My Money Went Bot on Zalo — numbered category picker](docs/screenshots/zalo-bot.PNG)
-
-![My Money Went Bot demo preview](docs/media/my-money-went-bot-demo-preview.gif)
-
-[Xem demo 54 giây có tiếng](https://raw.githubusercontent.com/maingocanh1702/my-money-went-bot/main/docs/media/my-money-went-bot-demo.mp4) — một giao dịch đi qua Telegram, phân loại và báo cáo.
-
----
 
 ## Ngân hàng được hỗ trợ
 
