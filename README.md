@@ -348,7 +348,8 @@ Future tx from the same account auto-route. Set up `/keywords` rules to auto-cat
 ├── crontab.txt                   # Example cron jobs (VPS reference; prod = GitHub Actions)
 ├── setup.sh                      # VPS bootstrap script
 ├── railway.toml                  # Railway deploy config
-└── requirements.txt
+├── requirements.txt        # runtime dependencies
+└── requirements-dev.txt    # runtime + test dependencies
 ```
 
 ---
@@ -437,7 +438,7 @@ Zalo channel.
 ## Development
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # runtime + test dependencies
 pytest tests/unit/ -v
 ```
 
