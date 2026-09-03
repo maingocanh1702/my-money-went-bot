@@ -1,0 +1,13 @@
+# Test and development dependencies.
+#   pip install -r requirements-dev.txt
+# Pulls in the runtime set too, so one command gives a working test environment.
+-r requirements.txt
+
+pytest==9.0.3
+pytest-asyncio==1.4.0
+freezegun==1.5.1
+
+# storage/ (the PostgreSQL source-of-truth work) is not imported by the running
+# bot yet, so its drivers stay out of the deploy image until the cutover lands.
+SQLAlchemy==2.0.52
+psycopg[binary]==3.3.5

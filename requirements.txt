@@ -8,8 +8,3 @@ pyasn1==0.6.4
 httpx==0.28.1
 python-dotenv==1.2.2
 pytz==2026.1.post1
-pytest==9.0.3
-pytest-asyncio==1.4.0
-freezegun==1.5.1
-SQLAlchemy==2.0.52
-psycopg[binary]==3.3.5
