@@ -16,7 +16,7 @@ def _setup_tx_tab(fake_ss):
     return ws
 
 
-def _seed_bank_account(account_id="tcb_main", starting=1_000_000, cur="VND"):
+def _seed_bank_account(account_id="bank_main", starting=1_000_000, cur="VND"):
     sh.add_account(
         account_id=account_id,
         name=account_id,
@@ -48,11 +48,11 @@ def test_append_ledger_entry_dedup_on_repeat(fake_ss):
     sh._ensure_ledger_tab()
 
     id1 = sh.append_ledger_entry(
-        tx_row_num=5, account_id="tcb_main", direction="-",
+        tx_row_num=5, account_id="bank_main", direction="-",
         amount=50000, currency="VND", tx_type="expense",
     )
     id2 = sh.append_ledger_entry(
-        tx_row_num=5, account_id="tcb_main", direction="-",
+        tx_row_num=5, account_id="bank_main", direction="-",
         amount=50000, currency="VND", tx_type="expense",
     )
     assert id1 == id2 == "L5_1"
@@ -64,7 +64,7 @@ def test_append_ledger_entry_two_legs_distinct(fake_ss):
     sh._ensure_ledger_tab()
     # Transfer: 1 tx row, 2 legs (out from acct A, in to acct B)
     sh.append_ledger_entry(
-        tx_row_num=10, account_id="tcb_main", direction="-",
+        tx_row_num=10, account_id="bank_main", direction="-",
         amount=1_000_000, currency="VND", tx_type="transfer", leg="out",
     )
     sh.append_ledger_entry(
@@ -88,7 +88,7 @@ def test_is_and_mark_ledger_applied(fake_ss):
 def test_void_ledger_for_tx(fake_ss):
     sh._ensure_ledger_tab()
     sh.append_ledger_entry(
-        tx_row_num=5, account_id="tcb_main", direction="-",
+        tx_row_num=5, account_id="bank_main", direction="-",
         amount=50000, currency="VND", tx_type="expense",
     )
     voided = sh.void_ledger_for_tx(5)
@@ -101,44 +101,44 @@ def test_void_ledger_for_tx(fake_ss):
 
 def test_reset_transaction_row_voids_ledger_and_refreshes_cache(fake_ss):
     _setup_tx_tab(fake_ss)
-    _seed_bank_account("tcb_main", starting=1_000_000)
+    _seed_bank_account("bank_main", starting=1_000_000)
     row_num = sh.append_transaction(
         "2026-05-10", "highland", 50000, "R1", "2026-05",
-        account_id="tcb_main",
+        account_id="bank_main",
     )
     sh.append_ledger_entry(
-        tx_row_num=row_num, account_id="tcb_main", direction="-",
+        tx_row_num=row_num, account_id="bank_main", direction="-",
         amount=50000, currency="VND", tx_type="expense",
     )
     sh.mark_ledger_applied(row_num)
-    sh.update_account_cache("tcb_main")
-    acc = sh.find_account_by_id("tcb_main")
+    sh.update_account_cache("bank_main")
+    acc = sh.find_account_by_id("bank_main")
     assert acc["running_balance"] == 950_000
 
     # Recat: reset clears ledger + restores starting balance
     sh.reset_transaction_row(row_num)
     assert sh.is_ledger_applied(row_num) is False
     sh.invalidate_accounts_cache()
-    acc2 = sh.find_account_by_id("tcb_main")
+    acc2 = sh.find_account_by_id("bank_main")
     assert acc2["running_balance"] == 1_000_000
 
 
 # ── Account cache math ─────────────────────────────────────────
 
 def test_update_account_cache_bank_signed_sum(fake_ss):
-    _seed_bank_account("tcb_main", starting=1_000_000)
+    _seed_bank_account("bank_main", starting=1_000_000)
     sh._ensure_ledger_tab()
 
     sh.append_ledger_entry(
-        tx_row_num=2, account_id="tcb_main", direction="-",
+        tx_row_num=2, account_id="bank_main", direction="-",
         amount=200_000, currency="VND", tx_type="expense",
     )
     sh.append_ledger_entry(
-        tx_row_num=3, account_id="tcb_main", direction="+",
+        tx_row_num=3, account_id="bank_main", direction="+",
         amount=500_000, currency="VND", tx_type="income",
     )
-    sh.update_account_cache("tcb_main")
-    acc = sh.find_account_by_id("tcb_main")
+    sh.update_account_cache("bank_main")
+    acc = sh.find_account_by_id("bank_main")
     # 1,000,000 − 200,000 + 500,000 = 1,300,000
     assert acc["running_balance"] == 1_300_000
 
@@ -171,31 +171,31 @@ def test_update_account_cache_credit_outstanding(fake_ss):
 
 
 def test_update_account_cache_skips_voided_entries(fake_ss):
-    _seed_bank_account("tcb_main", starting=1_000_000)
+    _seed_bank_account("bank_main", starting=1_000_000)
     sh._ensure_ledger_tab()
 
     sh.append_ledger_entry(
-        tx_row_num=2, account_id="tcb_main", direction="-",
+        tx_row_num=2, account_id="bank_main", direction="-",
         amount=200_000, currency="VND", tx_type="expense",
     )
-    sh.update_account_cache("tcb_main")
-    assert sh.find_account_by_id("tcb_main")["running_balance"] == 800_000
+    sh.update_account_cache("bank_main")
+    assert sh.find_account_by_id("bank_main")["running_balance"] == 800_000
 
     sh.void_ledger_for_tx(2)
-    sh.update_account_cache("tcb_main")
-    assert sh.find_account_by_id("tcb_main")["running_balance"] == 1_000_000
+    sh.update_account_cache("bank_main")
+    assert sh.find_account_by_id("bank_main")["running_balance"] == 1_000_000
 
 
 def test_update_account_cache_currency_mismatch_skipped(fake_ss):
     """Defensive: a HKD entry sneaking into a VND account must NOT corrupt
     running_balance — update_account_cache filters by currency."""
-    _seed_bank_account("tcb_main", starting=1_000_000, cur="VND")
+    _seed_bank_account("bank_main", starting=1_000_000, cur="VND")
     sh._ensure_ledger_tab()
     # Bypass append_ledger_entry's currency contract — manually inject a row
     ws = sh._ensure_ledger_tab()
     ws.append_row([
-        "L_BAD", "9", "tcb_main", "-", 300, "HKD", "expense",
+        "L_BAD", "9", "bank_main", "-", 300, "HKD", "expense",
         "2026-05-10T00:00:00", "wrong currency",
     ])
-    sh.update_account_cache("tcb_main")
-    assert sh.find_account_by_id("tcb_main")["running_balance"] == 1_000_000
+    sh.update_account_cache("bank_main")
+    assert sh.find_account_by_id("bank_main")["running_balance"] == 1_000_000

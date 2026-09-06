@@ -2,6 +2,24 @@
 
 All notable changes to MyMoneyWent will be documented in this file.
 
+## Unreleased
+
+### Removed
+- Email parsers for Techcombank and Hang Seng, and the `techcombank_visa`
+  cashback template. They were written against one maintainer's mailbox and
+  card terms, and nobody else could verify either. The email path itself is
+  unchanged — Cake by VPBank remains as the worked example, and adding a bank
+  is still one sender in `google_apps_script.js` plus one `_parse_<bank>`.
+- The maintainer's own name from the merchant-keyword stop list. Vietnamese
+  transfers carry the sender's name, so that list needed one — it is now
+  yours to set via `MERCHANT_NOISE_WORDS` in `.env`.
+
+### Changed
+- `account_resolver` treats every `email_<bank>` source the same, so a new
+  parser needs no change there.
+- `card_templates/example_visa.yaml` replaces the Techcombank template as the
+  second worked example: per-rule rates, calendar-month caps, no gate.
+
 ## v1.0.0 — 2026-09-01 (Open-Source Release)
 
 Architecture migration from private mono repo. All SaaS/multi-tenant code removed.

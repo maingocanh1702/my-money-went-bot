@@ -158,37 +158,37 @@ def test_fuzzy_dedup_reads_canonical_datetime_written_to_transactions(fake_ss):
 def test_calendar_month_cap_period_ignores_statement_day(fake_ss):
     _setup_tx_tab()
     sh.add_account(
-        account_id="tcb", name="TCB", acc_type="credit", currency="VND",
-        source_keys=["email_tcb:tcb"], statement_day=15,
+        account_id="bank1", name="Bank 1", acc_type="credit", currency="VND",
+        source_keys=["email_cake:bank1"], statement_day=15,
     )
     sh.upsert_card_config(
-        "tcb", cashback_rate=0.01, min_eligible_spend=0,
+        "bank1", cashback_rate=0.01, min_eligible_spend=0,
         cap_period="calendar_month", alert_pct=0.8, active=True,
     )
-    assert sh.cashback_cycle_id("tcb", "2026-06-20") == "tcb_calendar_2026-06"
-    assert sh.cashback_cycle_id("tcb", "2026-07-01") == "tcb_calendar_2026-07"
-    assert sh.normalize_cashback_cycle_id("tcb", "2026-06") == "tcb_calendar_2026-06"
-    assert sh.normalize_cashback_cycle_id("tcb", "tcb_2026-06") == "tcb_calendar_2026-06"
+    assert sh.cashback_cycle_id("bank1", "2026-06-20") == "bank1_calendar_2026-06"
+    assert sh.cashback_cycle_id("bank1", "2026-07-01") == "bank1_calendar_2026-07"
+    assert sh.normalize_cashback_cycle_id("bank1", "2026-06") == "bank1_calendar_2026-06"
+    assert sh.normalize_cashback_cycle_id("bank1", "bank1_2026-06") == "bank1_calendar_2026-06"
 
 
 def test_calendar_month_versioning_isolates_legacy_statement_cycle_rows(fake_ss):
     _setup_tx_tab()
-    _seed_credit(account_id="tcb", statement_day=15)
+    _seed_credit(account_id="bank1", statement_day=15)
     _seed_tiers()
-    _seed_rules(account_id="tcb")
+    _seed_rules(account_id="bank1")
     _seed_mcc()
 
-    june = _add_tx("tcb", "WCM_WINMART June", 300_000, "2026-06-20T09:00:00")
+    june = _add_tx("bank1", "WCM_WINMART June", 300_000, "2026-06-20T09:00:00")
     # Simulate the old statement-cycle writer before calendar-month support.
     sh.compute_and_record_cashback(june)
-    assert sh.get_cashback_ledger("tcb")[0]["cycle"] == "tcb_2026-07"
+    assert sh.get_cashback_ledger("bank1")[0]["cycle"] == "bank1_2026-07"
 
-    sh.upsert_card_config("tcb", cap_period="calendar_month")
-    july = _add_tx("tcb", "WCM_WINMART July", 300_000, "2026-07-01T09:00:00")
+    sh.upsert_card_config("bank1", cap_period="calendar_month")
+    july = _add_tx("bank1", "WCM_WINMART July", 300_000, "2026-07-01T09:00:00")
     result = sh.compute_and_record_cashback(july)
 
-    assert result["cycle"] == "tcb_calendar_2026-07"
-    july_lines = [line for line in sh.get_cashback_ledger("tcb", result["cycle"])
+    assert result["cycle"] == "bank1_calendar_2026-07"
+    july_lines = [line for line in sh.get_cashback_ledger("bank1", result["cycle"])
                   if line["status"] != "void"]
     assert len(july_lines) == 1
     assert july_lines[0]["tx_row_num"] == july
@@ -197,13 +197,13 @@ def test_calendar_month_versioning_isolates_legacy_statement_cycle_rows(fake_ss)
 
 def test_invalid_calendar_date_preserves_existing_cashback_until_repaired(fake_ss):
     _setup_tx_tab()
-    _seed_credit(account_id="tcb", statement_day=15)
+    _seed_credit(account_id="bank1", statement_day=15)
     _seed_tiers()
-    _seed_rules(account_id="tcb")
+    _seed_rules(account_id="bank1")
     _seed_mcc()
-    sh.upsert_card_config("tcb", cap_period="calendar_month")
+    sh.upsert_card_config("bank1", cap_period="calendar_month")
 
-    row_num = _add_tx("tcb", "WCM_WINMART June", 300_000, "2026-06-20T09:00:00")
+    row_num = _add_tx("bank1", "WCM_WINMART June", 300_000, "2026-06-20T09:00:00")
     computed = sh.compute_and_record_cashback(row_num)
     assert computed["lines"][0]["cashback_amount"] == 50_000
 
@@ -215,7 +215,7 @@ def test_invalid_calendar_date_preserves_existing_cashback_until_repaired(fake_s
 
     assert sh.recompute_cashback_for_tx(row_num)["lines"] == []
     assert sh.compute_and_record_cashback(row_num)["lines"] == []
-    active = [line for line in sh.get_cashback_ledger("tcb") if line["status"] != "void"]
+    active = [line for line in sh.get_cashback_ledger("bank1") if line["status"] != "void"]
     assert len(active) == 1
     assert active[0]["tx_row_num"] == row_num
     assert active[0]["cashback_amount"] == 50_000
@@ -378,13 +378,13 @@ def test_compute_idempotent_void_then_rewrite(fake_ss):
 
 def test_compute_skips_non_credit_account(fake_ss):
     _setup_tx_tab()
-    sh.add_account(account_id="tcb", name="TCB", acc_type="bank",
-                   currency="VND", source_keys=["sepay:tcb"], starting_balance=0)
+    sh.add_account(account_id="bank1", name="Bank 1", acc_type="bank",
+                   currency="VND", source_keys=["sepay:bank1"], starting_balance=0)
     sh.invalidate_accounts_cache()
-    r1 = _add_tx("tcb", "WCM_WINMART 1 HCM", 300000, "2026-06-10T09:00:00")
+    r1 = _add_tx("bank1", "WCM_WINMART 1 HCM", 300000, "2026-06-10T09:00:00")
     res = sh.compute_and_record_cashback(r1)
     assert res["lines"] == []
-    assert sh.get_cashback_ledger("tcb") == []
+    assert sh.get_cashback_ledger("bank1") == []
 
 
 def test_compute_skips_negative_refund_amount(fake_ss):

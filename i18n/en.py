@@ -128,7 +128,7 @@ STRINGS: dict[str, str] = {
     "ac.unmapped":          "🔍 *Unmapped account:* `{masked}`\n(source: `{source}`)\n\nBot doesn't recognize this account/card. Set up now?\n_Valid for 24h even if other tx arrive._",
     "ac.btn_setup":         "✅ Set up",
     "ac.btn_skip":          "⏭️ Skip",
-    "ac.setup_title":       "📝 *Set up new account* — `{masked}`\n\nStep {step}/{total} — Display name (e.g. `TCB Spending`, `Cake Visa ****8421`):",
+    "ac.setup_title":       "📝 *Set up new account* — `{masked}`\n\nStep {step}/{total} — Display name (e.g. `Main Bank`, `Cake Visa ****8421`):",
     "ac.step_type":         "Step {step}/{total} — Account type? (slug: `{slug}`)",
     "ac.step_limit":        "🪧 Step {step}/{total} — *Credit limit* (VND)? (e.g. `30000000`)",
     "ac.step_outstanding":  "💳 Step {step}/{total} — *Current outstanding* (VND)?\n(Amount owed right now, e.g. `3000000`. `0` if card is unused / fully paid.)",

@@ -78,9 +78,9 @@ async def test_supported_non_transaction_email_is_acknowledged_without_blocking_
     import main
 
     assert await main._process_email({
-        "from": "Hang Seng <hangseng@infoservices.hangseng.com>",
-        "subject": "Hang Seng e-Statement now available",
-        "body": "Your June statement is ready to view in HangSengNow.",
+        "from": "Cake by VPBank <no-reply@cake.vn>",
+        "subject": "Sao ke thang 6 cua ban da san sang",
+        "body": "Xem sao ke thang 6 trong ung dung Cake.",
         "date": "2026-06-30T12:00:00+07:00",
     }) is True
 
@@ -90,9 +90,9 @@ async def test_transaction_shaped_email_with_unknown_format_remains_retryable():
     import main
 
     assert await main._process_email({
-        "from": "automail@techcombank.com.vn",
+        "from": "no-reply@cake.vn",
         "subject": "Thông báo biến động số dư",
-        "body": "Nội dung giao dịch mới, nhưng không có số tiền.",
+        "body": "Nội dung mới, nhưng không đọc được số tiền.",
         "date": "2026-06-30T12:00:00+07:00",
     }) is False
 

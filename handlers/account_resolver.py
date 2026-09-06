@@ -9,7 +9,7 @@ Three statuses (plan §4.2):
                      → caller writes the tx with empty account_id (silent).
 
 `source_key` format: f"{source}:{identifier_normalized}"
-   - source ∈ {"sepay", "email_tcb", "email_cake", "email_hangseng"}
+   - source ∈ {"sepay"} plus one "email_<bank>" per parser in email_parser.py
    - identifier_normalized: lowercased, whitespace stripped.
 
 We deliberately do NOT auto-resolve "default" identifiers (e.g. Cake's
@@ -69,19 +69,12 @@ def _extract_identifier(source: str, payload: dict) -> str | None:
                 return str(v).strip()
         return None
 
-    if source == "email_tcb":
-        # The email parser stuffs masked account into _account_hint
-        v = payload.get("_account_hint")
-        return str(v).strip() if v else None
-
-    if source == "email_cake":
-        # Cake email body has no per-account number → caller falls back to
-        # a constant "default" hint, which a user-onboarded source_key will
-        # carry into the matched path.
-        v = payload.get("_account_hint")
-        return str(v).strip() if v else None
-
-    if source == "email_hangseng":
+    if source.startswith("email_"):
+        # Every email parser puts whatever identifies the account into
+        # _account_hint: a masked number when the mail carries one, or a
+        # constant (Cake's "cake_main" / "cake_cc") when it does not. A new
+        # bank parser therefore needs no change here — the user onboards its
+        # source_key once and every later mail matches.
         v = payload.get("_account_hint")
         return str(v).strip() if v else None
 
