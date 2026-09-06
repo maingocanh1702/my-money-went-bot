@@ -5,7 +5,7 @@
 
 [🇻🇳 Tiếng Việt](README.vi.md)
 
-![My Money Went Bot — a Telegram bot that catches every Vietnamese bank transaction and writes it to your Google Sheet](docs/screenshots/banner.png)
+![My Money Went Bot — credit-card cashback tracking from bank notification emails, plus money in and out of Vietnamese bank accounts via SePay, written to a Google Sheet you own](docs/screenshots/banner.png)
 
 **Credit-card cashback tracking from your bank's notification emails, plus every đồng in and out of your Vietnamese bank accounts through [SePay](https://sepay.vn) — written to a Google Sheet you own, driven from Telegram or Zalo.**
 
@@ -15,7 +15,7 @@
 
 ## What it does
 
-![How it works — bank transaction, SePay webhook, bot processes, write to Google Sheet, Telegram report](docs/screenshots/how-it-works.png)
+![How it works — a bank account transaction arrives by SePay webhook and a credit-card notification email arrives via Gmail and Apps Script; the bot deduplicates, resolves the account, categorizes and runs the cashback engine; everything lands in your Google Sheet and comes back to you on Telegram or Zalo](docs/screenshots/how-it-works.png)
 
 **My Money Went Bot is a personal finance bot that lives in your Telegram (or Zalo) chat. It does two jobs:**
 
@@ -75,7 +75,7 @@ Most personal finance apps (Money Lover, Misa, MoneyKeeper, ...) want your bank 
 
 ## Features
 
-![Feature overview — features, system architecture, supported banks, and the command list](docs/screenshots/features-architecture.png)
+![Feature overview — credit-card cashback features, bank-account features, the two-input system architecture, supported banks, and the command list](docs/screenshots/features-architecture.png)
 
 The full feature breakdown:
 

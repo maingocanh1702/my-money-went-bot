@@ -16,7 +16,7 @@ Usage:
     await send_text("Hello!")
 
     # Zalo
-    await send_text("Hello!", channel="zalo", recipient_id="246845883529197922")
+    await send_text("Hello!", channel="zalo", recipient_id="1000000000000000001")
 """
 
 import html

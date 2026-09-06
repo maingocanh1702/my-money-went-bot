@@ -1,17 +1,2 @@
-# Default
-*                               @maingocanh1702
-
-# High-risk (2 approvals via branch protection D-6-protect)
-/core/                          @maingocanh1702
-/markets/*/adapters/            @maingocanh1702
-/ops_api/                       @maingocanh1702
-/scripts/linear_migrate.py      @maingocanh1702
-/.github/workflows/             @maingocanh1702
-/.github/CODEOWNERS             @maingocanh1702
-
-# Docs
-/docs/                          @maingocanh1702
-/docs/operations/               @maingocanh1702
-
-# Memory — founder only
-/memory/                        @maingocanh1702
+# Every change is reviewed by the maintainer.
+*                       @maingocanh1702
