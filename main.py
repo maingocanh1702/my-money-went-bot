@@ -117,18 +117,29 @@ async def webhook(request: Request, bg: BackgroundTasks):
         bg.add_task(_process, body)
         return JSONResponse({"ok": True})
 
-    if not has_valid_sepay_secret(body, allow_unconfigured=False):
+    # SePay authenticates with "Authorization: Apikey <key>" — a header, never a
+    # body field. Checking only the body rejected every real delivery.
+    if not has_valid_sepay_secret(
+        body,
+        authorization=request.headers.get("authorization"),
+        allow_unconfigured=False,
+    ):
         print("[webhook] rejected: invalid SePay webhook secret")
-        return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
+        return JSONResponse({"success": False, "ok": False, "error": "unauthorized"}, status_code=401)
     if "data" in body and not isinstance(body["data"], dict):
-        return JSONResponse({"ok": False, "error": "invalid SePay payload"}, status_code=400)
+        return JSONResponse({"success": False, "ok": False, "error": "invalid SePay payload"}, status_code=400)
     try:
-        await handle_sepay_webhook(body)
+        await handle_sepay_webhook(body, authenticated=True)
     except Exception:
         import traceback
         print("ERROR [sepay webhook]:", traceback.format_exc())
-        return JSONResponse({"ok": False, "error": "retryable processing failure"}, status_code=503)
-    return JSONResponse({"ok": True})
+        return JSONResponse(
+            {"success": False, "ok": False, "error": "retryable processing failure"},
+            status_code=503,
+        )
+    # SePay treats anything other than 200/201 with {"success": true} as a failed
+    # delivery and retries it. {"ok": true} alone was being retried forever.
+    return JSONResponse({"success": True, "ok": True})
 
 
 # ─── Email webhook (Google Apps Script → bot) ────────────────
