@@ -12,14 +12,15 @@
 ![Railway](https://img.shields.io/badge/Deploy-Railway-0B0D0E?style=for-the-badge&logo=railway&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-D4A017?style=for-the-badge)
 
-# My Money Went Bot - theo dõi tiền đi đâu ngay trong Telegram
+# My Money Went Bot - cashback thẻ tín dụng và tiền ra / vào ngân hàng, ngay trong Telegram
 
-Bot tự ghi giao dịch ngân hàng Việt Nam vào Google Sheet của bạn, hỏi bạn phân loại chi tiêu bằng nút bấm, rồi tạo báo cáo theo ngày, tuần, tháng, quý, năm.
+Bot làm hai việc: theo dõi **cashback thẻ tín dụng** từ chính email thông báo của ngân hàng (biết mỗi lần quẹt được hoàn bao nhiêu, còn bao nhiêu cap, cách cổng kích hoạt bao xa), và theo dõi **từng đồng ra / vào tài khoản ngân hàng Việt Nam** qua SePay. Mọi thứ ghi vào Google Sheet của bạn, phân loại bằng nút bấm, báo cáo theo ngày, tuần, tháng, quý, năm.
 
 ---
 
 ## Bạn đang gặp vấn đề này?
 
+- Có thẻ cashback (Cake Freedom, Techcombank Visa, ...) nhưng chỉ biết được hoàn bao nhiêu khi ngân hàng chốt sao kê — không biết danh mục nào đã đầy cap, đã qua cổng kích hoạt chưa, nên quẹt thẻ nào cho lần tiếp theo.
 - Muốn biết tiền đi đâu nhưng lười nhập tay từng khoản.
 - App quản lý chi tiêu bắt đăng nhập ngân hàng hoặc giữ data trên cloud của họ.
 - Sao kê ngân hàng khó đọc, khó phân loại, khó xem theo account/category.
@@ -28,13 +29,19 @@ Bot tự ghi giao dịch ngân hàng Việt Nam vào Google Sheet của bạn, h
 
 ## Bot này làm gì?
 
-My Money Went Bot nối 3 thứ bạn đã dùng:
+My Money Went Bot nối những thứ bạn đã dùng:
 
 ```text
-SePay webhook -> Telegram bot -> Google Sheet của bạn
+Tài khoản ngân hàng  ── SePay webhook ─────────────┐
+                                                   ├─> Bot (Telegram / Zalo) ─> Google Sheet của bạn
+Thẻ tín dụng / bank ── email thông báo ─ Apps Script ┘        └─ cashback engine: MCC · rate · cap · cổng
 ```
 
-Điểm quan trọng: **My Money Went Bot không truy cập tài khoản ngân hàng của bạn.** Bot không đăng nhập ngân hàng, không đọc biến động số dư trực tiếp, không truy vấn lịch sử giao dịch, và không giữ username/password/OTP/số thẻ. Bot chỉ nhận dữ liệu giao dịch mà **SePay gửi qua webhook** sau khi bạn tự cấu hình SePay.
+Với thẻ tín dụng, mỗi lần quẹt bot trả lời ngay khoản này được hoàn bao nhiêu, và `/cashback` cho thấy cả kỳ sao kê: từng danh mục còn bao nhiêu cap, tổng kỳ, và cần tiêu thêm bao nhiêu để mở cổng. Rule của từng thẻ là file YAML trong `card_templates/` — có sẵn Cake Freedom và Techcombank Visa, thêm thẻ khác không cần sửa code.
+
+Với tài khoản ngân hàng, SePay nhận thông báo từ ngân hàng và gửi webhook cho bot. Gói Free của SePay là 0đ với 50 giao dịch/tháng; vượt thì tính phí phần vượt hoặc lên gói trả phí — xem [bảng giá SePay](https://sepay.vn/bang-gia.html).
+
+Điểm quan trọng: **My Money Went Bot không truy cập tài khoản ngân hàng của bạn.** Bot không đăng nhập ngân hàng, không đọc biến động số dư trực tiếp, không truy vấn lịch sử giao dịch, và không giữ username/password/OTP/số thẻ. Bot chỉ nhận dữ liệu giao dịch mà **SePay gửi qua webhook** sau khi bạn tự cấu hình SePay — hoặc, với thẻ tín dụng, **email thông báo** mà Google Apps Script của bạn chuyển tới từ Gmail của chính bạn.
 
 **SePay** là công ty hạ tầng Open Banking tại Việt Nam, cung cấp API ngân hàng và giải pháp tự động hóa dòng tiền. SePay là bên thực hiện kết nối với ngân hàng của bạn; My Money Went Bot chỉ nhận thông báo giao dịch đã được SePay truyền sang rồi ghi vào Google Sheet của bạn. Xem thêm: [giới thiệu SePay](https://sepay.vn/gioi-thieu.html) và [quy định sử dụng dịch vụ](https://sepay.vn/terms-of-service.html).
 
@@ -62,10 +69,14 @@ Khi có giao dịch mới:
 
 | Tính năng | Tác dụng |
 |---|---|
-| Telegram category picker | Tap nút để phân loại giao dịch mới |
+| `/cashback` | Cashback thẻ tín dụng theo kỳ sao kê: MCC, rate, cap từng danh mục, giới hạn ngày, cổng kích hoạt |
+| Template thẻ YAML | `/cashback seed cake_freedom` — áp rule của thẻ trong vài giây, thêm thẻ mới bằng một file |
+| Email ingestion | Thẻ / ngân hàng ngoài SePay (Cake, Techcombank, Hang Seng) vào qua Gmail + Apps Script |
+| Tiền ra / vào qua SePay | Mỗi giao dịch của tài khoản đã link đến trong vài giây, tag đúng account |
+| Telegram / Zalo category picker | Tap nút để phân loại giao dịch mới |
 | Auto-categorize | Rule kiểu `GRAB -> Daily Spending`, `Spotify -> Subscription` |
 | Per-account tracking | Biết giao dịch đến từ account nào |
-| `/report` | Xem report theo week/month/quarter/year |
+| `/report` | Xem report theo week/month/quarter/year, theo account hoặc category |
 | `/today` | Xem chi tiêu hôm nay |
 | `/allocate` | Đặt budget theo category |
 | Google Sheet backend | Dễ export, pivot, audit, chỉnh tay khi cần |
@@ -101,8 +112,8 @@ Tôi không rành kỹ thuật. Hãy làm theo docs/AI_SETUP.md và hướng d�
 | Cần có | Dùng để làm gì |
 |---|---|
 | Telegram account | Chat với bot |
-| Google account | Tạo Sheet và service account |
-| SePay account | Nhận webhook giao dịch ngân hàng Việt Nam |
+| Google account | Tạo Sheet và service account; Gmail + Apps Script nếu dùng đường email cho thẻ tín dụng |
+| SePay account | Nhận webhook giao dịch ngân hàng Việt Nam (gói Free: 50 giao dịch/tháng) |
 | Railway account | Deploy bot có HTTPS public |
 
 ## Link nhanh
