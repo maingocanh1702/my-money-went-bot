@@ -50,6 +50,51 @@ def _parse_shorthand(s: str) -> float | None:
     return value * _UNIT_MULTIPLIERS[unit]
 
 
+def resolve_separators(s: str) -> str | None:
+    """Turn a digits-and-separators string into a plain decimal string.
+
+    "." and "," are each a thousands separator in one locale and a decimal
+    point in another, so what they mean has to be decided from the shape of
+    the number before it is handed to float(). Guessing wrong is not a
+    rounding error: float("50.000") is fifty, and the number on the screen was
+    fifty thousand.
+
+    The rules, in order:
+      * both separators present → whichever appears LAST is the decimal point
+      * one separator, repeated → thousands grouping ("1.234.567")
+      * one separator, exactly three digits after it → thousands ("50.000",
+        "1,000") — no currency this bot handles has three decimal places
+      * otherwise → decimal point ("100.50", "1,5")
+
+    Returns None when `s` is not a number, so the caller decides what an
+    unreadable amount means rather than inheriting a silent zero.
+    """
+    s = (s or "").strip()
+    if not re.fullmatch(r"[\d.,]+", s):
+        return None
+    if s[0] in ".,":
+        s = "0" + s
+    if s[-1] in ".,":
+        s = s[:-1]
+
+    dots, commas = s.count("."), s.count(",")
+    if dots and commas:
+        dec = "." if s.rfind(".") > s.rfind(",") else ","
+    elif dots or commas:
+        sep = "." if dots else ","
+        tail = s.rsplit(sep, 1)[1]
+        dec = "" if ((dots or commas) > 1 or len(tail) == 3) else sep
+    else:
+        dec = ""
+
+    if dec:
+        s = s.replace("," if dec == "." else ".", "").replace(dec, ".")
+    else:
+        s = s.replace(".", "").replace(",", "")
+
+    return s if re.fullmatch(r"\d+(?:\.\d+)?", s) else None
+
+
 def parse_money(text: str) -> float | None:
     """Parse a typed money amount. Returns float or None when invalid."""
     if text is None:
@@ -75,37 +120,15 @@ def parse_money(text: str) -> float | None:
     # Strict: after normalization (currency suffix + whitespace removed) the
     # remainder must be digits/separators only. "5tr/tháng" or "abc100" is
     # rejected instead of being digit-stripped into a wrong number.
-    if not re.fullmatch(r"[\d.,]+", norm):
-        return None
-    s = norm
-    # If it has multiple dots/commas → thousands separators, strip them
-    if s.count(".") > 1 or s.count(",") > 1:
-        s = s.replace(".", "").replace(",", "")
-    elif "," in s and "." in s:
-        # 1,000.50 or 1.000,50 — last separator is decimal
-        if s.rfind(",") > s.rfind("."):
-            s = s.replace(".", "").replace(",", ".")
-        else:
-            s = s.replace(",", "")
-    elif "," in s:
-        parts = s.split(",")
-        if len(parts) == 2 and len(parts[1]) == 3:
-            s = s.replace(",", "")  # 1,000 = thousands
-        else:
-            s = s.replace(",", ".")  # 1,5 = decimal
-    elif "." in s:
-        parts = s.split(".")
-        if len(parts) == 2 and len(parts[1]) == 3:
-            s = s.replace(".", "")  # 1.000 = VND thousands
-    s = re.sub(r"[^\d.]", "", s)
-    if not s:
+    resolved = resolve_separators(norm)
+    if resolved is None:
         return None
     try:
-        value = float(s)
-        value = -value if negative else value
-        return value if math.isfinite(value) else None
+        value = float(resolved)
     except ValueError:
         return None
+    value = -value if negative else value
+    return value if math.isfinite(value) else None
 
 
 def parse_budget_amount(text: str) -> int | None:
