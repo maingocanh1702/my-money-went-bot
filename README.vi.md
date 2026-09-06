@@ -248,6 +248,7 @@ Nội dung wiki được version trong repo ở `docs/wiki/` — sửa ở đó 
 | `Cashback Card Config` | Cấu hình cashback của thẻ (rate, cổng, kỳ) |
 | `Cashback Ledger` | Cashback đã tính, một dòng / giao dịch, theo kỳ |
 | `MCC Map` | Map keyword → mã MCC |
+| `Excluded Events` | Mọi sự kiện bị loại, kèm lý do |
 
 ### Bước 3 — Setup SePay
 

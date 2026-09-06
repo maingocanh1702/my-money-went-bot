@@ -8,7 +8,7 @@ import math
 from datetime import datetime
 import pytz
 
-from config import SEPAY_LEGACY_REF_LOOKUP, CHAT_ID, TIMEZONE, SEPAY_SECRET
+from config import INGESTION_START_AT, SEPAY_LEGACY_REF_LOOKUP, CHAT_ID, TIMEZONE, SEPAY_SECRET
 from config import TX_MAX_AGE_MINUTES, EMAIL_TX_MAX_AGE_MINUTES
 from config import ZALO_ENABLED, ZALO_CHAT_ID
 import messenger
@@ -45,6 +45,21 @@ async def _ensure_buckets(month_key: str) -> tuple[list[dict], int]:
         created = sh.bootstrap_default_categories(month_key)
         buckets = sh.get_active_buckets(month_key, force_refresh=True)
         return buckets, created
+
+
+def _parse_ingestion_start(tz):
+    """INGESTION_START_AT as a timezone-aware instant, or None when unusable.
+
+    A misconfigured boundary must not quietly become "exclude everything", so an
+    unparseable value is reported and ignored, leaving the age windows in place.
+    """
+    raw = INGESTION_START_AT
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError:
+        print(f"[sepay] INGESTION_START_AT={raw!r} is not an ISO date/timestamp — ignoring it")
+        return None
+    return tz.localize(parsed) if parsed.tzinfo is None else parsed.astimezone(tz)
 
 
 async def _append_claimed_transaction(ref_code: str, *args, **kwargs) -> int:
@@ -203,30 +218,57 @@ async def _handle_transaction(payload: dict, *, trusted_email: bool, authenticat
     else:
         tx_date = datetime.now(tz)
 
-    # Guard: reject stale transactions (SePay replays old history on first webhook setup)
-    # Email transactions can be delayed (Gmail polling), so use a wider window.
-    # Both windows are configurable (TX_MAX_AGE_MINUTES / EMAIL_TX_MAX_AGE_MINUTES)
-    # — raise them if the bot can be down longer than the default (delayed SePay
-    # retries beyond the window are silently skipped).
-    max_age_minutes = EMAIL_TX_MAX_AGE_MINUTES if source_family == "email" else TX_MAX_AGE_MINUTES
+    tx_type_label = "Tiền vào" if is_incoming else "Tiền ra"
+
+    # A provider replays history when its webhook is first registered, and that
+    # history is not this installation's to record. INGESTION_START_AT states
+    # where ownership begins; without it, the older age windows stand in as the
+    # bootstrap guard.
+    #
+    # Either way the boundary is not replay protection — the claim ledger is —
+    # and whatever is declined is written down. An acknowledged financial event
+    # that leaves nothing behind is money that vanished without a trace.
     now = datetime.now(tz)
     if tx_date.tzinfo is None:
         tx_date_aware = tz.localize(tx_date)
     else:
         tx_date_aware = tx_date.astimezone(tz)
-    age_minutes = (now - tx_date_aware).total_seconds() / 60
-    if age_minutes > max_age_minutes:
-        print(f"[sepay] skipping stale tx: {age_minutes:.0f}min old (max={max_age_minutes}), ref={ref_code!r}")
+
+    excluded_reason = ""
+    if INGESTION_START_AT:
+        start_at = _parse_ingestion_start(tz)
+        if start_at is not None and tx_date_aware < start_at:
+            excluded_reason = "before_ingestion_start"
+    else:
+        max_age_minutes = (EMAIL_TX_MAX_AGE_MINUTES if source_family == "email"
+                           else TX_MAX_AGE_MINUTES)
+        age_minutes = (now - tx_date_aware).total_seconds() / 60
+        if age_minutes > max_age_minutes:
+            excluded_reason = "older_than_max_age"
+
+    if excluded_reason:
+        print(f"[sepay] excluding tx: {excluded_reason} ref={ref_code!r}")
+        sh.record_excluded_event(
+            ref_code=ref_code, source=source_family,
+            occurred_at=tx_date_aware.strftime("%Y-%m-%d %H:%M:%S"),
+            amount=amount, currency=currency, tx_type=tx_type_label,
+            reason=excluded_reason, description=description,
+        )
         return
 
     month_key = sh.fmt_month(tx_date)
 
-    # ─── Fuzzy dedup: chặn duplicate giữa SePay + email sources ──
-    tx_type_label = "Tiền vào" if is_incoming else "Tiền ra"
+    # ─── Fuzzy dedup: pair one spend that arrived from two sources ──
     if sh.find_recent_duplicate(amount, tx_type_label, raw_date, currency=currency,
                                 source=source_family):
         print(f"[dedup] skipped cross-source duplicate: {amount} {currency} "
               f"{tx_type_label} ref={ref_code!r}")
+        sh.record_excluded_event(
+            ref_code=ref_code, source=source_family,
+            occurred_at=tx_date_aware.strftime("%Y-%m-%d %H:%M:%S"),
+            amount=amount, currency=currency, tx_type=tx_type_label,
+            reason="cross_source_duplicate", description=description,
+        )
         return
 
     # ─── Account resolution ──────────────────────────────────
