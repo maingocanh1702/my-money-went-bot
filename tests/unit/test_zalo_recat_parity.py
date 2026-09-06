@@ -15,7 +15,7 @@ from config import SHEETS as S
 import main
 
 
-ZALO_CHAT = "REDACTED-the-maintainers-Zalo-chat-id"
+ZALO_CHAT = "1000000000000000001"
 ZALO_KEY = f"zalo:{ZALO_CHAT}"
 
 TX_HEADER = [
