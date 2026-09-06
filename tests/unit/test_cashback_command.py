@@ -136,6 +136,11 @@ def test_set_billing_cycle_rejects_non_credit(fake_ss):
 
 
 def test_card_overview_shows_billing_cycle(fake_ss):
+    # card_overview_text() renders through i18n, which reads the language
+    # from Bot State. Create the tab here so the test does not depend on an
+    # earlier test having created it (it failed when run on its own).
+    ws_st = fake_ss.add_worksheet(S.BOT_STATE)
+    ws_st.update("A1:C1", [["chat_id", "state", "updated"]])
     # Bare credit card (no statement_day) → calendar-month wording.
     sh.add_account(account_id="bare_cc", name="Bare", acc_type="credit", currency="VND",
                    source_keys=["x:bare"], credit_limit=10_000_000)
