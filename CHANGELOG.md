@@ -4,6 +4,22 @@ All notable changes to MyMoneyWent will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+- Money read out of a sheet cell is now read the way the cell is *displayed*.
+  Google returns the formatted value, so a Vietnamese-locale sheet shows 50000
+  as `50.000` — which `float()` read as fifty. Amounts with repeated separators
+  (`1.234.567`) raised instead. Both readers, the cell reader and the typed-input
+  parser, now share one rule for what `.` and `,` mean, and agree on every form.
+  A typed `1,234,567.89` no longer becomes 123,456,789.
+- Nothing is discarded without a record. Every declined event — before the
+  ingestion boundary, past the age window, or a cross-source duplicate — is
+  appended to an `Excluded Events` tab with its reason. Set `INGESTION_START_AT`
+  to the date this installation starts owning transactions and late-arriving
+  transactions stop being thrown away; leave it unset and nothing changes.
+- Transactions are identified by SePay's own `id` rather than `referenceCode`,
+  which is not guaranteed unique. The cross-source duplicate check no longer
+  collapses two genuinely distinct spends that share an amount, type and second.
+
 ### Removed
 - Email parsers for Techcombank and Hang Seng, and the `techcombank_visa`
   cashback template. They were written against one maintainer's mailbox and
