@@ -214,7 +214,7 @@ async def test_email_cc_gate_open_sends_activation_notice(cc_world):
 
 @pytest.mark.asyncio
 async def test_bank_sepay_tx_earns_no_cashback(cc_world):
-    sh.add_account(account_id="tcb", name="TCB", acc_type="bank", currency="VND",
+    sh.add_account(account_id="bank1", name="Bank 1", acc_type="bank", currency="VND",
                    source_keys=["sepay:111"], starting_balance=0)
     sh.invalidate_accounts_cache()
     tz = pytz.timezone("Asia/Ho_Chi_Minh")
@@ -224,4 +224,4 @@ async def test_bank_sepay_tx_earns_no_cashback(cc_world):
         "transactionDate": now.strftime("%Y-%m-%dT%H:%M:%S"),
         "currency": "VND", "referenceCode": "BANK1", "accountNumber": "111",
     })
-    assert sh.get_cashback_ledger("tcb") == []
+    assert sh.get_cashback_ledger("bank1") == []

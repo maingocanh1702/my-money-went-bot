@@ -43,7 +43,7 @@ YAML templates in `card_templates/`, not code.
 python card_templates/validate.py card_templates/your_card.yaml
 ```
 
-Start from `cake_freedom.yaml` or `techcombank_visa.yaml`, or let the bot write
+Start from `cake_freedom.yaml` or `example_visa.yaml`, or let the bot write
 one for you — configure the card with `/cashback setup`, then `/cashback
 export` prints the YAML. Send it as a pull request so the next person with that
 card does not have to work the rules out again.

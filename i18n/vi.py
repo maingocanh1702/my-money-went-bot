@@ -128,7 +128,7 @@ STRINGS: dict[str, str] = {
     "ac.unmapped":          "🔍 *Tài khoản chưa liên kết:* `{masked}`\n(nguồn: `{source}`)\n\nBot chưa nhận diện tài khoản/thẻ này. Cài đặt ngay?\n_Còn hiệu lực 24h kể cả khi có tx khác đến._",
     "ac.btn_setup":         "✅ Cài đặt",
     "ac.btn_skip":          "⏭️ Bỏ qua",
-    "ac.setup_title":       "📝 *Cài đặt tài khoản mới* — `{masked}`\n\nBước {step}/{total} — Tên hiển thị (vd: `TCB Tiêu dùng`, `Cake Visa ****8421`):",
+    "ac.setup_title":       "📝 *Cài đặt tài khoản mới* — `{masked}`\n\nBước {step}/{total} — Tên hiển thị (vd: `Ngân hàng chính`, `Cake Visa ****8421`):",
     "ac.step_type":         "Bước {step}/{total} — Loại tài khoản? (slug: `{slug}`)",
     "ac.step_limit":        "🪧 Bước {step}/{total} — *Hạn mức thẻ* (VND)? (số, vd `30000000`)",
     "ac.step_outstanding":  "💳 Bước {step}/{total} — *Dư nợ hiện tại* (VND)?\n(số đang nợ trên thẻ ngay lúc cài đặt, vd `3000000`. `0` nếu thẻ chưa dùng / đã trả hết.)",

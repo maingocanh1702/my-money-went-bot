@@ -7,11 +7,9 @@ Examples
 --------
   python scripts/sim_webhook.py sepay --account 1903xxx888 --amount 50000 --type out --desc "highland"
   python scripts/sim_webhook.py sepay --amount 200000 --type in --desc "salary"
-  python scripts/sim_webhook.py email-tcb --account "****1234" --amount 500000 --type out --desc "winmart"
   python scripts/sim_webhook.py email-cake --amount 50000 --type out --desc "PAYOO BHX"
-  python scripts/sim_webhook.py email-hangseng --account "123-456999-789" --amount 300 --currency HKD
   python scripts/sim_webhook.py replay <ref_code>
-  python scripts/sim_webhook.py transfer --from tcb_main --to cake_main --amount 1000000
+  python scripts/sim_webhook.py transfer --from bank_main --to cake_main --amount 1000000
 
 Env:
   BOT_URL  — base URL (default http://localhost:8000)
@@ -76,28 +74,6 @@ def cmd_sepay(args) -> dict:
     return _post("/webhook", payload)
 
 
-def cmd_email_tcb(args) -> dict:
-    direction_label = "Tiền vào" if args.type == "in" else "Tiền ra"
-    body = (
-        f"Tài khoản: {args.account or '****1234'}\n"
-        f"Giao dịch: {direction_label}\n"
-        f"Số tiền GD: {int(args.amount):,} VND\n"
-        f"Số dư TK:   1,000,000 VND\n"
-        f"Nội dung:   {args.desc or 'sim tcb tx'}\n"
-        f"Thời gian:  {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n"
-    )
-    return _post(
-        "/webhook/email",
-        {
-            "secret": EMAIL_SECRET,
-            "from": "automail@techcombank.com.vn",
-            "subject": "TCB - Bien dong so du",
-            "body": body,
-            "date": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        },
-    )
-
-
 def cmd_email_cake(args) -> dict:
     sign = "+" if args.type == "in" else "-"
     body = (
@@ -112,29 +88,6 @@ def cmd_email_cake(args) -> dict:
             "secret": EMAIL_SECRET,
             "from": "no-reply@cake.vn",
             "subject": "Cake - Bien dong",
-            "body": body,
-            "date": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        },
-    )
-
-
-def cmd_email_hangseng(args) -> dict:
-    cur = (args.currency or "HKD").upper()
-    body = (
-        "你已成功轉賬（未登記收款人）\n"
-        "Your transfer is successful (Non-registered payee)\n"
-        f"由 From: {args.account or '123-456999-789'}\n"
-        f"{cur}{args.amount:.2f}\n"
-        f"至 To: {args.to or '99XXXX111'}\n"
-        f"轉賬日期 Transfer date: {datetime.now().strftime('%Y-%m-%d')}\n"
-        f"交易號碼 Transaction ID: HD{int(datetime.now().timestamp())}\n"
-    )
-    return _post(
-        "/webhook/email",
-        {
-            "secret": EMAIL_SECRET,
-            "from": "hangseng@infoservices.hangseng.com",
-            "subject": "Hang Seng transfer",
             "body": body,
             "date": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         },
@@ -183,18 +136,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--gateway", default=None)
     sp.set_defaults(func=cmd_sepay)
 
-    sp = sub.add_parser("email-tcb")
-    common(sp)
-    sp.set_defaults(func=cmd_email_tcb)
-
     sp = sub.add_parser("email-cake")
     common(sp)
     sp.set_defaults(func=cmd_email_cake)
-
-    sp = sub.add_parser("email-hangseng")
-    common(sp)
-    sp.add_argument("--to", default=None, help="To-account display string")
-    sp.set_defaults(func=cmd_email_hangseng)
 
     sp = sub.add_parser("replay")
     sp.add_argument("ref_code", help="ref_code to replay")
