@@ -72,16 +72,43 @@ async def handle_trusted_email_transaction(payload: dict):
     await _handle_transaction(payload, trusted_email=True)
 
 
-async def handle_sepay_webhook(payload: dict):
-    await _handle_transaction(payload, trusted_email=False)
+async def handle_sepay_webhook(payload: dict, *, authenticated: bool = False):
+    await _handle_transaction(payload, trusted_email=False, authenticated=authenticated)
 
 
-def has_valid_sepay_secret(payload: dict, *, allow_unconfigured: bool = True) -> bool:
-    """Validate a SePay payload without logging or processing its bank data."""
+def _api_key_from_authorization(header: str | None) -> str:
+    """Extract the key from ``Authorization: Apikey <key>`` (SePay's scheme).
+
+    SePay sends webhook credentials only in headers — never in the JSON body.
+    The scheme is matched case-insensitively; any other scheme yields "".
+    """
+    if not header:
+        return ""
+    scheme, _, key = header.strip().partition(" ")
+    if scheme.lower() != "apikey":
+        return ""
+    return key.strip()
+
+
+def has_valid_sepay_secret(
+    payload: dict,
+    *,
+    authorization: str | None = None,
+    allow_unconfigured: bool = True,
+) -> bool:
+    """Validate a SePay delivery without logging or processing its bank data.
+
+    The documented path is the ``Authorization: Apikey <key>`` header. A key in
+    the body is still accepted so local tools (scripts/sim_webhook.py) and tests
+    can post without forging headers; it is the same shared secret either way.
+    """
     if not isinstance(payload, dict):
         return False
     if not SEPAY_SECRET:
         return allow_unconfigured
+    header_key = _api_key_from_authorization(authorization)
+    if header_key and hmac.compare_digest(header_key, SEPAY_SECRET):
+        return True
     nested_data = payload.get("data")
     nested_data = nested_data if isinstance(nested_data, dict) else {}
     incoming_secret = (
@@ -93,8 +120,11 @@ def has_valid_sepay_secret(payload: dict, *, allow_unconfigured: bool = True) ->
     return hmac.compare_digest(str(incoming_secret or ""), SEPAY_SECRET)
 
 
-async def _handle_transaction(payload: dict, *, trusted_email: bool):
-    if not trusted_email and not has_valid_sepay_secret(payload):
+async def _handle_transaction(payload: dict, *, trusted_email: bool, authenticated: bool = False):
+    # ``authenticated`` means the HTTP boundary already verified the SePay
+    # credential (from the header). Re-checking the body here would reject
+    # every header-authenticated delivery, since SePay puts nothing in the body.
+    if not trusted_email and not authenticated and not has_valid_sepay_secret(payload):
         print("[sepay] rejected: invalid secret")
         return
 
@@ -350,6 +380,14 @@ async def _handle_transaction(payload: dict, *, trusted_email: bool):
         "await_credit_statement", "await_credit_due",
         "await_freetext", "await_inline_new_cat_name", "await_daily_excuse",
     )
+    # Built before the branch below: the Zalo picker needs the same bucket
+    # choices whether or not the Telegram side is mid-flow. Previously this was
+    # only bound in the else-branch, so a mid-flow Telegram user silently lost
+    # the Zalo picker (UnboundLocalError swallowed by the except below).
+    frequent = sh.get_frequent_categories(3)
+    buttons = tg.build_bucket_buttons(buckets, f"p_{row_num}", include_new=True,
+                                      frequent_ids=frequent)
+
     if existing_step in _CRITICAL_STEPS:
         pending = existing_state.get("pending_tx_queue") or []
         pending.append({
@@ -378,9 +416,6 @@ async def _handle_transaction(payload: dict, *, trusted_email: bool):
             "pending_tx_queue": existing_state.get("pending_tx_queue") or [],
         })
 
-        frequent = sh.get_frequent_categories(3)
-        buttons = tg.build_bucket_buttons(buckets, f"p_{row_num}", include_new=True,
-                                          frequent_ids=frequent)
         await tg.send_with_buttons(
             f"💸 *-{sh.fmt_amount(amount, currency)}*\n"
             f"`{description}`\n\n"
@@ -448,7 +483,8 @@ async def _handle_transaction(payload: dict, *, trusted_email: bool):
                     "queue": [],
                 })
         except Exception as e:
-            print(f"[zalo] category picker error: {e}")
+            print(f"[zalo] category picker error: {e!r}")
+            import traceback; traceback.print_exc()
 
     # Account onboarding prompt AFTER the tx notification — see incoming
     # branch for rationale.
@@ -580,11 +616,14 @@ async def _ask_cashback_learn(account_id: str, row_num: int):
                         "",
                         "Chọn nhóm hoàn tiền:",
                     ]
+                    # ``choices`` is [(mcc, "emoji name"), ...] — the same list the
+                    # Telegram buttons were built from. This block used to iterate
+                    # an undefined ``rules`` with an unimported emoji map, so it
+                    # raised NameError on every call and the except below hid it.
                     rule_list = []
-                    for i, r in enumerate(rules, 1):
-                        emoji = CASHBACK_MCC_EMOJI.get(r["match_value"], "")
-                        zalo_lines.append(f"{i}. {emoji} {r['rule_name']}")
-                        rule_list.append({"mcc": r["match_value"], "name": r["rule_name"]})
+                    for i, (mcc, label) in enumerate(choices, 1):
+                        zalo_lines.append(f"{i}. {label}")
+                        rule_list.append({"mcc": mcc, "name": label})
                     zalo_lines.append("0. Không hoàn")
                     zalo_lines.append("\nReply số để chọn")
 
@@ -599,7 +638,8 @@ async def _ask_cashback_learn(account_id: str, row_num: int):
                         "rules": rule_list,
                     })
             except Exception as e:
-                print(f"[zalo] cashback learn picker error: {e}")
+                print(f"[zalo] cashback learn picker error: {e!r}")
+                import traceback; traceback.print_exc()
     except Exception as e:
         print(f"[cashback] ask_learn error row={row_num}: {e}")
 
