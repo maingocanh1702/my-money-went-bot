@@ -5,9 +5,9 @@
 
 [🇻🇳 Tiếng Việt](README.vi.md)
 
-![My Money Went Bot — credit-card cashback tracking from bank notification emails, plus money in and out of Vietnamese bank accounts via SePay, written to a Google Sheet you own](docs/screenshots/banner.png)
+![My Money Went Bot — automatic transaction tracking for Vietnamese bank accounts and credit cards, written to a Google Sheet you own and categorized from Telegram or Zalo](docs/screenshots/banner.png)
 
-**Credit-card cashback tracking from your bank's notification emails, plus every đồng in and out of your Vietnamese bank accounts through [SePay](https://sepay.vn) — written to a Google Sheet you own, driven from Telegram or Zalo.**
+**Automatic transaction tracking for your Vietnamese bank accounts and your credit cards.** Every transaction lands in a Google Sheet you own and gets categorized from Telegram or Zalo — no manual entry, no bank login, no third-party data store.
 
 > 🙏 **Credits:** built on top of patterns from [`maddyle8124/spend-less-bot`](https://github.com/maddyle8124/spend-less-bot). Big thanks to Maddy — without that seed this wouldn't exist.
 
@@ -15,16 +15,19 @@
 
 ## What it does
 
-![How it works — a bank account transaction arrives by SePay webhook and a credit-card notification email arrives via Gmail and Apps Script; the bot deduplicates, resolves the account, categorizes and runs the cashback engine; everything lands in your Google Sheet and comes back to you on Telegram or Zalo](docs/screenshots/how-it-works.png)
+![How it works — a bank account transaction arrives by SePay webhook and a credit-card swipe arrives as a notification email via Gmail and Apps Script; the bot deduplicates, resolves the account and categorizes it; the row lands in your Google Sheet and comes back to you on Telegram or Zalo](docs/screenshots/how-it-works.png)
 
-**My Money Went Bot is a personal finance bot that lives in your Telegram (or Zalo) chat. It does two jobs:**
+**My Money Went Bot is a personal expense tracker that lives in your Telegram (or Zalo) chat.** It catches your transactions the moment they happen, from two sources at once:
 
-**1. Tracks money in and out of your Vietnamese bank accounts.** Link your accounts to [SePay](https://sepay.vn); every incoming or outgoing transaction reaches the bot as a webhook within seconds, is written to a Google Sheet *you own*, and gets categorized with one tap — or automatically, once you've taught the bot a keyword rule. `/report` slices it all by account, by category, and by week / month / quarter / year. SePay's free plan covers 50 transactions a month; see [What SePay costs](#what-sepay-costs).
+- **Vietnamese bank accounts** — link them to [SePay](https://sepay.vn) and every transfer, card payment or salary arrives as a webhook within seconds. SePay's free plan covers 50 transactions a month; see [What SePay costs](#what-sepay-costs).
+- **Credit cards** — your bank emails you for every swipe, and a small Google Apps Script forwards those emails to the bot. This also covers any bank SePay hasn't signed. Costs nothing.
 
-**2. Tracks credit-card cashback from the bank's own notification emails.** Cards and banks that SePay doesn't cover — Cake by VPBank ships as a worked example — email you for every swipe. A small Google Apps Script forwards those emails to the bot, which parses the amount and merchant, files the transaction against the right card, and runs the cashback engine: MCC classification, the card's rate, per-transaction tiers, per-category caps, daily limits and the activation gate — all per statement cycle. Every swipe replies with what it earned; `/cashback` shows the whole cycle: what you've earned, how close each category is to its cap, and how much more you need to spend to unlock it.
+Either way the transaction is written to a Google Sheet *you own*, tagged with the account it came from, and categorized with one tap — or with no tap at all, once you've taught the bot a keyword rule. `/report` then slices everything by account, by category, and by week / month / quarter / year.
+
+On top of that tracking sit the things you'd otherwise do by hand: monthly budgets per category, credit-card balances and payments, and **cashback tracking** that tells you what each swipe earned before the statement closes.
 
 <details>
-<summary>📐 Detailed flow — the two inputs, the cashback branch, auto-categorize and onboarding</summary>
+<summary>📐 Detailed flow — the two sources, categorizing, and the cashback branch</summary>
 
 ```mermaid
 flowchart TD
@@ -67,43 +70,47 @@ Most personal finance apps (Money Lover, Misa, MoneyKeeper, ...) want your bank 
 
 - **You own the data.** It lives in your Google Sheet. Export, fork, archive, pivot — your call.
 - **You see every line of code.** ~3,000 LOC of Python. Audit, customize, ship.
-- **You know your cashback before the bank tells you.** Banks show cashback after the statement closes. The bot shows it per swipe — what this one earned, how much cap is left in that category, how far you are from the activation gate — so the *next* purchase goes on the right card.
 - **You categorize once.** Auto-categorization via `/keywords` means recurring tx (Spotify, Grab, ...) skip the picker.
 - **Reports match your real model** — per-account *and* per-category, across week/month/quarter/year. Not just "monthly category bar chart".
+- **Nothing is entered by hand.** Both a bank transfer and a card swipe reach the sheet on their own, so the record is complete rather than whatever you remembered to type in.
 
 ---
 
 ## Features
 
-![Feature overview — credit-card cashback features, bank-account features, the two-input system architecture, supported banks, and the command list](docs/screenshots/features-architecture.png)
+![Feature overview — how transactions are caught from both sources, categorizing and reporting, cashback tracking, the system architecture, supported banks, and the command list](docs/screenshots/features-architecture.png)
 
-The full feature breakdown:
+The full feature breakdown.
+
+### Catching every transaction
+
+🏦 **Bank accounts, via SePay** — every transfer, card payment or salary that touches a linked account arrives as a webhook within seconds and is tagged with the account it came from. Enable *Tiền ra* only for spending, or both directions to see income too.
+
+📧 **Credit cards and other banks, via notification email** — `google_apps_script.js` polls Gmail every minute, forwards each notification email exactly once (deduplicated by message id, not by thread) to `/webhook/email`, and `handlers/email_parser.py` turns it into the same transaction payload SePay would have sent. Everything downstream — accounts, categories, reports, cashback — is identical whichever way a transaction arrived.
+
+🔍 **No duplicates, no gaps** — a transaction that arrives twice (once from SePay, once by email) is dropped by a fuzzy cross-source check, and a webhook retried by SePay is caught by a durable reference ledger.
+
+🤖 **Smart account onboarding** — the first time a transaction arrives from an unmapped source, the bot asks. Three-step wizard: name → type → done (a credit card also asks for limit, statement day and due day). Later transactions from that source route themselves.
+
+🔁 **Historical backfill** — `/accounts assign <slug>` retroactively links unmapped past transactions to a newly-onboarded account, so nothing is lost between "first webhook" and "wizard complete".
+
+### Making sense of it
+
+⚡ **Auto-categorize** — `/keywords` lets you define patterns ("GRAB" → Daily Spending, "Spotify" → Subscription). Matching transactions skip the prompt entirely.
+
+📊 **Unified `/report` with 2 lenses × 4 periods** — week/month/quarter/year via inline buttons. Toggle account ↔ category lens in-place. No re-typing the command.
+
+🎯 **Smart budget allocation** — `/allocate` sets monthly caps per category. After setup, it returns in *edit mode* — tap one bucket to change its limit, no re-walking the full wizard.
+
+🧾 **Balances and transfers** — outstanding balance per credit card, `/cc pay` to record a payment, `/transfer` for moves between your own accounts, all on an append-only ledger.
 
 ### Credit-card cashback
 
-💳 **Cashback engine, one ledger line per swipe** — the bot classifies the merchant into an MCC using a self-learning keyword → MCC map (when it can't tell, it asks once with the card's categories as buttons and remembers your answer), applies the card's rate, per-transaction tier caps, the per-category cap for the cycle, daily transaction limits and the activation gate (e.g. "spend 5,000,000đ this cycle to unlock"). Cashback shows as *pending* until the gate is met. Every 0đ line carries a reason (`mcc_unknown`, `mcc_not_eligible`, `daily_limit`, `mcc_cap_full`), so the ledger is auditable. Wrong? Tap **Sai CB** to void it.
+💳 **Cashback tracking** — because the bot already sees every swipe, it can also work out what each one earned. It classifies the merchant into an MCC using a self-learning keyword → MCC map (when it can't tell, it asks once with the card's categories as buttons and remembers your answer), then applies the card's rate, per-transaction tier caps, the per-category cap for the cycle, daily transaction limits and the activation gate (e.g. "spend 5,000,000đ this cycle to unlock"). Cashback shows as *pending* until the gate is met, and every 0đ line carries a reason (`mcc_unknown`, `mcc_not_eligible`, `daily_limit`, `mcc_cap_full`) so the ledger is auditable. Wrong? Tap **Sai CB** to void it.
 
 🗓 **Statement-cycle aware** — caps and gates reset on the card's statement day, not on the 1st (`cap_period: statement_cycle` or `calendar_month`, per card). `/cashback` shows the live cycle: per-category progress bars, cycle total, spend vs gate, and "need X more to activate".
 
 📇 **Card templates in YAML** — `card_templates/cake_freedom.yaml` for a real card, `card_templates/example_visa.yaml` for the fields it doesn't use. `/cashback seed cake_freedom` applies one in seconds; `/cashback setup` walks you through a card no template covers; `/cashback export` turns a tuned config back into a template you can share. Adding a card nobody has covered is a pull request, not a code change.
-
-📧 **Email ingestion** — for cards and banks SePay doesn't cover, `google_apps_script.js` polls Gmail every minute, forwards each notification email exactly once (deduplicated by message id, not by thread) to `/webhook/email`, and `handlers/email_parser.py` turns it into the same transaction payload SePay would have sent — so everything downstream (accounts, categories, reports, cashback) is identical.
-
-### Bank accounts
-
-🏦 **Money in / out via SePay** — every transfer, card payment or salary that touches a linked account arrives as a webhook within seconds and is tagged with the account it came from. Enable *Tiền ra* only for spending, or both directions to see income too. `/report` slices by account (TPB / Vietcombank / cash) and by category. A fuzzy cross-source check drops the same transaction when it arrives twice (SePay *and* an email).
-
-📊 **Unified `/report` with 2 lenses × 4 periods** — week/month/quarter/year via inline buttons. Toggle account ↔ category lens in-place. No re-typing the command.
-
-🤖 **Smart account onboarding** — first time a tx arrives from an unmapped source, bot asks. 3-step wizard: name → type → done (a credit card also asks for limit, statement day and due day). Future tx auto-route.
-
-⚡ **Auto-categorize** — `/keywords` lets you define patterns ("GRAB" → Daily Spending, "Spotify" → Subscription). Matching tx skip the prompt entirely.
-
-🎯 **Smart budget allocation** — `/allocate` sets monthly caps per category. After setup, returns in *edit mode* — tap one bucket to change its limit, no re-walking the full wizard.
-
-🔁 **Historical backfill** — `/accounts assign <slug>` retroactively links unmapped past txs to a newly-onboarded account. No tx lost between "first webhook" and "wizard complete".
-
-🧾 **Balances and transfers** — outstanding balance per credit card, `/cc pay` to record a payment, `/transfer` for moves between your own accounts, all on an append-only ledger.
 
 ### Everywhere
 
@@ -111,22 +118,13 @@ The full feature breakdown:
 
 🌐 **Bilingual UI** — `/lang` switches the whole bot between Vietnamese and English.
 
-🇻🇳 **Vietnamese banks, VND-first** — works with anything SePay supports plus the email-covered banks above. A foreign-currency account (HKD, USD, ...) is tracked per-account without polluting VND totals or the daily cap.
+🇻🇳 **Vietnamese banks, VND-first** — works with anything SePay supports plus any bank you add an email parser for. A foreign-currency account (HKD, USD, ...) is tracked per-account without polluting VND totals or the daily cap.
 
 ---
 
 ## Screenshots
 
-**Cashback tracking.** A Grab ride on a Cake Freedom card: the transaction is logged, the cashback line shows what it earned and that it's pending, and the gate bar shows how far the cycle is from activation. `/cashback` then gives the whole statement cycle at a glance:
-
-<table>
-  <tr>
-    <td><img src="docs/screenshots/cashback-transaction-telegram.png" alt="A credit-card transaction logged with its cashback line, category cap and activation-gate progress, followed by the keyword-rule prompt" /></td>
-    <td><img src="docs/screenshots/cashback-overview-telegram.png" alt="/cashback overview for one statement cycle: rate, gate, billing days, per-category caps with progress bars, cycle total and the amount still needed to activate" /></td>
-  </tr>
-</table>
-
-**Bank tracking.** Auto-categorization from a keyword rule, and the monthly report by category and by account:
+**Tracking and reporting.** A transaction auto-categorized from a keyword rule, and the same month reported by category and by account:
 
 <table>
   <tr>
@@ -136,6 +134,15 @@ The full feature breakdown:
   <tr>
     <td><img src="docs/screenshots/report-monthly-category-telegram.png" alt="Category-lens monthly report" /></td>
     <td><img src="docs/screenshots/report-monthly-account-telegram.png" alt="Account-lens monthly report — the same month sliced per bank account" /></td>
+  </tr>
+</table>
+
+**Cashback.** A Grab ride on a Cake Freedom card: the transaction is logged, the cashback line shows what it earned and that it is still pending, and the gate bar shows how far the cycle is from activation. `/cashback` gives the whole statement cycle at a glance:
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/cashback-transaction-telegram.png" alt="A credit-card transaction logged with its cashback line, category cap and activation-gate progress, followed by the keyword-rule prompt" /></td>
+    <td><img src="docs/screenshots/cashback-overview-telegram.png" alt="/cashback overview for one statement cycle: rate, gate, billing days, per-category caps with progress bars, cycle total and the amount still needed to activate" /></td>
   </tr>
 </table>
 
@@ -251,7 +258,7 @@ The wiki pages are versioned in this repo under `docs/wiki/` — edit them there
    (Income tx are logged but skip the category picker — see [Why this exists](#why-this-exists).)
 3. ⚠️ **Disable SePay's native Google Sheets integration** — this bot writes its own rows; doubling = duplicate transactions.
 
-Credit cards and banks SePay doesn't cover come in through email instead — see [Step 6](#step-6--turn-on-credit-card-cashback-optional).
+Credit cards and banks SePay doesn't cover come in through email instead — see [Step 6](#step-6--track-your-credit-cards-too-optional).
 
 ### Step 4 — Deploy
 
@@ -314,9 +321,9 @@ journalctl -u mmwbot -f   # watch logs
 
 Future tx from the same account auto-route. Set up `/keywords` rules to auto-categorize recurring tx.
 
-### Step 6 — Turn on credit-card cashback (optional)
+### Step 6 — Track your credit cards too (optional)
 
-This is the email path: the bank's notification emails reach the bot through a Google Apps Script, so it works for any card whether or not SePay supports the bank.
+SePay covers bank accounts. Cards — and any bank SePay hasn't signed — reach the bot through their notification emails instead, forwarded by a Google Apps Script. Once a card is tracked you can also turn cashback on for it.
 
 1. Generate `EMAIL_SECRET` (`openssl rand -hex 16`) and set it on Railway.
 2. Go to [script.google.com](https://script.google.com) → New project → paste [`google_apps_script.js`](google_apps_script.js).
@@ -324,9 +331,8 @@ This is the email path: the bank's notification emails reach the bot through a G
 4. Run `checkBankEmails` once to grant Gmail access, then run `bootstrapProcessed` once so the bot does not replay your whole inbox.
 5. **Triggers → Add trigger** → `checkBankEmails` → time-driven → every minute.
 6. Make one small purchase with the card. The bot pings; onboard the source as **🧾 Credit** (it asks for limit, statement day and due day).
-7. `/cashback templates` → `/cashback seed cake_freedom <card-slug>` (or `/cashback setup <card-slug>` for a card with no template).
 
-From now on every swipe replies with its cashback line, and `/cashback` shows the current statement cycle.
+Every swipe is now tracked like any other transaction. To add cashback on top, run `/cashback templates` → `/cashback seed cake_freedom <card-slug>` (or `/cashback setup <card-slug>` for a card no template covers); from then on each swipe replies with what it earned and `/cashback` shows the current statement cycle.
 
 ---
 
