@@ -11,7 +11,7 @@
  *   6. Triggers → Add Trigger → checkBankEmails → Time-driven → Every minute
  *
  * Script sẽ tự động:
- *   - Tìm email từ TCB / Cake / Hang Seng / Forwarders
+ *   - Tìm email từ các ngân hàng trong BANK_SENDERS (và forwarder của bạn)
  *   - Parse và gửi đến bot
  *   - Dedup theo MESSAGE ID (PropertiesService), KHÔNG theo thread
  *
@@ -42,14 +42,11 @@ const WEBHOOK_SECRET = "SET_EMAIL_SECRET_IN_APPS_SCRIPT";
 // → phải thêm địa chỉ forwarder vào đây.
 // Python parser sẽ scan body để detect bank gốc từ "Forwarded message" block.
 const BANK_SENDERS = [
-  "automail@techcombank.com.vn",
-  "ebank@techcombank.com.vn",
-  "no-reply@techcombank.com.vn",
-  "thongbao@techcombank.com.vn",
   "no-reply@cake.vn",
   "notification@cake.vn",
   "noreply@cake.vn",
-  "hangseng@infoservices.hangseng.com",
+  // Thêm sender của ngân hàng bạn dùng ở đây — phải có parser tương ứng
+  // trong handlers/email_parser.py thì bot mới đọc được.
   // Forwarders — nếu bạn auto-forward bank email từ Gmail khác:
   // "your-forwarder@gmail.com",
 ];

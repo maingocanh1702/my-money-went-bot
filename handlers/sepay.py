@@ -165,7 +165,7 @@ async def _handle_transaction(payload: dict, *, trusted_email: bool, authenticat
     description = (data.get("description") or data.get("content") or "Không có mô tả").strip()
 
     # Currency: VND default cho mọi nguồn cũ (SePay luôn là VND).
-    # Email parsers (TCB/Cake) tự set "VND"; Hang Seng set "HKD".
+    # Email parsers tự set currency đọc được (Cake: "VND"); parser ngoại tệ set của nó.
     currency = str(data.get("currency") or "VND").upper().strip() or "VND"
 
     # Deterministic fallback ref_code — stable across SePay retries

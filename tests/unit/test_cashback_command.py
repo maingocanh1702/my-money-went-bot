@@ -65,13 +65,13 @@ def test_seed_cake_creates_full_config(fake_ss):
 def test_seed_cake_rejects_non_credit_account(fake_ss):
     # Codex round 04 [P2]: seeding a non-credit (or unknown) account must write
     # nothing — no orphan config/rules.
-    sh.add_account(account_id="tcb", name="TCB", acc_type="bank", currency="VND",
+    sh.add_account(account_id="bank1", name="Bank 1", acc_type="bank", currency="VND",
                    source_keys=["sepay:1"], starting_balance=0)
     sh.invalidate_accounts_cache()
-    res = cb.seed_cake_card("tcb")
+    res = cb.seed_cake_card("bank1")
     assert res["ok"] is False
-    assert sh.get_card_config("tcb") is None
-    assert sh.get_cashback_rules("tcb") == []
+    assert sh.get_card_config("bank1") is None
+    assert sh.get_cashback_rules("bank1") == []
 
 
 def test_seed_cake_idempotent(fake_ss):
@@ -128,10 +128,10 @@ def test_set_billing_cycle_writes_and_validates(fake_ss):
 
 
 def test_set_billing_cycle_rejects_non_credit(fake_ss):
-    sh.add_account(account_id="tcb", name="TCB", acc_type="bank", currency="VND",
+    sh.add_account(account_id="bank1", name="Bank 1", acc_type="bank", currency="VND",
                    source_keys=["sepay:1"], starting_balance=0)
     sh.invalidate_accounts_cache()
-    assert sh.set_billing_cycle("tcb", 15) is False
+    assert sh.set_billing_cycle("bank1", 15) is False
     assert sh.set_billing_cycle("nope", 15) is False
 
 
@@ -331,7 +331,7 @@ async def test_zalo_rule_flow_edit_and_delete(monkeypatch, fake_ss):
 
 def test_list_cashback_cards_credit_only(fake_ss):
     _seed_card()
-    sh.add_account(account_id="tcb", name="TCB", acc_type="bank", currency="VND",
+    sh.add_account(account_id="bank1", name="Bank 1", acc_type="bank", currency="VND",
                    source_keys=["sepay:1"], starting_balance=0)
     sh.invalidate_accounts_cache()
     cards = cb.list_cashback_cards()

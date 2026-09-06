@@ -27,23 +27,23 @@ def test_resolver_no_identifier_when_payload_empty(fake_ss):
 
 
 def test_resolver_matched_sepay(fake_ss):
-    _seed_account(fake_ss, "tcb_main", ["sepay:1903999888"])
+    _seed_account(fake_ss, "bank_main", ["sepay:1903999888"])
     res = resolve_account({"accountNumber": "1903999888"})
     assert res.status == "matched"
-    assert res.account_id == "tcb_main"
+    assert res.account_id == "bank_main"
     assert res.identifier == "1903999888"
     assert res.source_key == "sepay:1903999888"
 
 
 def test_resolver_matched_via_subaccount_fallback(fake_ss):
-    _seed_account(fake_ss, "tcb_va", ["sepay:VA001"])
+    _seed_account(fake_ss, "bank1_va", ["sepay:VA001"])
     res = resolve_account({"subAccount": "VA001"})
     assert res.status == "matched"
-    assert res.account_id == "tcb_va"
+    assert res.account_id == "bank1_va"
 
 
 def test_resolver_new_identifier_when_unknown(fake_ss):
-    _seed_account(fake_ss, "tcb_main", ["sepay:1903999888"])
+    _seed_account(fake_ss, "bank_main", ["sepay:1903999888"])
     res = resolve_account({"accountNumber": "9999"})
     assert res.status == "new_identifier"
     assert res.identifier == "9999"
@@ -51,11 +51,11 @@ def test_resolver_new_identifier_when_unknown(fake_ss):
     assert res.account_id is None
 
 
-def test_resolver_email_tcb(fake_ss):
-    _seed_account(fake_ss, "tcb_main", ["email_tcb:****1234"])
-    res = resolve_account({"_source": "email_tcb", "_account_hint": "****1234"})
+def test_resolver_email_cake(fake_ss):
+    _seed_account(fake_ss, "bank_main", ["email_cake:****1234"])
+    res = resolve_account({"_source": "email_cake", "_account_hint": "****1234"})
     assert res.status == "matched"
-    assert res.account_id == "tcb_main"
+    assert res.account_id == "bank_main"
 
 
 def test_resolver_email_cake_bank_hint(fake_ss):
@@ -74,26 +74,28 @@ def test_resolver_email_cake_cc_hint(fake_ss):
     assert res.account_id == "cake_visa"
 
 
-def test_resolver_email_hangseng(fake_ss):
-    _seed_account(fake_ss, "hsbc_main",
-                  ["email_hangseng:123-456999-789"], currency="HKD")
-    res = resolve_account({"_source": "email_hangseng", "_account_hint": "123-456999-789"})
+def test_resolver_email_source_from_any_parser(fake_ss):
+    """A bank parser added later needs no resolver change, foreign currency
+    included — the hint it stamps is matched like every other email source."""
+    _seed_account(fake_ss, "offshore_main",
+                  ["email_otherbank:123-456999-789"], currency="HKD")
+    res = resolve_account({"_source": "email_otherbank", "_account_hint": "123-456999-789"})
     assert res.status == "matched"
-    assert res.account_id == "hsbc_main"
+    assert res.account_id == "offshore_main"
 
 
 def test_resolver_multiple_source_keys_match_any(fake_ss):
-    _seed_account(fake_ss, "tcb_main",
-                  ["sepay:1903999888", "email_tcb:****8888"])
+    _seed_account(fake_ss, "bank_main",
+                  ["sepay:1903999888", "email_otherbank:****8888"])
     # Match via sepay
     res1 = resolve_account({"accountNumber": "1903999888"})
-    assert res1.account_id == "tcb_main"
+    assert res1.account_id == "bank_main"
     # Match via email
-    res2 = resolve_account({"_source": "email_tcb", "_account_hint": "****8888"})
-    assert res2.account_id == "tcb_main"
+    res2 = resolve_account({"_source": "email_otherbank", "_account_hint": "****8888"})
+    assert res2.account_id == "bank_main"
 
 
 def test_resolver_identifier_normalized_lowercase(fake_ss):
-    _seed_account(fake_ss, "tcb_main", ["sepay:abc123"])
+    _seed_account(fake_ss, "bank_main", ["sepay:abc123"])
     res = resolve_account({"accountNumber": "ABC123"})
     assert res.status == "matched"  # source_key normalized to lowercase

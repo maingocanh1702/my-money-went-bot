@@ -432,7 +432,7 @@ async def test_zalo_auto_cat_sends_logged_month_total(fake_ss, bot_state_tab, mo
     await sepay.handle_sepay_webhook({
         "transferType": "out",
         "transferAmount": 10_000,
-        "content": "BankAPINotify MAI NGOC ANH chuyen tien tch",
+        "content": "BankAPINotify NGUYEN VAN AN chuyen tien tch",
         "referenceCode": "ZALO_AUTO_CAT_TOTAL_1",
         "transactionDate": tx_date.isoformat(),
     })

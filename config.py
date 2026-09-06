@@ -92,6 +92,16 @@ CRON_SECRET = os.environ.get("CRON_SECRET", "")
 # Tự đặt 1 chuỗi random, điền vào cả đây và trong Google Apps Script
 EMAIL_SECRET = os.environ.get("EMAIL_SECRET", "")
 
+# Words to ignore when guessing a merchant name from a transfer description.
+# Vietnamese transfers embed the sender's own name, so add yours here (comma
+# separated, no accents) to stop the bot learning it as a merchant:
+#   MERCHANT_NOISE_WORDS=nguyen,van,an
+MERCHANT_NOISE_WORDS = {
+    w.strip().lower()
+    for w in os.environ.get("MERCHANT_NOISE_WORDS", "").split(",")
+    if w.strip()
+}
+
 # Stale-transaction guard windows (minutes). Webhook tx older than this are
 # skipped — chặn SePay replay lịch sử cũ khi mới setup webhook. Tăng lên nếu
 # bot có thể down lâu hơn (SePay retry đến muộn sẽ bị bỏ qua ngoài cửa sổ này).

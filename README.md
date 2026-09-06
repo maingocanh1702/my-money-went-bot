@@ -21,28 +21,27 @@
 
 **1. Tracks money in and out of your Vietnamese bank accounts.** Link your accounts to [SePay](https://sepay.vn); every incoming or outgoing transaction reaches the bot as a webhook within seconds, is written to a Google Sheet *you own*, and gets categorized with one tap — or automatically, once you've taught the bot a keyword rule. `/report` slices it all by account, by category, and by week / month / quarter / year. SePay's free plan covers 50 transactions a month; see [What SePay costs](#what-sepay-costs).
 
-**2. Tracks credit-card cashback from the bank's own notification emails.** Cards and banks that SePay doesn't cover (Cake by VPBank, Techcombank, Hang Seng, ...) email you for every swipe. A small Google Apps Script forwards those emails to the bot, which parses the amount and merchant, files the transaction against the right card, and runs the cashback engine: MCC classification, the card's rate, per-transaction tiers, per-category caps, daily limits and the activation gate — all per statement cycle. Every swipe replies with what it earned; `/cashback` shows the whole cycle: what you've earned, how close each category is to its cap, and how much more you need to spend to unlock it.
+**2. Tracks credit-card cashback from the bank's own notification emails.** Cards and banks that SePay doesn't cover — Cake by VPBank ships as a worked example — email you for every swipe. A small Google Apps Script forwards those emails to the bot, which parses the amount and merchant, files the transaction against the right card, and runs the cashback engine: MCC classification, the card's rate, per-transaction tiers, per-category caps, daily limits and the activation gate — all per statement cycle. Every swipe replies with what it earned; `/cashback` shows the whole cycle: what you've earned, how close each category is to its cap, and how much more you need to spend to unlock it.
 
 <details>
-<summary>📐 Detailed flow (bank webhook, email path, cashback branch, auto-categorize and onboarding)</summary>
+<summary>📐 Detailed flow — the two inputs, the cashback branch, auto-categorize and onboarding</summary>
 
 ```mermaid
-flowchart LR
-    A[🏦 Bank account<br/>money in / out] -->|SePay<br/>webhook| B[🤖 Bot]
-    A2[💳 Credit-card<br/>notification email] -->|Gmail →<br/>Apps Script| B
-    B --> C[📊 Row in<br/>Google Sheet]
-    C --> D{Match<br/>keyword<br/>rule?}
-    D -->|✅ Yes| E[🎯 Auto-<br/>categorize]
-    D -->|❌ No| F[💬 'What<br/>category?']
-    F --> G[👆 You tap]
-    E --> H[📈 /report<br/>account ×<br/>category ×<br/>period]
-    G --> H
-    C -->|credit card| K[💰 Cashback engine<br/>MCC · rate · tiers<br/>caps · daily limit · gate]
-    K --> L[🧾 Cashback<br/>Ledger]
-    L --> M[💳 /cashback<br/>per statement<br/>cycle]
-
-    B -. unknown<br/>source? .-> I[📝 Onboard<br/>wizard]
-    I -. future tx<br/>auto-route .-> B
+flowchart TD
+    A[🏦 Bank account<br/>money in / out] -->|SePay webhook| B[🤖 Bot<br/>dedup → resolve account]
+    A2[💳 Card notification<br/>email] -->|Gmail → Apps Script| B
+    B -.->|source not mapped yet| I[📝 Onboard wizard<br/>name → type → done]
+    I -.->|later tx auto-route| B
+    B --> C[📊 Row in your<br/>Google Sheet]
+    C --> D{Keyword rule<br/>matches?}
+    D -->|✅ yes| E[🎯 Auto-categorized]
+    D -->|❌ no| F[💬 You tap a category]
+    E --> H[📈 /report<br/>account × category × period]
+    F --> H
+    C --> K{Credit card?}
+    K -->|yes| L[💰 Cashback engine<br/>MCC → rate → per-tx tier<br/>→ cycle cap → daily limit → gate]
+    L --> M[🧾 Cashback Ledger<br/>one line per swipe]
+    M --> N[💳 /cashback<br/>this statement cycle]
 
     classDef bank fill:#fef3c7,stroke:#d97706,color:#92400e
     classDef bot fill:#dbeafe,stroke:#2563eb,color:#1e40af
@@ -50,10 +49,10 @@ flowchart LR
     classDef user fill:#fce7f3,stroke:#db2777,color:#9d174d
     classDef out fill:#f3e8ff,stroke:#9333ea,color:#6b21a8
     class A,A2 bank
-    class B,E,I,K bot
-    class C,L store
-    class F,G user
-    class H,M out
+    class B,E,I,L bot
+    class C,M store
+    class F user
+    class H,N out
 ```
 
 </details>
@@ -86,9 +85,9 @@ The full feature breakdown:
 
 🗓 **Statement-cycle aware** — caps and gates reset on the card's statement day, not on the 1st (`cap_period: statement_cycle` or `calendar_month`, per card). `/cashback` shows the live cycle: per-category progress bars, cycle total, spend vs gate, and "need X more to activate".
 
-📇 **Card templates in YAML** — `card_templates/cake_freedom.yaml`, `card_templates/techcombank_visa.yaml`. `/cashback seed cake_freedom` applies one in seconds; `/cashback setup` walks you through a card no template covers; `/cashback export` turns a tuned config back into a template you can share. Adding a card nobody has covered is a pull request, not a code change.
+📇 **Card templates in YAML** — `card_templates/cake_freedom.yaml` for a real card, `card_templates/example_visa.yaml` for the fields it doesn't use. `/cashback seed cake_freedom` applies one in seconds; `/cashback setup` walks you through a card no template covers; `/cashback export` turns a tuned config back into a template you can share. Adding a card nobody has covered is a pull request, not a code change.
 
-📧 **Email ingestion** — for cards and banks SePay doesn't cover (Techcombank, Cake by VPBank, Hang Seng), `google_apps_script.js` polls Gmail every minute, forwards each notification email exactly once (deduplicated by message id, not by thread) to `/webhook/email`, and `handlers/email_parser.py` turns it into the same transaction payload SePay would have sent — so everything downstream (accounts, categories, reports, cashback) is identical.
+📧 **Email ingestion** — for cards and banks SePay doesn't cover, `google_apps_script.js` polls Gmail every minute, forwards each notification email exactly once (deduplicated by message id, not by thread) to `/webhook/email`, and `handlers/email_parser.py` turns it into the same transaction payload SePay would have sent — so everything downstream (accounts, categories, reports, cashback) is identical.
 
 ### Bank accounts
 
@@ -112,7 +111,7 @@ The full feature breakdown:
 
 🌐 **Bilingual UI** — `/lang` switches the whole bot between Vietnamese and English.
 
-🇻🇳 **Vietnamese banks, VND-first** — works with anything SePay supports plus the email-covered banks above. Foreign-currency accounts (e.g. HKD via Hang Seng email) are tracked per-account without polluting VND totals.
+🇻🇳 **Vietnamese banks, VND-first** — works with anything SePay supports plus the email-covered banks above. A foreign-currency account (HKD, USD, ...) is tracked per-account without polluting VND totals or the daily cap.
 
 ---
 
@@ -180,10 +179,8 @@ SePay's **Free** plan is 0đ/month and includes **50 transactions/month**. Going
 | Bank / card | Arrives as | Cashback template |
 |---|---|---|
 | Cake by VPBank — Freedom card | notification email | [`card_templates/cake_freedom.yaml`](card_templates/cake_freedom.yaml) |
-| Techcombank — accounts and Visa | notification email | [`card_templates/techcombank_visa.yaml`](card_templates/techcombank_visa.yaml) |
-| Hang Seng (HKD) | notification email | — |
 
-Any bank that emails you a per-transaction notification can be added: one sender in `google_apps_script.js`, one parser in `handlers/email_parser.py`, and — for a card — a YAML template. The email path costs nothing: Gmail and Google Apps Script are free.
+Cake ships as the worked example. **Any bank that emails you a per-transaction notification can be added**, and it is deliberately small: one sender in `google_apps_script.js`, one `_parse_<bank>` in `handlers/email_parser.py` returning the same dict `_parse_cake` does, and — for a card — a YAML template ([`example_visa.yaml`](card_templates/example_visa.yaml) shows the fields Cake's template doesn't use). Nothing else changes: account resolution, dedup, categories, reports and the cashback engine are shared. The email path also costs nothing — Gmail and Google Apps Script are free — so it is the cheapest way to cover a bank SePay has not signed.
 
 ---
 
@@ -345,7 +342,7 @@ From now on every swipe replies with its cashback line, and `/cashback` shows th
 | `/allocate` | Edit budget. Wizard on first run, per-bucket edit-mode after. |
 | `/cashback` | Credit-card cashback: rules, MCC map, billing cycle, overview. |
 | `/cashback templates` | List available YAML card templates. |
-| `/cashback seed <template> [cc]` | Apply a template (Cake Freedom, Techcombank Visa, etc.). |
+| `/cashback seed <template> [cc]` | Apply a template — `cake_freedom`, or your own. |
 | `/cashback setup [cc]` | Wizard to create custom cashback rules from scratch. |
 | `/cashback export [cc]` | Export card config as YAML template. |
 | `/cashback savetemplate [cc]` | Save current config as a reusable template. |
@@ -369,8 +366,8 @@ Two inputs, one pipeline, one spreadsheet.
  bank accounts                          credit cards / banks outside SePay
 ┌──────────────┐                        ┌──────────────┐   ┌─────────────────┐
 │ VN bank      │  money in / out        │ Bank e-mail  │   │ Google Apps     │
-│ (via SePay)  │ ──── webhook ───┐      │ (Cake, TCB,  │──►│ Script (Gmail,  │
-└──────────────┘  POST /webhook  │      │  Hang Seng)  │   │ every minute)   │
+│ (via SePay)  │ ──── webhook ───┐      │ notification │──►│ Script (Gmail,  │
+└──────────────┘  POST /webhook  │      │              │   │ every minute)   │
                                  │      └──────────────┘   └────────┬────────┘
                                  ▼                                  │ POST /webhook/email
                     ┌────────────────────────────┐◄─────────────────┘
@@ -406,7 +403,7 @@ Two inputs, one pipeline, one spreadsheet.
 ├── i18n/                         # UI strings — vi.py / en.py, /lang switches
 ├── handlers/
 │   ├── sepay.py                  # Incoming SePay webhook handler
-│   ├── email_parser.py           # TCB / Cake / Hang Seng notification emails
+│   ├── email_parser.py           # Bank notification emails → SePay-shaped payload
 │   ├── account_resolver.py       # Maps payload → account_id
 │   ├── accounts.py               # /accounts wizard + onboarding + backfill
 │   ├── transaction.py            # Category picker + confirmation flow
@@ -423,10 +420,10 @@ Two inputs, one pipeline, one spreadsheet.
 │   ├── __init__.py               # Loader, validator, exporter, cache
 │   ├── schema.py                 # CardTemplate, CardConfig, RuleConfig dataclasses
 │   ├── validate.py               # Standalone CLI validator
-│   ├── cake_freedom.yaml         # Cake by VPBank Freedom template
-│   └── techcombank_visa.yaml     # Techcombank Visa template
+│   ├── cake_freedom.yaml         # Cake by VPBank Freedom — a real card
+│   └── example_visa.yaml         # Sample template: per-rule rates, calendar month
 ├── scripts/
-│   ├── sim_webhook.py            # POST fake SePay / TCB / Cake / Hang Seng payloads to a local bot
+│   ├── sim_webhook.py            # POST fake SePay / Cake payloads to a local bot
 │   ├── cashback_reconcile.py     # End of cycle: ledger estimate vs what the bank actually paid
 │   ├── check_no_personal_data.py # CI guard: no real account ids / secrets in the tree
 │   └── check_parity.sh           # Diff this repo against a private fork
@@ -518,8 +515,8 @@ Intentionally out of scope for now:
 - 🎮 **Discord bot** — for users who live in Discord, not Telegram.
 
 Shipped from the original roadmap: credit cards + cashback, manual `/transfer`,
-email ingestion (TCB / Cake / Hang Seng), multi-currency accounts (HKD), and a
-Zalo channel.
+email ingestion for banks outside SePay, multi-currency accounts, and a Zalo
+channel.
 
 ---
 
@@ -553,7 +550,7 @@ When opening a PR:
 
 ## Acknowledgments
 
-This project started as a fork-and-rewrite of [`maddyle8124/spend-less-bot`](https://github.com/maddyle8124/spend-less-bot). The core idea — Telegram bot + SePay webhook + Google Sheet — comes from there. My Money Went Bot adds the credit-card cashback engine and YAML card templates, the email ingestion path for banks outside SePay, per-account tracking with an append-only ledger, unified multi-period reports, the account onboarding wizard, a Zalo channel, and a number of UX refinements.
+This project started as a fork-and-rewrite of [`maddyle8124/spend-less-bot`](https://github.com/maddyle8124/spend-less-bot). The core idea — Telegram bot + SePay webhook + Google Sheet — comes from there. My Money Went Bot adds the credit-card cashback engine and YAML card templates, the email ingestion path for cards and banks outside SePay, per-account tracking with an append-only ledger, unified multi-period reports, the account onboarding wizard, a Zalo channel, and a number of UX refinements.
 
 ---
 

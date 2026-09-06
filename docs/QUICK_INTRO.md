@@ -20,7 +20,7 @@ Bot làm hai việc: theo dõi **cashback thẻ tín dụng** từ chính email 
 
 ## Bạn đang gặp vấn đề này?
 
-- Có thẻ cashback (Cake Freedom, Techcombank Visa, ...) nhưng chỉ biết được hoàn bao nhiêu khi ngân hàng chốt sao kê — không biết danh mục nào đã đầy cap, đã qua cổng kích hoạt chưa, nên quẹt thẻ nào cho lần tiếp theo.
+- Có thẻ cashback (Cake Freedom, ...) nhưng chỉ biết được hoàn bao nhiêu khi ngân hàng chốt sao kê — không biết danh mục nào đã đầy cap, đã qua cổng kích hoạt chưa, nên quẹt thẻ nào cho lần tiếp theo.
 - Muốn biết tiền đi đâu nhưng lười nhập tay từng khoản.
 - App quản lý chi tiêu bắt đăng nhập ngân hàng hoặc giữ data trên cloud của họ.
 - Sao kê ngân hàng khó đọc, khó phân loại, khó xem theo account/category.
@@ -37,7 +37,7 @@ Tài khoản ngân hàng  ── SePay webhook ───────────
 Thẻ tín dụng / bank ── email thông báo ─ Apps Script ┘        └─ cashback engine: MCC · rate · cap · cổng
 ```
 
-Với thẻ tín dụng, mỗi lần quẹt bot trả lời ngay khoản này được hoàn bao nhiêu, và `/cashback` cho thấy cả kỳ sao kê: từng danh mục còn bao nhiêu cap, tổng kỳ, và cần tiêu thêm bao nhiêu để mở cổng. Rule của từng thẻ là file YAML trong `card_templates/` — có sẵn Cake Freedom và Techcombank Visa, thêm thẻ khác không cần sửa code.
+Với thẻ tín dụng, mỗi lần quẹt bot trả lời ngay khoản này được hoàn bao nhiêu, và `/cashback` cho thấy cả kỳ sao kê: từng danh mục còn bao nhiêu cap, tổng kỳ, và cần tiêu thêm bao nhiêu để mở cổng. Rule của từng thẻ là file YAML trong `card_templates/` — có sẵn Cake Freedom, thêm thẻ khác chỉ cần thêm một file, không sửa code.
 
 Với tài khoản ngân hàng, SePay nhận thông báo từ ngân hàng và gửi webhook cho bot. Gói Free của SePay là 0đ với 50 giao dịch/tháng; vượt thì tính phí phần vượt hoặc lên gói trả phí — xem [bảng giá SePay](https://sepay.vn/bang-gia.html).
 
@@ -71,7 +71,7 @@ Khi có giao dịch mới:
 |---|---|
 | `/cashback` | Cashback thẻ tín dụng theo kỳ sao kê: MCC, rate, cap từng danh mục, giới hạn ngày, cổng kích hoạt |
 | Template thẻ YAML | `/cashback seed cake_freedom` — áp rule của thẻ trong vài giây, thêm thẻ mới bằng một file |
-| Email ingestion | Thẻ / ngân hàng ngoài SePay (Cake, Techcombank, Hang Seng) vào qua Gmail + Apps Script |
+| Email ingestion | Thẻ / ngân hàng ngoài SePay vào qua Gmail + Apps Script (có sẵn Cake) |
 | Tiền ra / vào qua SePay | Mỗi giao dịch của tài khoản đã link đến trong vài giây, tag đúng account |
 | Telegram / Zalo category picker | Tap nút để phân loại giao dịch mới |
 | Auto-categorize | Rule kiểu `GRAB -> Daily Spending`, `Spotify -> Subscription` |

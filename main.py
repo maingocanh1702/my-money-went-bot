@@ -1314,7 +1314,7 @@ async def _zalo_handle_account_setup_action(
         chat_id,
         f"Setup account/card mới — {entry['identifier']}\n\n"
         "Nhập tên hiển thị:\n"
-        "(VD: TCB Tiêu dùng, Cake Visa 8421)",
+        "(VD: Ngân hàng chính, Cake Visa 8421)",
     )
 
 
@@ -1342,7 +1342,7 @@ async def _zalo_cmd_accounts(chat_id: str, text: str, state_key: str):
         await messenger.send_text(
             "Setup account mới\n\n"
             "Nhập tên hiển thị:\n"
-            "(VD: TCB Tiêu dùng, Cake Visa 8421)",
+            "(VD: Ngân hàng chính, Cake Visa 8421)",
             channel="zalo", recipient_id=chat_id,
         )
         return
@@ -1692,7 +1692,7 @@ async def _zalo_accounts_handle_assign_confirm(
 async def _zalo_cmd_transfer(chat_id: str, text: str):
     parts = text.strip().split()
     if len(parts) < 4:
-        await _zalo_send(chat_id, "Usage: /transfer <amount> <from> <to>\nVd: /transfer 1000000 tcb_main cake_main")
+        await _zalo_send(chat_id, "Usage: /transfer <amount> <from> <to>\nVd: /transfer 1000000 bank_main cake_main")
         return
     amount = _parse_zalo_money(parts[1])
     if amount is None or amount <= 0:
@@ -3269,7 +3269,7 @@ async def _tg_cmd_transfer(text: str):
     """Telegram /transfer <amount> <from> <to>"""
     parts = text.strip().split()
     if len(parts) < 4:
-        await tg.send_text("Usage: `/transfer <amount> <from> <to>`\nVd: `/transfer 1000000 tcb_main cake_main`")
+        await tg.send_text("Usage: `/transfer <amount> <from> <to>`\nVd: `/transfer 1000000 bank_main cake_main`")
         return
     amount = _parse_money(parts[1])
     if amount is None or amount <= 0:

@@ -6,7 +6,7 @@ patterns, and card-level config.
 
 Usage:
     from card_templates import list_templates, load_template
-    names = list_templates()        # ["cake_freedom", "techcombank_visa"]
+    names = list_templates()        # e.g. ["cake_freedom", ...]
     tpl = load_template("cake_freedom")
     tpl.config.cashback_rate        # 0.20
     tpl.rules[0].mcc                # "5262"
