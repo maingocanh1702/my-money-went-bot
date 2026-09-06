@@ -29,5 +29,14 @@ jobs:
       - name: No personal data in the repository
         run: python3 scripts/check_no_personal_data.py
 
+      # Undefined names, redefinitions and syntax errors only. Audit finding
+      # F-08 was a NameError that sat in production for weeks because the
+      # surrounding except swallowed it; this rule set catches that class in
+      # well under a second. Style rules are deliberately not enforced here.
+      - name: Static errors (ruff)
+        run: |
+          pip install ruff==0.15.14
+          ruff check --select E9,F63,F7,F82 --no-cache .
+
       - name: Run tests
         run: pytest tests/ -v --tb=short
