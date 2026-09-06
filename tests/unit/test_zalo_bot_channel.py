@@ -162,8 +162,8 @@ async def test_zalo_category_reply_stale_new_bucket_starts_new_category_flow(
 async def test_zalo_start_clears_stale_state(fake_ss, bot_state_tab, monkeypatch):
     import main
 
-    monkeypatch.setattr(main, "ZALO_CHAT_ID", "REDACTED-the-maintainers-Zalo-chat-id")
-    sh.set_state("zalo:REDACTED-the-maintainers-Zalo-chat-id", {"step": "zalo_manage", "month_key": "2026-06"})
+    monkeypatch.setattr(main, "ZALO_CHAT_ID", "1000000000000000001")
+    sh.set_state("zalo:1000000000000000001", {"step": "zalo_manage", "month_key": "2026-06"})
 
     sent = []
 
@@ -174,12 +174,12 @@ async def test_zalo_start_clears_stale_state(fake_ss, bot_state_tab, monkeypatch
 
     await main._handle_zalo_text({
         "message": {
-            "chat": {"id": "REDACTED-the-maintainers-Zalo-chat-id"},
+            "chat": {"id": "1000000000000000001"},
             "text": "/start",
         },
     })
 
-    assert sh.get_state("zalo:REDACTED-the-maintainers-Zalo-chat-id") == {}
+    assert sh.get_state("zalo:1000000000000000001") == {}
     assert sent and "Financial Tracking Bot" in sent[0]
 
 
@@ -191,7 +191,7 @@ async def test_auto_alloc_fallback_zalo_message_when_no_previous_budget(
 
     _seed_budget_config(fake_ss)
     monkeypatch.setattr(main, "ZALO_ENABLED", True)
-    monkeypatch.setattr(main, "ZALO_CHAT_ID", "REDACTED-the-maintainers-Zalo-chat-id")
+    monkeypatch.setattr(main, "ZALO_CHAT_ID", "1000000000000000001")
     monkeypatch.setattr(sh, "fmt_month", lambda dt: "2026-06" if dt.month == 6 else "2026-05")
 
     tg_sent = []
@@ -347,13 +347,13 @@ async def test_zalo_setup_pending_account_starts_wizard(fake_ss, bot_state_tab, 
     setup_key = sh.add_pending_account("email_cake:cake_cc", "Cake credit card", 9)
 
     await main._zalo_handle_account_setup_action(
-        "REDACTED-the-maintainers-Zalo-chat-id",
+        "1000000000000000001",
         "setup",
         setup_key,
-        "zalo:REDACTED-the-maintainers-Zalo-chat-id",
+        "zalo:1000000000000000001",
     )
 
-    state = sh.get_state("zalo:REDACTED-the-maintainers-Zalo-chat-id")
+    state = sh.get_state("zalo:1000000000000000001")
     assert state["step"] == "zalo_accounts_name"
     assert state["pending_source_key"] == "email_cake:cake_cc"
     assert state["new_acct_row_num"] == 9
@@ -420,7 +420,7 @@ async def test_zalo_auto_cat_sends_logged_month_total(fake_ss, bot_state_tab, mo
     monkeypatch.setattr(sepay.tg, "send_text", fake_tg_send_text)
     monkeypatch.setattr(sepay.tg, "send_with_buttons", fake_tg_send_with_buttons)
     monkeypatch.setattr(sepay, "ZALO_ENABLED", True)
-    monkeypatch.setattr(sepay, "ZALO_CHAT_ID", "REDACTED-the-maintainers-Zalo-chat-id")
+    monkeypatch.setattr(sepay, "ZALO_CHAT_ID", "1000000000000000001")
 
     zalo_sent = []
 
@@ -481,7 +481,7 @@ async def test_zalo_manual_category_reply_sends_logged_month_total(
     monkeypatch.setattr(main.messenger, "send_text", fake_send)
 
     await main._zalo_finalize_transaction(
-        "REDACTED-the-maintainers-Zalo-chat-id",
+        "1000000000000000001",
         row_num,
         "coffee",
         "",
@@ -492,7 +492,7 @@ async def test_zalo_manual_category_reply_sends_logged_month_total(
             "tx_direction": "out",
             "tx_date": tx_date.isoformat(),
         },
-        "zalo:REDACTED-the-maintainers-Zalo-chat-id",
+        "zalo:1000000000000000001",
     )
 
     assert sent[-1].startswith("Logged: ☕ Coffee")
@@ -521,7 +521,7 @@ async def test_zalo_manage_clones_previous_month_before_defaults(
 
     monkeypatch.setattr(main.messenger, "send_text", fake_send)
 
-    await main._zalo_cmd_manage("REDACTED-the-maintainers-Zalo-chat-id", "zalo:REDACTED-the-maintainers-Zalo-chat-id")
+    await main._zalo_cmd_manage("1000000000000000001", "zalo:1000000000000000001")
 
     buckets = sh.get_active_buckets("2026-06", force_refresh=True)
     assert [b["id"] for b in buckets] == ["food"]
@@ -549,7 +549,7 @@ async def test_zalo_allocate_clones_previous_month_before_defaults(
 
     monkeypatch.setattr(main.messenger, "send_text", fake_send)
 
-    await main._zalo_cmd_allocate("REDACTED-the-maintainers-Zalo-chat-id", "zalo:REDACTED-the-maintainers-Zalo-chat-id")
+    await main._zalo_cmd_allocate("1000000000000000001", "zalo:1000000000000000001")
 
     buckets = sh.get_active_buckets("2026-06", force_refresh=True)
     assert [b["id"] for b in buckets] == ["food"]
