@@ -647,6 +647,53 @@ def _parse_dt(date_str: str):
     return _parse_local_datetime(date_str)
 
 
+# -----------------------------------------------------
+# Excluded events — every financial event the bot declines to record
+# -----------------------------------------------------
+EXCLUDED_EVENTS_HEADER = [
+    "recorded_at", "occurred_at", "source", "ref_code",
+    "amount", "currency", "tx_type", "reason", "description",
+]
+
+
+def _ensure_excluded_events_tab():
+    return _ensure_tab_with_header(S.EXCLUDED_EVENTS, EXCLUDED_EVENTS_HEADER, rows=500)
+
+
+def record_excluded_event(*, ref_code: str, source: str, occurred_at: str, amount,
+                          currency: str, tx_type: str, reason: str,
+                          description: str = "") -> bool:
+    """Write down a financial event the bot decided not to record, and why.
+
+    An authenticated webhook that is acknowledged and then dropped with nothing
+    but a log line is money that silently disappeared: no row, no total, no way
+    to find out later that it happened. Every decline leaves a line here
+    instead, carrying enough to reconstruct the event and audit the reason.
+
+    This tab is deliberately outside the Transactions tab, so an excluded event
+    can never reach a spending total. Best-effort: a failure to record must not
+    turn into a failure to respond, so it is logged and swallowed.
+    """
+    try:
+        ws = _ensure_excluded_events_tab()
+        ws.append_row([
+            datetime.now(pytz.timezone(TIMEZONE)).strftime("%Y-%m-%d %H:%M:%S"),
+            str(occurred_at or ""),
+            str(source or ""),
+            str(ref_code or ""),
+            amount if amount is not None else "",
+            (currency or "").upper(),
+            str(tx_type or ""),
+            str(reason or ""),
+            str(description or "")[:200],
+        ])
+        print(f"[excluded] recorded {reason!r} ref={ref_code!r} amount={amount} {currency}")
+        return True
+    except Exception as e:
+        print(f"[excluded] could not record {reason!r} ref={ref_code!r}: {e}")
+        return False
+
+
 def find_recent_duplicate(amount: float, tx_type: str, tx_date: str, currency: str = "VND",
                           *, source: str = "") -> bool:
     """Whether this looks like the SAME real transaction already seen on ANOTHER source.
@@ -1360,9 +1407,9 @@ MCC_MAP_HEADER = [                  # §6.5 — cols A–G (description → MCC 
 def _ensure_tab_with_header(name: str, header: list[str], rows: int = 200):
     """Create `name` with `header` (dynamic range) if missing. Idempotent.
 
-    Shared by every cashback _ensure_*_tab — the range is always
-    `A1:{last}1` where last = _last_col_letter(len(header)), so the full
-    header is written regardless of how many columns it has.
+    Shared by the cashback and excluded-event _ensure_*_tab helpers — the
+    range is always `A1:{last}1` where last = _last_col_letter(len(header)),
+    so the full header is written regardless of how many columns it has.
     """
     ss = _get_spreadsheet()
     try:
@@ -1371,7 +1418,7 @@ def _ensure_tab_with_header(name: str, header: list[str], rows: int = 200):
         ws = ss.add_worksheet(title=name, rows=rows, cols=len(header))
         last = _last_col_letter(len(header))
         ws.update(f"A1:{last}1", [header])
-        print(f"[cashback] created tab {name!r}")
+        print(f"[sheets] created tab {name!r}")
         return ws
 
 
