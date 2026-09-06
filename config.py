@@ -102,9 +102,18 @@ MERCHANT_NOISE_WORDS = {
     if w.strip()
 }
 
-# Stale-transaction guard windows (minutes). Webhook tx older than this are
-# skipped — chặn SePay replay lịch sử cũ khi mới setup webhook. Tăng lên nếu
-# bot có thể down lâu hơn (SePay retry đến muộn sẽ bị bỏ qua ngoài cửa sổ này).
+# The point in time this installation starts owning transactions, as an ISO
+# date or timestamp ("2026-09-01" / "2026-09-01T00:00:00"). It exists because a
+# provider replays history the first time a webhook is registered, and that
+# history is not yours to record.
+#
+# Age is NOT replay protection — the identity in the claim ledger is. So when
+# this is set, an event is judged only by whether it happened before the
+# boundary; a transaction delayed by an outage, a Gmail polling gap or a
+# provider retry days later is still recorded rather than thrown away. Leave it
+# unset to keep the older age windows below as the bootstrap guard.
+INGESTION_START_AT = os.environ.get("INGESTION_START_AT", "").strip()
+
 # Transitional: before SePay's own transaction id became the identity, a
 # transaction was keyed by its bank reference (or, failing that, a content
 # hash). A SePay retry that spans the upgrade arrives with the new identity for
@@ -113,6 +122,11 @@ MERCHANT_NOISE_WORDS = {
 # deploying the upgrade.
 SEPAY_LEGACY_REF_LOOKUP = _env_bool("SEPAY_LEGACY_REF_LOOKUP", True)
 
+# Stale-transaction guard windows (minutes) — the bootstrap guard used only
+# while INGESTION_START_AT is unset. Webhook tx older than this are skipped:
+# chặn SePay replay lịch sử cũ khi mới setup webhook. Tăng lên nếu bot có thể
+# down lâu hơn (SePay retry đến muộn sẽ bị loại ngoài cửa sổ này — có ghi lại
+# vào tab Excluded Events).
 TX_MAX_AGE_MINUTES = _env_int("TX_MAX_AGE_MINUTES", 10, min_value=1)
 EMAIL_TX_MAX_AGE_MINUTES = _env_int("EMAIL_TX_MAX_AGE_MINUTES", 7 * 24 * 60, min_value=1)
 
@@ -171,3 +185,4 @@ class SHEETS:
     CASHBACK_LEDGER  = "Cashback Ledger"
     MCC_MAP          = "MCC Map"
     PROCESSED_REFS   = "Processed Refs"
+    EXCLUDED_EVENTS  = "Excluded Events"
