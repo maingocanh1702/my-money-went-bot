@@ -20,7 +20,7 @@ import handlers.sepay as sepay
 from handlers import zalo_queue as zq
 
 
-ZALO_CHAT = "397f0cd1e99c00c2598d"
+ZALO_CHAT = "1000000000000000001"
 ZALO_KEY = f"zalo:{ZALO_CHAT}"
 
 TX_HEADER = [
