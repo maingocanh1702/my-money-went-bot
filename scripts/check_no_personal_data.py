@@ -44,6 +44,11 @@ BANNED_TOKEN_HASHES = {
     "32cb72eaa10f99f30faa56be5db4034e3c5dffd2ac673e9f8629bd44bfe9d54a": "a real Hang Seng reference number",
     "f2876f5f009f9b4b4926a71340d108c35f950a92f05d4e83347372a439368ef0": "a real merchant store code",
     "5a83e3d416130b51d84672430db102d600f24d0db25cb4f819d6bfd8d830297d": "a real account slug",
+    "aff666685a5662baef9928a807d31be4724f9d290a2684633e64f8b57c06b70a": "the maintainer's Zalo chat id",
+    "818503b40774d1eeffe7893a8d8df633b949c5e37f56f7626e5ba404ebb91612": "the maintainer's GCP service-account email",
+    "06bd3dbf173f337103d1d69dc0875554a6676741289f3a718c5490d01b4a8086": "the maintainer's GCP project id",
+    "ee311c213b03ccd0b0bf97b56ce537c50fbd48ff41f867cdd96ebaa5da46d207": "the maintainer's GCP service-account client id",
+    "a2be7edf6a721fbdc669e8c88a7bcc0e424874061377b1fbe05d04e94ec0c1c8": "the maintainer's GCP service-account key id",
 }
 
 # Synthetic values the fixtures are allowed to use. Add here, deliberately.
