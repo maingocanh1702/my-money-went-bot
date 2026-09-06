@@ -8,7 +8,7 @@ import math
 from datetime import datetime
 import pytz
 
-from config import CHAT_ID, TIMEZONE, SEPAY_SECRET
+from config import SEPAY_LEGACY_REF_LOOKUP, CHAT_ID, TIMEZONE, SEPAY_SECRET
 from config import TX_MAX_AGE_MINUTES, EMAIL_TX_MAX_AGE_MINUTES
 from config import ZALO_ENABLED, ZALO_CHAT_ID
 import messenger
@@ -168,14 +168,31 @@ async def _handle_transaction(payload: dict, *, trusted_email: bool, authenticat
     # Email parsers tự set currency đọc được (Cake: "VND"); parser ngoại tệ set của nó.
     currency = str(data.get("currency") or "VND").upper().strip() or "VND"
 
-    # Deterministic fallback ref_code — stable across SePay retries
-    # (hash of amount + description + date so duplicate deliveries are correctly deduped)
     raw_date = data.get("transactionDate") or data.get("transaction_date") or ""
-    ref_code = (
+    source_family = "email" if str(data.get("_source", "")).startswith("email_") else "sepay"
+
+    # Identity, strongest available first.
+    #
+    # SePay stamps every webhook with its own transaction id, stable across its
+    # retries, and its integration guide names that field as the one to
+    # deduplicate on. A bank `referenceCode` is an external value with no
+    # uniqueness guarantee, and the content hash below cannot tell two
+    # genuinely alike transactions apart: two coffees of the same price, on the
+    # same card, in the same minute hash identically, so the second one used to
+    # be swallowed as a duplicate. That was lost money, not a saved duplicate.
+    legacy_ref = (
         data.get("referenceCode")
         or data.get("reference_number")
         or hashlib.md5(f"{raw_amount}|{description}|{raw_date}".encode()).hexdigest()[:16]
     )
+    sepay_id = str(data.get("id") or "").strip()
+    if source_family == "sepay" and sepay_id:
+        ref_code = f"sepay:{sepay_id}"
+    else:
+        ref_code = legacy_ref
+        if source_family == "sepay":
+            print("[sepay] no provider id on this payload — falling back to a weak "
+                  f"reference identity ({'referenceCode' if data.get('referenceCode') else 'content hash'})")
 
     tz = pytz.timezone(TIMEZONE)
     if raw_date:
@@ -191,8 +208,7 @@ async def _handle_transaction(payload: dict, *, trusted_email: bool, authenticat
     # Both windows are configurable (TX_MAX_AGE_MINUTES / EMAIL_TX_MAX_AGE_MINUTES)
     # — raise them if the bot can be down longer than the default (delayed SePay
     # retries beyond the window are silently skipped).
-    is_email_source = data.get("_source", "").startswith("email_")
-    max_age_minutes = EMAIL_TX_MAX_AGE_MINUTES if is_email_source else TX_MAX_AGE_MINUTES
+    max_age_minutes = EMAIL_TX_MAX_AGE_MINUTES if source_family == "email" else TX_MAX_AGE_MINUTES
     now = datetime.now(tz)
     if tx_date.tzinfo is None:
         tx_date_aware = tz.localize(tx_date)
@@ -207,8 +223,10 @@ async def _handle_transaction(payload: dict, *, trusted_email: bool, authenticat
 
     # ─── Fuzzy dedup: chặn duplicate giữa SePay + email sources ──
     tx_type_label = "Tiền vào" if is_incoming else "Tiền ra"
-    if sh.find_recent_duplicate(amount, tx_type_label, raw_date, currency=currency):
-        print(f"[dedup] skipped duplicate: {amount} {currency} {tx_type_label} ref={ref_code!r}")
+    if sh.find_recent_duplicate(amount, tx_type_label, raw_date, currency=currency,
+                                source=source_family):
+        print(f"[dedup] skipped cross-source duplicate: {amount} {currency} "
+              f"{tx_type_label} ref={ref_code!r}")
         return
 
     # ─── Account resolution ──────────────────────────────────
@@ -221,6 +239,16 @@ async def _handle_transaction(payload: dict, *, trusted_email: bool, authenticat
     # Claim immediately before a financial write. Every authenticated source
     # must retry if this state cannot be made durable; acknowledging a SePay
     # failure here would lose a real transaction just as surely as email would.
+    # A retry that spans the identity upgrade carries the new key for a row
+    # written under the old one. Check the old key too, or the same transaction
+    # is written twice. Retire via SEPAY_LEGACY_REF_LOOKUP once the provider's
+    # retry window has passed.
+    if (SEPAY_LEGACY_REF_LOOKUP and legacy_ref != ref_code
+            and sh.find_transaction_row_by_ref(legacy_ref) is not None):
+        print(f"DEBUG: already written under its pre-upgrade reference {legacy_ref!r}, "
+              f"now {ref_code!r} — ignoring")
+        return
+
     if sh.tx_exists(ref_code):
         print(f"DEBUG: duplicate webhook ignored, ref_code={ref_code!r}")
         return

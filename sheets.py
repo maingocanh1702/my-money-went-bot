@@ -176,6 +176,21 @@ def _last_col_letter(n: int) -> str:
     return letters
 
 
+def row_source_family(row: list) -> str:
+    """Read the source family out of column U (index 20), e.g. "sepay" or "email".
+
+    Column U holds the raw source_key — "sepay:1903999888", "email_cake:cake_cc".
+    Legacy rows and rows written without a resolved source leave it blank, and
+    "" deliberately means *unknown*, never "same source as the caller".
+    """
+    if len(row) > 20 and row[20]:
+        family = str(row[20]).split(":", 1)[0].strip().lower()
+        if family.startswith("email"):
+            return "email"
+        return family
+    return ""
+
+
 def row_currency(row: list) -> str:
     """Read column P (index 15) safely. Backfill 'VND' for legacy rows.
 
@@ -632,12 +647,22 @@ def _parse_dt(date_str: str):
     return _parse_local_datetime(date_str)
 
 
-def find_recent_duplicate(amount: float, tx_type: str, tx_date: str, currency: str = "VND") -> bool:
-    """
-    Trả về True nếu đã có giao dịch cùng amount + type + currency trong
-    DEDUP_WINDOW_SEC giây. Currency check tránh false-dedup giữa HKD và VND
-    có cùng số (vd HKD 300 vs VND 300 — unlikely nhưng có thể).
-    Fail-open: trả về False nếu có exception (thà ghi trùng còn hơn miss GD).
+def find_recent_duplicate(amount: float, tx_type: str, tx_date: str, currency: str = "VND",
+                          *, source: str = "") -> bool:
+    """Whether this looks like the SAME real transaction already seen on ANOTHER source.
+
+    A bank transfer can reach the bot twice — once from SePay, once from the
+    bank's notification email — and those two deliveries carry unrelated
+    identities, so only a fuzzy amount/type/time comparison can pair them.
+
+    What this must never do is block two events from the *same* source. Two
+    coffees of the same price, on the same card, in the same minute are two
+    transactions, and SePay gives each its own id; treating them as one loses
+    real money. So a row whose source family matches `source` is skipped.
+    An empty source on either side means *unknown*, and unknown never blocks —
+    the same fail-open bias the exception handler below already takes.
+
+    Currency is compared so HKD 300 and VND 300 do not pair.
     """
     try:
         rows = _get_tx_rows()
@@ -650,6 +675,9 @@ def find_recent_duplicate(amount: float, tx_type: str, tx_date: str, currency: s
 
         norm_type = _normalize_type(tx_type)
         new_cur = (currency or "VND").upper().strip() or "VND"
+        new_source = (source or "").strip().lower()
+        if new_source.startswith("email"):
+            new_source = "email"
 
         for row in rows[-DEDUP_LOOKBACK_ROWS:]:
             try:
@@ -658,8 +686,13 @@ def find_recent_duplicate(amount: float, tx_type: str, tx_date: str, currency: s
                 row_type   = _normalize_type(str(row[6]))
                 row_amount = _parse_amount(row[7])
                 row_cur    = row_currency(row)
+                row_source = row_source_family(row)
 
                 if row_dt is None:
+                    continue
+
+                # Same source → distinct events are distinct transactions.
+                if new_source and row_source and row_source == new_source:
                     continue
 
                 if (
@@ -668,7 +701,8 @@ def find_recent_duplicate(amount: float, tx_type: str, tx_date: str, currency: s
                     and row_cur == new_cur
                     and abs((new_dt - row_dt).total_seconds()) < DEDUP_WINDOW_SEC
                 ):
-                    print(f"[dedup] duplicate found: amount={amount} {new_cur} type={tx_type} "
+                    print(f"[dedup] cross-source duplicate: amount={amount} {new_cur} "
+                          f"type={tx_type} source={new_source or '?'} vs {row_source or '?'} "
                           f"diff={abs((new_dt - row_dt).total_seconds()):.0f}s")
                     return True
             except (ValueError, IndexError):
