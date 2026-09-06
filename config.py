@@ -105,6 +105,14 @@ MERCHANT_NOISE_WORDS = {
 # Stale-transaction guard windows (minutes). Webhook tx older than this are
 # skipped — chặn SePay replay lịch sử cũ khi mới setup webhook. Tăng lên nếu
 # bot có thể down lâu hơn (SePay retry đến muộn sẽ bị bỏ qua ngoài cửa sổ này).
+# Transitional: before SePay's own transaction id became the identity, a
+# transaction was keyed by its bank reference (or, failing that, a content
+# hash). A SePay retry that spans the upgrade arrives with the new identity for
+# a row that was written under the old one, so both keys are checked until an
+# operator turns this off — no earlier than the provider's retry window after
+# deploying the upgrade.
+SEPAY_LEGACY_REF_LOOKUP = _env_bool("SEPAY_LEGACY_REF_LOOKUP", True)
+
 TX_MAX_AGE_MINUTES = _env_int("TX_MAX_AGE_MINUTES", 10, min_value=1)
 EMAIL_TX_MAX_AGE_MINUTES = _env_int("EMAIL_TX_MAX_AGE_MINUTES", 7 * 24 * 60, min_value=1)
 
