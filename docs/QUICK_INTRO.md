@@ -1,6 +1,6 @@
 # My Money Went Bot
 
-![My Money Went Bot — credit-card cashback tracking from bank notification emails, plus money in and out of Vietnamese bank accounts via SePay, written to a Google Sheet you own](screenshots/banner.png)
+![My Money Went Bot — automatic transaction tracking for Vietnamese bank accounts and credit cards, written to a Google Sheet you own and categorized from Telegram or Zalo](screenshots/banner.png)
 
 [English](../README.md) | [Tiếng Việt](../README.vi.md) | [Setup bằng AI](AI_SETUP.md)
 
@@ -12,16 +12,17 @@
 ![Railway](https://img.shields.io/badge/Deploy-Railway-0B0D0E?style=for-the-badge&logo=railway&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-D4A017?style=for-the-badge)
 
-# My Money Went Bot - cashback thẻ tín dụng và tiền ra / vào ngân hàng, ngay trong Telegram
+# My Money Went Bot - tự động theo dõi giao dịch thẻ và ngân hàng, ngay trong Telegram
 
-Bot làm hai việc: theo dõi **cashback thẻ tín dụng** từ chính email thông báo của ngân hàng (biết mỗi lần quẹt được hoàn bao nhiêu, còn bao nhiêu cap, cách cổng kích hoạt bao xa), và theo dõi **từng đồng ra / vào tài khoản ngân hàng Việt Nam** qua SePay. Mọi thứ ghi vào Google Sheet của bạn, phân loại bằng nút bấm, báo cáo theo ngày, tuần, tháng, quý, năm.
+Bot tự ghi mọi giao dịch **thẻ tín dụng** và **tài khoản ngân hàng Việt Nam** vào Google Sheet của bạn, hỏi bạn phân loại bằng nút bấm (hoặc tự phân loại nếu đã có keyword rule), rồi báo cáo theo ngày, tuần, tháng, quý, năm. Trên nền đó có thêm ngân sách theo danh mục, dư nợ thẻ, và theo dõi cashback.
 
 ---
 
 ## Bạn đang gặp vấn đề này?
 
-- Có thẻ cashback (Cake Freedom, ...) nhưng chỉ biết được hoàn bao nhiêu khi ngân hàng chốt sao kê — không biết danh mục nào đã đầy cap, đã qua cổng kích hoạt chưa, nên quẹt thẻ nào cho lần tiếp theo.
 - Muốn biết tiền đi đâu nhưng lười nhập tay từng khoản.
+- Giao dịch thẻ tín dụng nằm một nơi, giao dịch ngân hàng nằm một nơi, cuối tháng không cộng lại được.
+- Có thẻ cashback nhưng chỉ biết được hoàn bao nhiêu khi ngân hàng chốt sao kê.
 - App quản lý chi tiêu bắt đăng nhập ngân hàng hoặc giữ data trên cloud của họ.
 - Sao kê ngân hàng khó đọc, khó phân loại, khó xem theo account/category.
 - Google Sheet linh hoạt nhưng cập nhật thủ công quá mệt.
@@ -37,9 +38,11 @@ Tài khoản ngân hàng  ── SePay webhook ───────────
 Thẻ tín dụng / bank ── email thông báo ─ Apps Script ┘        └─ cashback engine: MCC · rate · cap · cổng
 ```
 
-Với thẻ tín dụng, mỗi lần quẹt bot trả lời ngay khoản này được hoàn bao nhiêu, và `/cashback` cho thấy cả kỳ sao kê: từng danh mục còn bao nhiêu cap, tổng kỳ, và cần tiêu thêm bao nhiêu để mở cổng. Rule của từng thẻ là file YAML trong `card_templates/` — có sẵn Cake Freedom, thêm thẻ khác chỉ cần thêm một file, không sửa code.
-
 Với tài khoản ngân hàng, SePay nhận thông báo từ ngân hàng và gửi webhook cho bot. Gói Free của SePay là 0đ với 50 giao dịch/tháng; vượt thì tính phí phần vượt hoặc lên gói trả phí — xem [bảng giá SePay](https://sepay.vn/bang-gia.html).
+
+Với thẻ tín dụng, bot đọc chính email thông báo mà ngân hàng gửi cho bạn — cách này cũng phủ luôn ngân hàng nào SePay chưa hỗ trợ, và không tốn phí.
+
+Vì bot đã thấy mọi lần quẹt, nó tính luôn được cashback: mỗi lần quẹt trả lời ngay được hoàn bao nhiêu, `/cashback` cho thấy cả kỳ sao kê. Rule của từng thẻ là file YAML trong `card_templates/` — thêm thẻ khác chỉ cần thêm một file, không sửa code.
 
 Điểm quan trọng: **My Money Went Bot không truy cập tài khoản ngân hàng của bạn.** Bot không đăng nhập ngân hàng, không đọc biến động số dư trực tiếp, không truy vấn lịch sử giao dịch, và không giữ username/password/OTP/số thẻ. Bot chỉ nhận dữ liệu giao dịch mà **SePay gửi qua webhook** sau khi bạn tự cấu hình SePay — hoặc, với thẻ tín dụng, **email thông báo** mà Google Apps Script của bạn chuyển tới từ Gmail của chính bạn.
 
@@ -69,16 +72,16 @@ Khi có giao dịch mới:
 
 | Tính năng | Tác dụng |
 |---|---|
-| `/cashback` | Cashback thẻ tín dụng theo kỳ sao kê: MCC, rate, cap từng danh mục, giới hạn ngày, cổng kích hoạt |
-| Template thẻ YAML | `/cashback seed cake_freedom` — áp rule của thẻ trong vài giây, thêm thẻ mới bằng một file |
-| Email ingestion | Thẻ / ngân hàng ngoài SePay vào qua Gmail + Apps Script (có sẵn Cake) |
-| Tiền ra / vào qua SePay | Mỗi giao dịch của tài khoản đã link đến trong vài giây, tag đúng account |
+| Tracking qua SePay | Mỗi giao dịch của tài khoản đã link về trong vài giây, gắn đúng tài khoản |
+| Tracking thẻ qua email | Thẻ tín dụng và ngân hàng ngoài SePay vào qua Gmail + Apps Script |
 | Telegram / Zalo category picker | Tap nút để phân loại giao dịch mới |
 | Auto-categorize | Rule kiểu `GRAB -> Daily Spending`, `Spotify -> Subscription` |
 | Per-account tracking | Biết giao dịch đến từ account nào |
 | `/report` | Xem report theo week/month/quarter/year, theo account hoặc category |
 | `/today` | Xem chi tiêu hôm nay |
 | `/allocate` | Đặt budget theo category |
+| `/cashback` | Cashback thẻ theo kỳ sao kê: MCC, rate, cap danh mục, giới hạn ngày, cổng kích hoạt |
+| Template thẻ YAML | `/cashback seed cake_freedom` — áp rule của thẻ trong vài giây |
 | Google Sheet backend | Dễ export, pivot, audit, chỉnh tay khi cần |
 | Webhook secrets | Chặn request giả từ bên ngoài |
 
