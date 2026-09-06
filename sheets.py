@@ -1,6 +1,7 @@
 import asyncio
 import json
 import math
+import re
 import time
 import threading
 import gspread
@@ -12,6 +13,7 @@ import pytz
 from config import SHEET_ID, CREDS_FILE, GOOGLE_CREDS_JSON, TIMEZONE, DAILY_BUCKET_ID
 from config import SHEETS as S
 from handlers.cashback_engine import compute_cashback
+from utils import resolve_separators
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -202,36 +204,43 @@ def row_currency(row: list) -> str:
     return "VND"
 
 
+_SCIENTIFIC = re.compile(r"[-+]?\d+(?:\.\d+)?[eE][-+]?\d+")
+
+
 def _parse_amount(val) -> float:
-    """Parse a sheet cell amount value safely.
-    Handles: "50000", "50,000", "50.000" (VN), "50000.0" (float repr).
-    VND has no decimal places so we round to int.
+    """Read a money value out of a sheet cell.
+
+    Google returns a cell as it is DISPLAYED, so the same 50000 arrives as
+    "50000", "50,000" or "50.000" depending on the sheet's locale, and may
+    carry the currency symbol with it. Deciding which character is the
+    thousands separator therefore cannot be left to float(): it reads
+    "50.000" as fifty, quietly turning fifty thousand đồng into fifty.
+
+    Blank is 0. Anything genuinely unreadable raises, because a cell holding
+    money the bot cannot parse is a problem its owner needs to see — a silent
+    0.0 would just remove that money from every total. `_to_num` catches this
+    for the cells where blank-or-unset is a legitimate value.
     """
     s = str(val).strip()
     if not s:
         return 0.0
-    # If it looks like a plain float already (no thousands separator style)
-    # e.g. "50000.0" — just parse directly
-    try:
-        return float(s)
-    except ValueError:
-        pass
-    # Remove thousands separators (commas or dots used as thousand sep)
-    # Determine separator style: if there's both , and ., the last one is decimal
-    if "," in s and "." in s:
-        # e.g. "50,000.00" → decimal is "."
-        s = s.replace(",", "")
-    elif "," in s:
-        # e.g. "50,000" → comma is thousands sep
-        s = s.replace(",", "")
-    elif "." in s and s.count(".") == 1:
-        # Could be decimal "50000.0" or thousands "50.000"
-        # For VND: if digits after dot < 3, treat as decimal; else thousands
-        parts = s.split(".")
-        if len(parts[1]) == 3:
-            s = s.replace(".", "")  # thousands separator
-        # else leave as-is (decimal)
-    return float(s) if s else 0.0
+
+    negative = s.startswith(("-", "\u2212")) or (s.startswith("(") and s.endswith(")"))
+
+    # Large numbers come back in scientific notation ("1.23457E+12"); that is
+    # already unambiguous, and stripping its separators would mangle it.
+    body = s.lstrip("-\u2212(").rstrip(")").strip()
+    if _SCIENTIFIC.fullmatch(body):
+        value = float(body)
+        return -abs(value) if negative else value
+
+    # Drop the currency decoration ("50.000 ₫", "HKD 300.00", "$1,234.56").
+    digits = re.sub(r"[^\d.,]", "", body)
+    resolved = resolve_separators(digits)
+    if resolved is None:
+        raise ValueError(f"unreadable amount in sheet cell: {val!r}")
+    value = float(resolved)
+    return -value if negative else value
 
 
 def calc_pct(spent: float, total: float) -> int:
