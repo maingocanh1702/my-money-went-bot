@@ -8,21 +8,29 @@
 
 ![My Money Went Bot — a Telegram bot that catches every Vietnamese bank transaction and writes it to your Google Sheet](docs/screenshots/banner.png)
 
+**Theo dõi cashback thẻ tín dụng từ chính email thông báo của ngân hàng, và từng đồng ra / vào tài khoản ngân hàng Việt Nam qua [SePay](https://sepay.vn) — ghi vào Google Sheet của bạn, điều khiển từ Telegram hoặc Zalo.**
+
 > 🙏 **Credits:** xây dựng dựa trên các pattern từ [`maddyle8124/spend-less-bot`](https://github.com/maddyle8124/spend-less-bot). Cảm ơn Maddy rất nhiều — không có repo gốc này thì My Money Went cũng không có.
 
 ---
 
 ## Bot làm gì
 
+![How it works — bank transaction, SePay webhook, bot processes, write to Google Sheet, Telegram report](docs/screenshots/how-it-works.png)
 
-**My Money Went Bot là 1 bot Telegram theo dõi chi tiêu cá nhân.** Mỗi lần ngân hàng VN gửi thông báo giao dịch (qua [SePay](https://sepay.vn)), bot ghi vào Google Sheet *của bạn* và hỏi bạn tap phân loại — hoặc skip luôn nếu bạn đã dạy nó 1 keyword rule. Gõ `/report` bất cứ lúc nào để xem tiền đã đi đâu, slice theo account, category, và khoảng thời gian.
+**My Money Went Bot là bot tài chính cá nhân sống trong chat Telegram (hoặc Zalo) của bạn. Nó làm 2 việc:**
+
+**1. Theo dõi tiền ra / vào các tài khoản ngân hàng Việt Nam.** Link tài khoản với [SePay](https://sepay.vn); mỗi giao dịch tiền vào hay tiền ra đến bot dưới dạng webhook trong vài giây, được ghi vào Google Sheet *của bạn*, và phân loại bằng một cú tap — hoặc tự động, khi bạn đã dạy bot một keyword rule. `/report` cắt theo account, theo category, theo tuần / tháng / quý / năm. Gói miễn phí của SePay đủ cho 50 giao dịch mỗi tháng — xem [SePay tính phí thế nào](#sepay-tính-phí-thế-nào).
+
+**2. Theo dõi cashback thẻ tín dụng từ email thông báo của ngân hàng.** Những thẻ và ngân hàng SePay chưa hỗ trợ (Cake by VPBank, Techcombank, Hang Seng, ...) đều gửi email cho mỗi lần quẹt. Một Google Apps Script nhỏ chuyển các email đó tới bot; bot đọc số tiền và merchant, gắn giao dịch vào đúng thẻ, rồi chạy cashback engine: phân loại MCC, rate của thẻ, cap theo từng giao dịch, cap theo danh mục, giới hạn theo ngày và cổng kích hoạt — tất cả theo kỳ sao kê. Mỗi lần quẹt bot trả lời ngay khoản này được hoàn bao nhiêu; `/cashback` cho thấy cả kỳ: đã được bao nhiêu, mỗi danh mục còn cách cap bao xa, và cần tiêu thêm bao nhiêu để mở cổng.
 
 <details>
-<summary>📐 Flow chi tiết (có nhánh auto-categorize + onboarding)</summary>
+<summary>📐 Flow chi tiết (webhook ngân hàng, đường email, nhánh cashback, auto-categorize và onboarding)</summary>
 
 ```mermaid
 flowchart LR
-    A[🏦 Tx ngân<br/>hàng VN] -->|SePay<br/>webhook| B[🤖 Bot]
+    A[🏦 Tài khoản NH<br/>tiền vào / ra] -->|SePay<br/>webhook| B[🤖 Bot]
+    A2[💳 Email thông báo<br/>thẻ tín dụng] -->|Gmail →<br/>Apps Script| B
     B --> C[📊 Ghi row<br/>Google Sheet]
     C --> D{Match<br/>keyword<br/>rule?}
     D -->|✅ Có| E[🎯 Auto-<br/>categorize]
@@ -30,6 +38,9 @@ flowchart LR
     F --> G[👆 Bạn tap]
     E --> H[📈 /report<br/>account ×<br/>category ×<br/>period]
     G --> H
+    C -->|thẻ tín dụng| K[💰 Cashback engine<br/>MCC · rate · tiers<br/>cap · giới hạn ngày · cổng]
+    K --> L[🧾 Cashback<br/>Ledger]
+    L --> M[💳 /cashback<br/>theo kỳ<br/>sao kê]
 
     B -. nguồn<br/>chưa biết? .-> I[📝 Wizard<br/>onboard]
     I -. tx sau<br/>auto-route .-> B
@@ -39,11 +50,11 @@ flowchart LR
     classDef store fill:#dcfce7,stroke:#16a34a,color:#15803d
     classDef user fill:#fce7f3,stroke:#db2777,color:#9d174d
     classDef out fill:#f3e8ff,stroke:#9333ea,color:#6b21a8
-    class A bank
-    class B,E,I bot
-    class C store
+    class A,A2 bank
+    class B,E,I,K bot
+    class C,L store
     class F,G user
-    class H out
+    class H,M out
 ```
 
 </details>
@@ -58,6 +69,7 @@ Các app tài chính cá nhân (Money Lover, Misa, MoneyKeeper, ...) thường �
 
 - **Bạn sở hữu data.** Tất cả nằm trong Google Sheet của bạn. Export, fork, archive, pivot — quyền bạn.
 - **Bạn đọc được mọi dòng code.** ~3,000 LOC Python. Audit, custom, ship.
+- **Bạn biết cashback trước khi ngân hàng báo.** Ngân hàng chỉ cho biết cashback sau khi chốt sao kê. Bot cho biết theo từng lần quẹt — khoản này được hoàn bao nhiêu, danh mục đó còn bao nhiêu cap, còn cách cổng kích hoạt bao xa — để lần quẹt *tiếp theo* đặt đúng thẻ.
 - **Bạn phân loại 1 lần.** Auto-categorize qua `/keywords` giúp tx định kỳ (Spotify, Grab, ...) skip luôn picker.
 - **Report khớp với mô hình thực tế** — per-account *và* per-category, theo week/month/quarter/year. Không chỉ là "biểu đồ category theo tháng".
 
@@ -65,14 +77,27 @@ Các app tài chính cá nhân (Money Lover, Misa, MoneyKeeper, ...) thường �
 
 ## Tính năng
 
+![Feature overview — features, system architecture, supported banks, and the command list](docs/screenshots/features-architecture.png)
 
 Chi tiết từng tính năng:
 
-🏦 **Tracking per-account** — mỗi tx được tag theo bank account gốc. `/report` slice theo account (TPB / Vietcombank / cash) và theo category.
+### Cashback thẻ tín dụng
+
+💳 **Cashback engine, mỗi lần quẹt một dòng ledger** — bot phân loại merchant vào MCC bằng bảng keyword → MCC tự học (không nhận ra thì hỏi một lần, đưa các danh mục của thẻ làm nút bấm, và nhớ câu trả lời), áp rate của thẻ, cap theo bậc từng giao dịch, cap danh mục trong kỳ, giới hạn số giao dịch mỗi ngày và cổng kích hoạt (vd "tiêu đủ 5.000.000đ trong kỳ mới được hoàn"). Cashback ở trạng thái *pending* cho đến khi qua cổng. Mỗi dòng 0đ đều ghi lý do (`mcc_unknown`, `mcc_not_eligible`, `daily_limit`, `mcc_cap_full`) nên ledger soi lại được. Sai? Tap **Sai CB** để hủy.
+
+🗓 **Theo kỳ sao kê** — cap và cổng reset đúng ngày sao kê của thẻ, không phải mùng 1 (`cap_period: statement_cycle` hoặc `calendar_month`, tùy thẻ). `/cashback` cho thấy kỳ hiện tại: progress bar từng danh mục, tổng kỳ, chi tiêu so với cổng, và "cần thêm X để kích hoạt".
+
+📇 **Template thẻ bằng YAML** — `card_templates/cake_freedom.yaml`, `card_templates/techcombank_visa.yaml`. `/cashback seed cake_freedom` áp template trong vài giây; `/cashback setup` dắt bạn qua từng bước cho thẻ chưa có template; `/cashback export` biến config đã chỉnh thành template để chia sẻ. Thêm thẻ của một ngân hàng chưa ai làm là một pull request, không phải sửa code.
+
+📧 **Email ingestion** — với thẻ và ngân hàng SePay chưa hỗ trợ (Techcombank, Cake by VPBank, Hang Seng), `google_apps_script.js` quét Gmail mỗi phút, chuyển mỗi email thông báo đúng một lần (dedup theo message id, không theo thread) tới `/webhook/email`, và `handlers/email_parser.py` biến nó thành đúng payload SePay lẽ ra đã gửi — nên mọi thứ phía sau (account, category, report, cashback) giống hệt nhau.
+
+### Tài khoản ngân hàng
+
+🏦 **Tiền ra / vào qua SePay** — mỗi lần chuyển khoản, thanh toán thẻ hay nhận lương chạm vào tài khoản đã link đều đến dưới dạng webhook trong vài giây và được tag đúng account gốc. Chỉ bật *Tiền ra* nếu chỉ cần chi tiêu, bật cả hai chiều để thấy cả thu nhập. `/report` slice theo account (TPB / Vietcombank / tiền mặt) và theo category. Một bước dedup mờ giữa các nguồn loại bỏ giao dịch đến hai lần (SePay *và* email).
 
 📊 **`/report` thống nhất, 2 lens × 4 period** — tuần/tháng/quý/năm qua inline button. Toggle account ↔ category lens tại chỗ. Không cần gõ lại command.
 
-🤖 **Onboarding account thông minh** — lần đầu tx đến từ nguồn chưa map, bot hỏi. Wizard 3 bước: tên → loại → xong. Tx sau auto-route.
+🤖 **Onboarding account thông minh** — lần đầu tx đến từ nguồn chưa map, bot hỏi. Wizard 3 bước: tên → loại → xong (thẻ tín dụng hỏi thêm hạn mức, ngày sao kê, ngày đến hạn). Tx sau auto-route.
 
 ⚡ **Auto-categorize** — `/keywords` cho phép định nghĩa pattern ("GRAB" → Daily Spending, "Spotify" → Subscription). Tx match sẽ skip prompt.
 
@@ -80,35 +105,45 @@ Chi tiết từng tính năng:
 
 🔁 **Backfill tx lịch sử** — `/accounts assign <slug>` gán retroactive tx cũ chưa map vào account vừa onboard. Không mất tx nào giữa "first webhook" và "wizard complete".
 
-🧾 **Thẻ tín dụng + cashback engine** — dư nợ, `/cc pay`, kỳ sao kê, và tracker cashback theo MCC đầy đủ (`/cashback`): rules, cap theo kỳ, cổng kích hoạt, MCC map tự học.
+🧾 **Số dư và chuyển khoản** — dư nợ từng thẻ tín dụng, `/cc pay` ghi nhận trả thẻ, `/transfer` cho các khoản chuyển giữa tài khoản của chính bạn, tất cả trên một ledger append-only.
 
-📧 **Email ingestion** — bank SePay không hỗ trợ (TCB, Cake, Hang Seng) vẫn vào được qua Google Apps Script forward email thông báo tới `/webhook/email` (xem `google_apps_script.js`).
+### Ở mọi kênh
 
 💬 **Kênh Zalo** — cùng các flow trên Zalo Bot Platform qua menu đánh số: category picker, `/report`, `/manage`, `/allocate`, `/keywords`, `/cashback`, `/recat`, `/pending`.
 
 🌐 **Song ngữ** — `/lang` đổi toàn bộ bot giữa Tiếng Việt và English.
 
-🇻🇳 **Ngân hàng VN** — hoạt động với bất kỳ bank nào SePay support. VND-first; account ngoại tệ (vd HKD qua email Hang Seng) được track riêng theo account, không lẫn vào tổng VND.
+🇻🇳 **Ngân hàng VN, VND-first** — hoạt động với bất kỳ bank nào SePay support, cộng các ngân hàng đi qua email ở trên. Account ngoại tệ (vd HKD qua email Hang Seng) được track riêng theo account, không lẫn vào tổng VND.
 
 ---
 
 ## Screenshots
+
+**Cashback tracking.** Một cuốc Grab trên thẻ Cake Freedom: giao dịch được ghi, dòng cashback cho biết được hoàn bao nhiêu và đang pending, thanh cổng cho biết kỳ này còn cách kích hoạt bao xa. `/cashback` sau đó cho thấy cả kỳ sao kê:
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/cashback-transaction-telegram.png" alt="Giao dịch thẻ tín dụng được ghi cùng dòng cashback, cap danh mục và tiến độ cổng kích hoạt, tiếp theo là prompt keyword rule" /></td>
+    <td><img src="docs/screenshots/cashback-overview-telegram.png" alt="Tổng quan /cashback cho một kỳ sao kê: rate, cổng, ngày sao kê, cap từng danh mục với progress bar, tổng kỳ và số tiền còn cần để kích hoạt" /></td>
+  </tr>
+</table>
+
+**Tracking ngân hàng.** Auto-categorize từ keyword rule, và báo cáo tháng theo category và theo account:
 
 <table>
   <tr>
     <td><img src="docs/screenshots/auto-categorize.png" alt="A transaction auto-categorized from a keyword rule, with the budget bar updating" /></td>
     <td><img src="docs/screenshots/report-monthly.png" alt="Monthly report with budget bars and tracking buckets" /></td>
   </tr>
-</table>
-
-Cùng báo cáo đó trên Zalo, và các keyword rule chạy auto-categorize:
-
-<table>
   <tr>
     <td><img src="docs/screenshots/report-monthly-category-telegram.png" alt="Category-lens monthly report" /></td>
-    <td><img src="docs/screenshots/zalo-bot.PNG" alt="Keyword rules and an auto-categorized transaction on Zalo" /></td>
+    <td><img src="docs/screenshots/report-monthly-account-telegram.png" alt="Account-lens monthly report — cùng tháng đó cắt theo từng tài khoản" /></td>
   </tr>
 </table>
+
+Cùng các flow đó trên Zalo — keyword rule và một giao dịch được auto-categorize:
+
+<img src="docs/screenshots/zalo-bot.PNG" width="48%" alt="Keyword rules and an auto-categorized transaction on Zalo" />
 
 ![Demo preview](docs/media/my-money-went-bot-demo-preview.gif)
 
@@ -116,7 +151,9 @@ Cùng báo cáo đó trên Zalo, và các keyword rule chạy auto-categorize:
 
 ---
 
-## Ngân hàng được hỗ trợ
+## Ngân hàng và thẻ được hỗ trợ
+
+### Tài khoản ngân hàng — qua SePay
 
 Bất cứ bank nào [SePay support](https://sepay.vn/ngan-hang.html) là bot này track được. SePay kết nối trực tiếp với **10 ngân hàng VN** (tính đến 2026):
 
@@ -133,7 +170,21 @@ Bất cứ bank nào [SePay support](https://sepay.vn/ngan-hang.html) là bot n�
 | KienLongBank | KLB |
 | OCB | OCB |
 
-Một số bank (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) dùng **API trực tiếp** — webhook tức thì khi có tx. Số còn lại đi qua **SMS Banking** nên có chút độ trễ. Dù sao bot cũng xử lý payload giống hệt nhau — xem [bảng giá SePay](https://sepay.vn/bang-gia.html) để biết list mới nhất.
+Một số bank (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) dùng **API trực tiếp** — webhook tức thì khi có tx. Số còn lại đi qua **SMS Banking** nên có chút độ trễ. Dù sao bot cũng xử lý payload giống hệt nhau.
+
+#### SePay tính phí thế nào
+
+Gói **Free** của SePay là 0đ/tháng, gồm **50 giao dịch/tháng**. Vượt quota vẫn được — phần vượt tính phí sau theo số giao dịch (pay-as-you-go) — hoặc lên gói trả phí: **Startup** từ 120.000đ/tháng với quota lớn hơn nhiều, hoặc **Shop** 70.000đ/cửa hàng/tháng không giới hạn giao dịch. FAQ của SePay ghi quota đếm theo giao dịch *tiền vào*. Với bot dùng cho một người thì gói Free thường là đủ; xem [bảng giá](https://sepay.vn/bang-gia.html) và [FAQ](https://sepay.vn/faq.html) để biết điều khoản hiện tại, vì họ có thay đổi.
+
+### Thẻ tín dụng và ngân hàng khác — qua email thông báo
+
+| Ngân hàng / thẻ | Đến bằng | Template cashback |
+|---|---|---|
+| Cake by VPBank — thẻ Freedom | email thông báo | [`card_templates/cake_freedom.yaml`](card_templates/cake_freedom.yaml) |
+| Techcombank — tài khoản và Visa | email thông báo | [`card_templates/techcombank_visa.yaml`](card_templates/techcombank_visa.yaml) |
+| Hang Seng (HKD) | email thông báo | — |
+
+Ngân hàng nào gửi email cho từng giao dịch đều thêm được: một dòng sender trong `google_apps_script.js`, một parser trong `handlers/email_parser.py`, và — với thẻ — một template YAML. Đường email không tốn phí: Gmail và Google Apps Script đều miễn phí.
 
 ---
 
@@ -142,8 +193,8 @@ Một số bank (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) dùng **API 
 | Yêu cầu | Lấy ở đâu |
 |---|---|
 | Tài khoản Telegram | Chắc bạn có rồi |
-| Tài khoản [SePay](https://sepay.vn) | Kết nối bank VN của bạn |
-| Tài khoản Google | Cho Google Sheets + Google Cloud |
+| Tài khoản [SePay](https://sepay.vn) | Kết nối tài khoản bank VN của bạn (gói Free: 50 tx/tháng) |
+| Tài khoản Google | Cho Google Sheets + Google Cloud — và Gmail + Apps Script nếu dùng đường email |
 | Server có HTTPS public | [Railway](https://railway.app) đơn giản nhất (free tier OK). Hoặc Ubuntu VPS + [ngrok](https://ngrok.com) cho test. |
 | Python 3.11+ | Trên server / Railway |
 
@@ -188,16 +239,23 @@ Nội dung wiki được version trong repo ở `docs/wiki/` — sửa ở đó 
 | `Keyword Rules` | Pattern auto-categorize |
 | `Bot State` | State wizard / picker per chat |
 | `Monthly Reports` | Archive báo cáo tháng |
+| `Cashback Rules` | Rule cashback theo MCC cho từng thẻ |
+| `Cashback Tx Tiers` | Bậc cap theo từng giao dịch |
+| `Cashback Card Config` | Cấu hình cashback của thẻ (rate, cổng, kỳ) |
+| `Cashback Ledger` | Cashback đã tính, một dòng / giao dịch, theo kỳ |
+| `MCC Map` | Map keyword → mã MCC |
 
 ### Bước 3 — Setup SePay
 
-1. Đăng ký tại [sepay.vn](https://sepay.vn), kết nối bank.
-2. **Webhook settings** → URL = `https://<your-domain>/webhook`. Chọn hướng tx muốn track:
+1. Đăng ký tại [sepay.vn](https://sepay.vn), kết nối tài khoản bank. Gói Free (50 giao dịch/tháng) đủ để bắt đầu — xem [SePay tính phí thế nào](#sepay-tính-phí-thế-nào).
+2. **Webhook settings** → URL = `https://<your-domain>/webhook`, xác thực = **API Key** với giá trị `SEPAY_SECRET` của bạn. Chọn hướng tx muốn track:
    - **Chỉ track chi tiêu** → chỉ bật **Tiền ra**.
    - **Track cả thu nhập + chi tiêu** → bật cả **Tiền ra** và **Tiền vào**.
 
    (Tx Tiền vào được ghi log nhưng skip category picker — xem [Tại sao có project này](#tại-sao-có-project-này).)
 3. ⚠️ **Tắt SePay native Google Sheets integration** — bot này tự ghi rows; bật cả 2 = tx duplicate.
+
+Thẻ tín dụng và ngân hàng SePay chưa hỗ trợ đi vào bằng email — xem [Bước 6](#bước-6--bật-cashback-thẻ-tín-dụng-tùy-chọn).
 
 ### Bước 4 — Deploy
 
@@ -260,6 +318,20 @@ journalctl -u mmwbot -f   # xem log
 
 Tx sau từ cùng account auto-route. Setup `/keywords` rules để auto-categorize tx định kỳ.
 
+### Bước 6 — Bật cashback thẻ tín dụng (tùy chọn)
+
+Đây là đường email: email thông báo của ngân hàng đến bot qua một Google Apps Script, nên chạy được với mọi thẻ dù SePay có hỗ trợ ngân hàng đó hay không.
+
+1. Tạo `EMAIL_SECRET` (`openssl rand -hex 16`) và set trên Railway.
+2. Vào [script.google.com](https://script.google.com) → New project → paste [`google_apps_script.js`](google_apps_script.js).
+3. Thay 2 placeholder ở đầu file: `WEBHOOK_URL` = `https://<your-domain>/webhook/email`, `WEBHOOK_SECRET` = `EMAIL_SECRET` của bạn.
+4. Chạy `checkBankEmails` một lần để cấp quyền Gmail, rồi chạy `bootstrapProcessed` một lần để bot không xử lý lại cả hộp thư cũ.
+5. **Triggers → Add trigger** → `checkBankEmails` → time-driven → mỗi phút.
+6. Quẹt thẻ một khoản nhỏ. Bot ping; onboard nguồn này là **🧾 Credit** (bot hỏi hạn mức, ngày sao kê, ngày đến hạn).
+7. `/cashback templates` → `/cashback seed cake_freedom <slug-thẻ>` (hoặc `/cashback setup <slug-thẻ>` với thẻ chưa có template).
+
+Từ đây mỗi lần quẹt bot trả lời kèm dòng cashback, và `/cashback` cho thấy kỳ sao kê hiện tại.
+
 ---
 
 ## Commands
@@ -272,7 +344,12 @@ Tx sau từ cùng account auto-route. Setup `/keywords` rules để auto-categor
 | `/manage` | Thêm / rename / xóa categories. Edit-amount per bucket. |
 | `/keywords` | Quản lý rules auto-categorize. |
 | `/allocate` | Sửa budget. Lần đầu = wizard, sau đó = edit-mode per bucket. |
-| `/cashback` | Cashback thẻ tín dụng: rules, MCC map, kỳ thanh toán, overview. |
+| `/cashback` | Cashback thẻ tín dụng: overview kỳ hiện tại, rules, MCC map, kỳ sao kê. |
+| `/cashback templates` | Liệt kê các template thẻ YAML có sẵn. |
+| `/cashback seed <template> [cc]` | Áp template (Cake Freedom, Techcombank Visa, ...) cho một thẻ. |
+| `/cashback setup [cc]` | Wizard tạo rule cashback từ đầu cho thẻ chưa có template. |
+| `/cashback export [cc]` | Xuất config của thẻ ra YAML template. |
+| `/cashback savetemplate [cc]` | Lưu config hiện tại thành template dùng lại được. |
 | `/transfer <số tiền> <from> <to>` | Ghi nhận chuyển tiền nội bộ giữa các account. |
 | `/cc pay <số tiền> [bank] <cc>` | Ghi nhận trả thẻ tín dụng. |
 | `/recat [row]` | Phân loại lại giao dịch cũ. Không có tham số → chọn từ 8 giao dịch gần nhất; `/recat <row>` nhắm thẳng số dòng. |
@@ -287,19 +364,36 @@ Tx sau từ cùng account auto-route. Setup `/keywords` rules để auto-categor
 
 ## Architecture
 
+Hai đầu vào, một pipeline, một spreadsheet.
+
 ```
-┌──────────┐   webhook    ┌────────────────┐    rows      ┌──────────────┐
-│  SePay   │ ───────────► │  FastAPI bot   │ ───────────► │ Google Sheet │
-└──────────┘              │  (Railway/VPS) │              │   (của bạn)  │
-                          └──────┬─────────┘              └──────────────┘
-                                 │ Telegram Bot API
-                                 ▼
-                          ┌────────────────┐
-                          │   Bạn (chat)   │
-                          └────────────────┘
+ tài khoản ngân hàng                    thẻ tín dụng / ngân hàng ngoài SePay
+┌──────────────┐                        ┌──────────────┐   ┌─────────────────┐
+│ Bank VN      │  tiền vào / ra         │ Email NH     │   │ Google Apps     │
+│ (qua SePay)  │ ──── webhook ───┐      │ (Cake, TCB,  │──►│ Script (Gmail,  │
+└──────────────┘  POST /webhook  │      │  Hang Seng)  │   │ mỗi phút)       │
+                                 │      └──────────────┘   └────────┬────────┘
+                                 ▼                                  │ POST /webhook/email
+                    ┌────────────────────────────┐◄─────────────────┘
+                    │  FastAPI bot (Railway/VPS) │
+                    │  ├ email_parser  → cùng shape payload với SePay
+                    │  ├ account_resolver → account / thẻ nào
+                    │  ├ dedup (ref + fuzzy giữa các nguồn)
+                    │  ├ ghi row + category (rule hoặc tap)
+                    │  └ cashback_engine → MCC · rate · tiers · cap · cổng
+                    └──────────────┬─────────────┘
+                                   │ rows                 ┌────────────────┐
+                                   ▼                      │ Bạn            │
+                    ┌────────────────────────────┐        │ Telegram / Zalo│
+                    │ Google Sheet (của bạn)     │◄──────►│ tap category,  │
+                    │ Đầu ra · Accounts · Ledger │ Bot API│ /report,       │
+                    │ Cashback Ledger · MCC Map  │        │ /cashback      │
+                    └────────────────────────────┘        └────────────────┘
 ```
 
-**Source of truth = ledger table.** `running_balance` là cache được recompute từ ledger mỗi lần write. Xem [`handlers/account_resolver.py`](handlers/account_resolver.py) và [`sheets.py`](sheets.py).
+**Source of truth = các bảng ledger.** `running_balance` là cache được recompute từ `Account Ledger` mỗi lần write, và cashback là một dòng `Cashback Ledger` cho mỗi giao dịch — `/cashback` chỉ đọc ledger đó cho kỳ sao kê hiện tại, không lưu tổng riêng ở đâu. Xem [`handlers/account_resolver.py`](handlers/account_resolver.py), [`handlers/cashback_engine.py`](handlers/cashback_engine.py) và [`sheets.py`](sheets.py).
+
+**Pipeline cashback cho mỗi giao dịch:** `email_parser` (hoặc SePay) → `account_resolver` chọn thẻ → ghi row → `cashback_engine` phân loại merchant qua `MCC Map` (hỏi bạn một lần nếu không nhận ra) → tìm rule của thẻ cho MCC đó → áp rate của rule (hoặc rate mặc định của thẻ) → cap theo bậc từng giao dịch → cap theo phần còn lại của danh mục trong kỳ → kiểm tra giới hạn số giao dịch mỗi ngày → đánh dấu *pending* cho đến khi chi tiêu trong kỳ qua cổng kích hoạt. Kết quả được append vào `Cashback Ledger` và tóm tắt trong câu trả lời. Engine là hàm thuần (không I/O) nên toàn bộ phần này được unit-test trên sheet in-memory.
 
 ### Cấu trúc project
 
@@ -326,8 +420,16 @@ Tx sau từ cùng account auto-route. Setup `/keywords` rules để auto-categor
 │   ├── reports.py                # /today snapshot + daily recap
 │   ├── zalo_queue.py             # Hàng đợi tx Zalo bền (/pending)
 │   └── zalo_render.py            # Render summary plain-text cho Zalo
-├── tests/unit/                   # 300+ unit tests, in-memory FakeSpreadsheet
-├── google_apps_script.js         # Forwarder Gmail → /webhook/email
+├── card_templates/               # Template thẻ cashback bằng YAML
+│   ├── cake_freedom.yaml         # Cake by VPBank Freedom
+│   └── techcombank_visa.yaml     # Techcombank Visa
+├── scripts/
+│   ├── sim_webhook.py            # POST payload giả SePay / TCB / Cake / Hang Seng vào bot local
+│   ├── cashback_reconcile.py     # Cuối kỳ: ledger ước tính vs ngân hàng thực trả
+│   ├── check_no_personal_data.py # CI guard: không để lọt số tài khoản thật / secret
+│   └── check_parity.sh           # Diff repo này với một fork private
+├── tests/unit/                   # 440+ unit tests, in-memory FakeSpreadsheet
+├── google_apps_script.js         # Forwarder Gmail → /webhook/email (đường email)
 ├── .env.example                  # Template — copy thành .env và điền
 ├── crontab.txt                   # Cron jobs mẫu (tham chiếu VPS; prod = GitHub Actions)
 ├── setup.sh                      # VPS bootstrap script
@@ -425,7 +527,9 @@ pip install -r requirements-dev.txt   # runtime + test dependencies
 pytest tests/unit/ -v
 ```
 
-300+ unit tests dùng `FakeSpreadsheet` in-memory — zero gọi Google API trong test. Tests có `@freeze_time` cần `freezegun` để period assertion deterministic.
+440+ unit tests dùng `FakeSpreadsheet` in-memory — zero gọi Google API trong test. Cashback engine là hàm thuần nên phần tính tiền được test từng dòng (cap, tiers, giới hạn ngày, cổng, ranh giới kỳ). Tests có `@freeze_time` cần `freezegun` để period assertion deterministic. CI còn chạy `scripts/check_no_personal_data.py` — build fail nếu một số tài khoản thật hay secret lọt vào tree.
+
+Muốn thử bot local mà không cần ngân hàng: `python scripts/sim_webhook.py sepay --amount 50000 --type out --desc "highland"` hoặc `... email-cake --amount 50000 --type out --desc "PAYOO BHX"`.
 
 ---
 
@@ -446,7 +550,7 @@ Khi mở PR:
 
 ## Acknowledgments
 
-Project này khởi đầu là fork-and-rewrite của [`maddyle8124/spend-less-bot`](https://github.com/maddyle8124/spend-less-bot). Ý tưởng cốt lõi — Telegram bot + SePay webhook + Google Sheet — đến từ repo đó. My Money Went Bot bổ sung tracking per-account, report thống nhất multi-period, wizard onboarding account, và nhiều UX refinement khác.
+Project này khởi đầu là fork-and-rewrite của [`maddyle8124/spend-less-bot`](https://github.com/maddyle8124/spend-less-bot). Ý tưởng cốt lõi — Telegram bot + SePay webhook + Google Sheet — đến từ repo đó. My Money Went Bot bổ sung cashback engine cho thẻ tín dụng cùng template thẻ YAML, đường email cho ngân hàng ngoài SePay, tracking per-account trên ledger append-only, report thống nhất multi-period, wizard onboarding account, kênh Zalo, và nhiều UX refinement khác.
 
 ---
 

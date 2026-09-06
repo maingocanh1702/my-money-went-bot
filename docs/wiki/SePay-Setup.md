@@ -1,6 +1,10 @@
 # SePay Setup
 
-SePay sends bank transaction notifications to the bot.
+SePay sends bank transaction notifications to the bot. This is the path for **bank accounts** (money in / out). Credit cards and banks SePay does not cover come in through notification emails instead — see *Step 6 — Turn on credit-card cashback* in the README.
+
+## 0. What it costs
+
+SePay's **Free** plan is 0đ/month and includes 50 transactions/month. Going over is allowed and the extra transactions are billed afterwards (pay-as-you-go), or you can move to a paid plan (Startup from 120,000đ/month; Shop at 70,000đ per store/month, unlimited). SePay's FAQ counts *incoming* transactions toward the quota. For a one-person bot the free plan is usually enough. Current terms: [pricing](https://sepay.vn/bang-gia.html) · [FAQ](https://sepay.vn/faq.html).
 
 ## 1. Connect your bank
 
