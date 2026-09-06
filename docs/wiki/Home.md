@@ -15,7 +15,10 @@ This wiki is the longer, task-based manual for My Money Went Bot. The README is 
 
 ## What the bot does
 
-My Money Went Bot receives Vietnamese bank transaction notifications through SePay, writes each transaction to your own Google Sheet, and lets you categorize expenses from **Telegram or Zalo** — two independent channels; set up either, or both. Reports can be viewed by account, category, and period.
+My Money Went Bot does two things, both into a Google Sheet you own, driven from **Telegram or Zalo** (two independent channels — set up either, or both):
+
+- **Credit-card cashback tracking.** The bank's own notification emails (Cake by VPBank, Techcombank, Hang Seng, ...) reach the bot through a Google Apps Script. For every swipe the bot classifies the merchant into an MCC, applies the card's rate, per-transaction tiers, per-category caps, daily limits and the activation gate, and replies with what the swipe earned. `/cashback` shows the whole statement cycle. Cards are YAML templates in `card_templates/`.
+- **Money in and out of your bank accounts.** SePay turns each bank notification into a webhook; the bot writes the row, tags the account, and asks for a category (or applies a keyword rule). Reports by account, category, and week/month/quarter/year. SePay's free plan covers 50 transactions a month — see [SePay Setup](SePay-Setup).
 
 ## Recommended setup path
 
@@ -28,6 +31,7 @@ Telegram and Zalo are independent channels — set up whichever you use, or both
 5. Connect SePay to the Railway webhook URL.
 6. Set the Telegram webhook.
 7. Test `/today` and one small transaction.
+8. Optional — credit-card cashback: set up the Gmail → Apps Script forwarder (`google_apps_script.js`), onboard the card, then `/cashback seed <template>`. Steps are in the README under *Step 6 — Turn on credit-card cashback*.
 
 Detailed guide: [Setup for Non-Technical Users](Setup-for-Non-Technical-Users)
 
