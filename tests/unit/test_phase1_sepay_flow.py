@@ -55,7 +55,7 @@ def fake_world(monkeypatch, fake_ss):
     return fake_ss
 
 
-def _seed_account(account_id="tcb_main", source="sepay:1903999888",
+def _seed_account(account_id="bank_main", source="sepay:1903999888",
                   acc_type="bank", currency="VND", starting=1_000_000):
     sh.add_account(
         account_id=account_id,
@@ -102,7 +102,7 @@ async def test_sepay_matched_writes_account_id_on_tx(fake_world):
 
     rows = sh._sheet(S.TRANSACTIONS).get_all_values()
     # row 2 = first written row
-    assert rows[1][16] == "tcb_main"          # col Q account_id
+    assert rows[1][16] == "bank_main"          # col Q account_id
     assert rows[1][17] == "expense"            # col R tx_type
     assert rows[1][19] == "FALSE"              # col T not yet applied (not categorized)
 
@@ -236,7 +236,7 @@ async def test_finalize_ledger_is_idempotent(fake_world):
     # Find the row and finalize it twice
     rows = sh._sheet(S.TRANSACTIONS).get_all_values()
     row_num = 2  # first tx row
-    assert rows[1][16] == "tcb_main"
+    assert rows[1][16] == "bank_main"
 
     transaction._apply_ledger_for_row(row_num)
     transaction._apply_ledger_for_row(row_num)  # second call must be no-op
@@ -246,7 +246,7 @@ async def test_finalize_ledger_is_idempotent(fake_world):
     assert len(ledger_rows) == 1
 
     sh.invalidate_accounts_cache()
-    acc = sh.find_account_by_id("tcb_main")
+    acc = sh.find_account_by_id("bank_main")
     assert acc["running_balance"] == 800_000  # 1,000,000 - 200,000
 
 
@@ -261,13 +261,13 @@ async def test_currency_mismatch_skips_ledger(fake_world):
 
     rows = sh._sheet(S.TRANSACTIONS).get_all_values()
     assert rows[1][15] == "HKD"  # currency col P
-    assert rows[1][16] == "tcb_main"  # account resolved...
+    assert rows[1][16] == "bank_main"  # account resolved...
 
     transaction._apply_ledger_for_row(2)  # ...but ledger write must skip
 
     assert sh._get_ledger_rows() == []
     sh.invalidate_accounts_cache()
-    acc = sh.find_account_by_id("tcb_main")
+    acc = sh.find_account_by_id("bank_main")
     assert acc["running_balance"] == 1_000_000  # unchanged
 
 
@@ -282,17 +282,17 @@ async def test_recategorize_does_not_double_count(fake_world):
 
     transaction._apply_ledger_for_row(2)
     sh.invalidate_accounts_cache()
-    assert sh.find_account_by_id("tcb_main")["running_balance"] == 950_000
+    assert sh.find_account_by_id("bank_main")["running_balance"] == 950_000
 
     # User taps "wrong category" — sheet logic resets the row
     sh.reset_transaction_row(2)
     sh.invalidate_accounts_cache()
-    assert sh.find_account_by_id("tcb_main")["running_balance"] == 1_000_000
+    assert sh.find_account_by_id("bank_main")["running_balance"] == 1_000_000
 
     # User picks again → re-apply
     transaction._apply_ledger_for_row(2)
     sh.invalidate_accounts_cache()
-    assert sh.find_account_by_id("tcb_main")["running_balance"] == 950_000
+    assert sh.find_account_by_id("bank_main")["running_balance"] == 950_000
 
     # Total ledger entries: 1 active, 1 voided
     all_rows = sh._get_ledger_rows()

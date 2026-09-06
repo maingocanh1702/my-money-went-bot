@@ -3,7 +3,7 @@ handlers/transaction.py — finalize + confirm transaction labeling
 """
 from datetime import datetime
 import pytz
-from config import CHAT_ID, DAILY_BUCKET_ID, TIMEZONE
+from config import CHAT_ID, DAILY_BUCKET_ID, MERCHANT_NOISE_WORDS, TIMEZONE
 import sheets as sh
 import telegram_api as tg
 
@@ -534,15 +534,18 @@ def _extract_keyword(description: str) -> str:
     (not a bank prefix, not a number, not a common noise word).
     """
     import re
+    # Bank plumbing and transfer boilerplate, never a merchant. Your OWN name
+    # appears in every transfer you send, so add it via MERCHANT_NOISE_WORDS
+    # rather than editing this list.
     noise = {
         "ct", "den", "tien", "chuyen", "thanh", "toan", "giao", "dich",
         "nhan", "gui", "tra", "phi", "tai", "khoan", "toi", "cho",
         "bank", "card", "payment", "transfer", "from", "the",
         "vnd", "usd", "hkd", "dong", "mbbank", "tpbank", "tcb",
         "vietcombank", "vcb", "vpbank", "bidv", "agribank",
-        "bankapi", "bankapinotify", "notify", "mai", "ngoc", "anh",
+        "bankapi", "bankapinotify", "notify",
         "noi", "dung", "ibft", "ma", "gd", "so", "auto",
-    }
+    } | MERCHANT_NOISE_WORDS
     # Normalize and split
     text = sh._normalize_for_match(description)
     words = re.split(r"[\s\-_/\\|:;,.]+", text)

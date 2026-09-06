@@ -21,15 +21,15 @@ def test_list_empty_when_no_accounts(fake_ss):
 
 def test_list_renders_name_type_currency_slug(fake_ss):
     sh.add_account(
-        account_id="tcb_main", name="TCB Tiêu dùng", acc_type="bank",
+        account_id="bank_main", name="Ngân hàng chính", acc_type="bank",
         currency="VND", source_keys=["sepay:1903"], starting_balance=0,
     )
     sh.invalidate_accounts_cache()
     lines = accounts._account_list_lines()
     blob = "\n".join(lines)
-    assert "TCB Tiêu dùng" in blob
+    assert "Ngân hàng chính" in blob
     assert "(VND, bank)" in blob
-    assert "tcb_main" in blob
+    assert "bank_main" in blob
     assert "sepay:1903" in blob
     # No balance / no "Số dư" / no "Dư nợ" — those are gone.
     assert "Số dư" not in blob

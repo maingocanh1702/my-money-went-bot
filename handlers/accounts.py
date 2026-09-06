@@ -578,7 +578,7 @@ async def cmd_accounts(text: str = ""):
         })
         await tg.send_text(
             "📝 *Setup account mới* (manual)\n\n"
-            "Tên hiển thị (vd: `TCB Tiêu dùng`, `Cake Visa ****8421`):"
+            "Tên hiển thị (vd: `Ngân hàng chính`, `Cake Visa ****8421`):"
         )
         return
 
@@ -746,7 +746,7 @@ async def cmd_transfer(text: str):
     if len(parts) < 4:
         await tg.send_text(
             "Usage: `/transfer <amount> <from> <to>`\n"
-            "Vd: `/transfer 1000000 tcb_main cake_main`"
+            "Vd: `/transfer 1000000 bank_main cake_main`"
         )
         return
     amount = _parse_money(parts[1])

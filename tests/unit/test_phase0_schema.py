@@ -84,10 +84,10 @@ def test_append_transaction_with_explicit_account_id(fake_ss):
     _setup_tx_tab(fake_ss)
     row_num = sh.append_transaction(
         "2026-05-10T10:00:00", "highland", 50000, "REF3", "2026-05",
-        account_id="tcb_main",
+        account_id="bank_main",
     )
     row = sh._sheet(S.TRANSACTIONS).row_values(row_num)
-    assert row[16] == "tcb_main"
+    assert row[16] == "bank_main"
     assert row[17] == "expense"
     assert row[19] == "FALSE"  # not yet applied
 
@@ -96,11 +96,11 @@ def test_append_transaction_with_linked_row(fake_ss):
     _setup_tx_tab(fake_ss)
     row_num = sh.append_transaction(
         "2026-05-10T10:00:00", "transfer", 1_000_000, "REF4", "2026-05",
-        account_id="tcb_main",
+        account_id="bank_main",
         ledger_tx_type="transfer",
         linked_tx_row=99,
     )
     row = sh._sheet(S.TRANSACTIONS).row_values(row_num)
-    assert row[16] == "tcb_main"
+    assert row[16] == "bank_main"
     assert row[17] == "transfer"
     assert row[18] == "99"

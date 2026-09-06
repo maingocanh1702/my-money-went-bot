@@ -20,7 +20,7 @@ class TestListTemplates:
     def test_discovers_bundled_templates(self):
         names = list_templates()
         assert "cake_freedom" in names
-        assert "techcombank_visa" in names
+        assert "example_visa" in names
 
     def test_returns_sorted(self):
         names = list_templates()
@@ -61,16 +61,16 @@ class TestLoadTemplate:
         # Cake rules inherit card rate (rate=None)
         assert tmdt.rate is None
 
-    def test_load_techcombank_visa(self):
-        tpl = load_template("techcombank_visa", force_reload=True)
-        assert tpl.card_id == "techcombank_visa"
-        assert tpl.bank == "Techcombank"
+    def test_load_example_visa(self):
+        tpl = load_template("example_visa", force_reload=True)
+        assert tpl.card_id == "example_visa"
+        assert tpl.bank == "Example Bank"
         assert tpl.config.cashback_rate == 0.01  # base 1%
         assert tpl.config.min_eligible_spend == 0  # no gate
         assert tpl.config.cap_period == "calendar_month"
         assert len(tpl.tiers) == 0  # no per-tx tiers
         assert len(tpl.rules) == 10
-        # Techcombank has per-rule rates
+        # The example card gives each rule its own rate
         restaurant = tpl.rule_by_mcc("5812")
         assert restaurant is not None
         assert restaurant.rate == 0.03
@@ -122,8 +122,8 @@ class TestMccChoices:
         assert "🛍" in tmdt_label
         assert "Sàn TMĐT" in tmdt_label
 
-    def test_techcombank_mcc_choices(self):
-        tpl = load_template("techcombank_visa", force_reload=True)
+    def test_example_mcc_choices(self):
+        tpl = load_template("example_visa", force_reload=True)
         choices = tpl.mcc_choices
         assert len(choices) == 10
 
@@ -210,10 +210,10 @@ class TestExport:
             invalidate_cache()
 
     def test_export_is_valid_yaml(self):
-        tpl = load_template("techcombank_visa", force_reload=True)
+        tpl = load_template("example_visa", force_reload=True)
         yaml_str = export_template(tpl)
         data = yaml.safe_load(yaml_str)
-        assert data["card_id"] == "techcombank_visa"
+        assert data["card_id"] == "example_visa"
         assert len(data["rules"]) == 10
 
 
@@ -226,8 +226,8 @@ class TestPatterns:
         assert "SHOPEE" in tpl.patterns["5262"]
         assert "LAZADA" in tpl.patterns["5262"]
 
-    def test_techcombank_has_patterns(self):
-        tpl = load_template("techcombank_visa", force_reload=True)
+    def test_example_has_patterns(self):
+        tpl = load_template("example_visa", force_reload=True)
         assert "5812" in tpl.patterns
         assert any("KICHI" in p for p in tpl.patterns["5812"])
 

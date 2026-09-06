@@ -1,16 +1,20 @@
-# Techcombank Visa — Cashback Template
-# Source: Techcombank website, chương trình 2026.
-# Rate 1-5% tùy danh mục, cap theo calendar month.
-# ⚠️ Chương trình thay đổi theo giai đoạn — verify trên app Techcombank.
+# Example Visa — Cashback Template (SAMPLE, not a real card)
+#
+# A worked second example next to cake_freedom.yaml, showing the parts that
+# template does not use: a per-rule `rate` (each MCC earns its own %), a
+# `calendar_month` cap period, no activation gate and no per-tx tiers.
+#
+# ⚠️ The rates and caps below are invented. Copy this file, rename card_id,
+# and fill in the real numbers from YOUR card's terms before seeding it.
 
-card_id: techcombank_visa
-card_name: "Techcombank Visa"
-bank: "Techcombank"
-version: "2026.08"
-description: "Hoàn 1-5% theo danh mục MCC, cap theo tháng dương lịch"
+card_id: example_visa
+card_name: "Example Visa"
+bank: "Example Bank"
+version: "1.0"
+description: "Sample template: 1-5% hoàn theo danh mục MCC, cap theo tháng dương lịch"
 
 config:
-  cashback_rate: 0.01           # base rate 1% cho MCC match nhưng rule rate trống
+  cashback_rate: 0.01           # base rate: dùng khi rule không có `rate` riêng
   min_eligible_spend: 0         # không cổng kích hoạt
   cap_period: calendar_month
   alert_pct: 0.80
