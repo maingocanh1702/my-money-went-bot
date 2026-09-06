@@ -247,6 +247,7 @@ The wiki pages are versioned in this repo under `docs/wiki/` — edit them there
 | `Cashback Card Config` | Card cashback settings (rate, gate, period) |
 | `Cashback Ledger` | Per-MCC cashback earned per cycle |
 | `MCC Map` | Keyword → MCC code mapping |
+| `Excluded Events` | Every event the bot declined, with the reason why |
 
 ### Step 3 — Set up SePay
 
