@@ -32,6 +32,7 @@ Keep the Sheet private and only share it with:
 | Secret | Protects against |
 |---|---|
 | `SEPAY_SECRET` | Fake SePay transaction webhooks |
+| `EMAIL_SECRET` | Fake forwarded bank e-mails on `/webhook/email` |
 | `TELEGRAM_WEBHOOK_SECRET` | Fake Telegram webhook updates |
 | `CRON_SECRET` | Unauthorized calls to `/trigger/*` endpoints |
 

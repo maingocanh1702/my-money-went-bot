@@ -15,7 +15,7 @@ This wiki is the longer, task-based manual for My Money Went Bot. The README is 
 
 ## What the bot does
 
-My Money Went Bot tracks your transactions automatically, into a Google Sheet you own, driven from **Telegram or Zalo** (two independent channels — set up either, or both). Transactions reach it from two sources:
+My Money Went Bot tracks your transactions automatically, into a Google Sheet you own, driven from **Telegram**, with **Zalo** available as a second channel alongside it. Transactions reach it from two sources:
 
 - **Vietnamese bank accounts.** SePay turns each bank notification into a webhook; the bot writes the row, tags the account, and asks for a category (or applies a keyword rule). SePay's free plan covers 50 transactions a month — see [SePay Setup](SePay-Setup).
 - **Credit cards.** The bank's own notification emails reach the bot through a Google Apps Script, which also covers any bank SePay hasn't signed.
@@ -24,7 +24,7 @@ Reports slice by account, category, and week/month/quarter/year. On top of the t
 
 ## Recommended setup path
 
-Telegram and Zalo are independent channels — set up whichever you use, or both. The steps below show Telegram; for Zalo see [Zalo Setup](Zalo-Setup). For most users, use Railway:
+Telegram is the primary channel: `BOT_TOKEN`, `CHAT_ID` and `TELEGRAM_WEBHOOK_SECRET` are required and the bot will not start without them. Zalo is an additional channel you can turn on alongside it — see [Zalo Setup](Zalo-Setup). For most users, use Railway:
 
 1. Create a Telegram bot (or set up Zalo — see [Zalo Setup](Zalo-Setup)).
 2. Create a Google Sheet.

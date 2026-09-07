@@ -2,7 +2,7 @@
 
 Use this path if you do not usually deploy servers. It uses Railway so you do not need to manage Linux, nginx, systemd, or SSL certificates.
 
-> **Telegram or Zalo?** They are two independent channels — set up either, or both. This guide walks through **Telegram**. To use **Zalo** instead of (or alongside) Telegram, follow [Zalo Setup](Zalo-Setup) for the Zalo variables; the Google Sheet, SePay, and security secrets are the same.
+> **Telegram or Zalo?** Telegram is required — the bot will not start without its three variables. Zalo is an extra channel you can add **alongside** Telegram, not instead of it. This guide walks through Telegram; add Zalo afterwards with [Zalo Setup](Zalo-Setup).
 
 ## Before you start
 
