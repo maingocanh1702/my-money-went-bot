@@ -70,7 +70,7 @@ flowchart TD
 Các app tài chính cá nhân (Money Lover, Misa, MoneyKeeper, ...) thường đòi credentials ngân hàng của bạn, chạy trên cloud của họ, và đẩy data của bạn sau bức tường freemium. Bot này làm ngược lại:
 
 - **Bạn sở hữu data.** Tất cả nằm trong Google Sheet của bạn. Export, fork, archive, pivot — quyền bạn.
-- **Bạn đọc được mọi dòng code.** ~3,000 LOC Python. Audit, custom, ship.
+- **Bạn đọc được mọi dòng code.** ~16k dòng Python, 440+ test, không obfuscate, không có service nào đứng giữa. Đọc, sửa, chạy.
 - **Bạn phân loại 1 lần.** Auto-categorize qua `/keywords` giúp tx định kỳ (Spotify, Grab, ...) skip luôn picker.
 - **Report khớp với mô hình thực tế** — per-account *và* per-category, theo week/month/quarter/year. Không chỉ là "biểu đồ category theo tháng".
 - **Không phải nhập tay khoản nào.** Cả chuyển khoản ngân hàng lẫn lần quẹt thẻ đều tự vào sheet, nên sổ sách đầy đủ chứ không phải chỉ những gì bạn nhớ để gõ.
@@ -248,6 +248,8 @@ Nội dung wiki được version trong repo ở `docs/wiki/` — sửa ở đó 
 | `Cashback Card Config` | Cấu hình cashback của thẻ (rate, cổng, kỳ) |
 | `Cashback Ledger` | Cashback đã tính, một dòng / giao dịch, theo kỳ |
 | `MCC Map` | Map keyword → mã MCC |
+| `Processed Refs` | Sổ claim idempotency — mỗi định danh giao dịch một dòng |
+| `Archive` | Dòng đã chuyển ra khỏi sheet đang dùng |
 | `Excluded Events` | Mọi sự kiện bị loại, kèm lý do |
 
 ### Bước 3 — Setup SePay
@@ -274,6 +276,19 @@ cp .env.example .env
 # (và ZALO_SECRET_TOKEN nếu ZALO_ENABLED=true)
 ```
 
+Đó là những biến thiếu thì bot không khởi động. Còn lại đều có default chạy được —
+`.env.example` mô tả đầy đủ từng biến, đây là những cái hay phải đụng nhất:
+
+| Tùy chọn | Mặc định | Đặt khi |
+|---|---|---|
+| `INGESTION_START_AT` | trống | Muốn có mốc bắt đầu sạch. Giao dịch trước mốc bị loại (có ghi lại); sau mốc, giao dịch đến muộn được ghi chứ không bị vứt. Nên đặt khi cài mới. |
+| `MERCHANT_NOISE_WORDS` | rỗng | Chuyển khoản VN luôn kèm tên người gửi — thêm tên bạn để bot không học thành tên merchant. |
+| `TX_MAX_AGE_MINUTES` | `10` | Chỉ có tác dụng khi `INGESTION_START_AT` trống. Tăng nếu bot có thể down lâu hơn 10 phút. |
+| `EMAIL_TX_MAX_AGE_MINUTES` | `10080` | Tương tự, cho đường email — Gmail poll làm trễ thêm. |
+| `SEPAY_LEGACY_REF_LOOKUP` | `true` | Cứ để bật. Tắt sau khi đã qua cửa sổ retry của SePay kể từ lần deploy nâng cấp định danh. |
+| `ZALO_TEXT_LIMIT` | `2000` | Zalo cắt tin nhắn dài khác với tài liệu. |
+
+
 **Railway** (khuyến nghị):
 
 1. Push fork của bạn lên GitHub.
@@ -287,31 +302,25 @@ cp .env.example .env
      -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>"
    ```
 
-**VPS** (Ubuntu 22.04):
+**VPS** (Ubuntu 22.04). Webhook bắt buộc phải chạy **HTTPS** — SePay, Telegram và
+Apps Script đều từ chối HTTP thường — nên `setup.sh` làm trọn gói: virtualenv,
+systemd unit `mmwbot` có đọc `.env`, nginx reverse proxy, và chứng chỉ Let's Encrypt.
 
 ```bash
-sudo apt install -y python3.11 python3-pip python3-venv
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-chmod 600 .env credentials.json
+# trên máy bạn
+scp -r ./my-money-went-bot ubuntu@<vps-ip>:~/
 
-# systemd service
-sudo tee /etc/systemd/system/mmwbot.service <<EOF
-[Unit]
-Description=My Money Went Bot
-After=network.target
-[Service]
-WorkingDirectory=$(pwd)
-ExecStart=$(pwd)/.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
-EnvironmentFile=$(pwd)/.env
-Restart=always
-[Install]
-WantedBy=multi-user.target
-EOF
+# trên VPS, khi .env và credentials.json đã nằm sẵn ở đó
+cd ~/my-money-went-bot
+sudo bash setup.sh your-domain.com
 
-sudo systemctl enable --now mmwbot
-journalctl -u mmwbot -f   # xem log
+systemctl status mmwbot
+journalctl -u mmwbot -f          # xem log
+curl https://your-domain.com/healthz
 ```
+
+Trỏ DNS A record về VPS trước khi chạy — certbot xác thực domain qua HTTP, không có
+thì fail.
 
 ### Bước 5 — Lần đầu chạy
 
@@ -322,6 +331,18 @@ journalctl -u mmwbot -f   # xem log
 5. Type `/report` → xem breakdown chi tiêu.
 
 Tx sau từ cùng account auto-route. Setup `/keywords` rules để auto-categorize tx định kỳ.
+
+### Bước 5b — Bật báo cáo định kỳ (2 phút, rất dễ quên)
+
+Recap tuần, báo cáo tháng và nhắc allocate đầu tháng do GitHub Actions bắn, không phải
+do bot tự chạy. Fork mới có sẵn lịch nhưng chưa có địa chỉ, nên **không có gì chạy cho
+tới khi bạn làm bước này**:
+
+1. Sửa `.github/workflows/cron.yml`, thay `BOT_URL: https://YOUR-APP.up.railway.app` bằng URL deploy của bạn.
+2. Trong repo: **Settings → Secrets and variables → Actions → New repository secret** → tên `CRON_SECRET`, giá trị trùng với biến môi trường `CRON_SECRET`.
+3. Commit. Bắn thử một cái: **Actions → Scheduled triggers → Run workflow → `weekly`**.
+
+GitHub tạm dừng scheduled workflow sau ~60 ngày repo không có hoạt động; push bất kỳ commit nào là bật lại.
 
 ### Bước 6 — Track luôn thẻ tín dụng (tùy chọn)
 
@@ -425,10 +446,14 @@ Hai đầu vào, một pipeline, một spreadsheet.
 │   ├── zalo_queue.py             # Hàng đợi tx Zalo bền (/pending)
 │   └── zalo_render.py            # Render summary plain-text cho Zalo
 ├── card_templates/               # Template thẻ cashback bằng YAML
+│   ├── __init__.py               # Loader, validator, exporter, cache
+│   ├── schema.py                 # Dataclass CardTemplate, CardConfig, RuleConfig
+│   ├── validate.py               # CLI validator độc lập
 │   ├── cake_freedom.yaml         # Cake by VPBank Freedom — thẻ thật
 │   └── example_visa.yaml         # Template mẫu: rate theo rule, cap theo tháng
 ├── scripts/
 │   ├── sim_webhook.py            # POST payload giả SePay / Cake vào bot local
+│   ├── zalo_get_updates.py       # In ra sender id Zalo đã nhắn cho bot
 │   ├── cashback_reconcile.py     # Cuối kỳ: ledger ước tính vs ngân hàng thực trả
 │   ├── check_no_personal_data.py # CI guard: không để lọt số tài khoản thật / secret
 │   └── check_parity.sh           # Diff repo này với một fork private
