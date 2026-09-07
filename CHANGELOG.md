@@ -17,6 +17,11 @@ All notable changes to MyMoneyWent will be documented in this file.
   edited in place, and formatting is stripped — a platform limit, not missing
   work here. Both READMEs and the Zalo wiki page now carry the comparison, and
   say that anything richer than text lands on Telegram first.
+- A "What it costs to run" section in both READMEs, with the free-tier limits of
+  every service the bot touches and the arithmetic to work out your own volume.
+  Hosting is the only bill (~$5/month on Railway, from ~68,000đ/month self-hosted);
+  the quota worth reading twice is SePay's, which counts *incoming* transactions
+  only, while this bot mostly records money going out.
 - Setting up the Zalo channel is now part of the guide rather than a page you had
   to already know existed: a numbered *Step 7* in both READMEs, and the AI setup
   prompt asks about Zalo once Telegram is working.
