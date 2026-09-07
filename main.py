@@ -21,7 +21,7 @@ from config import (
     ZALO_SECRET_TOKEN,
     TIMEZONE,
 )
-from utils import parse_money as _utils_parse_money, parse_budget_amount
+from utils import parse_money as _utils_parse_money, parse_budget_amount, md_safe
 import messenger
 import sheets as sh
 import telegram_api as tg
@@ -3494,7 +3494,7 @@ async def _tg_recat_by_row(row_num: int):
     buttons = tg.build_bucket_buttons(buckets, f"p_{row_num}", include_new=True)
     await tg.send_with_buttons(
         f"↩️ *Re-categorize: -{sh.fmt_amount(amount, currency)}*\n"
-        f"`{description}`\n\nKhoản này thuộc mục nào?",
+        f"`{md_safe(description)}`\n\nKhoản này thuộc mục nào?",
         buttons,
     )
 
@@ -3579,7 +3579,7 @@ async def _tg_cmd_pending():
                                       frequent_ids=frequent)
     await tg.send_with_buttons(
         f"💸 *-{sh.fmt_amount(amount, currency)}*\n"
-        f"`{description}`\n\n"
+        f"`{md_safe(description)}`\n\n"
         f"Khoản này thuộc mục nào? 🤔{remaining_note}",
         buttons,
     )

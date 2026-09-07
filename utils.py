@@ -131,6 +131,28 @@ def parse_money(text: str) -> float | None:
     return value if math.isfinite(value) else None
 
 
+# Telegram's legacy Markdown has no escape character, so these four are removed
+# rather than escaped. Parentheses stay: without a bracket they cannot form a
+# link, and merchant names use them constantly.
+_MD_ENTITY_CHARS = "*_`[]"
+
+
+def md_safe(text) -> str:
+    """Neutralise text that came from outside before it enters a Markdown message.
+
+    A bank memo is attacker-controlled: whoever sends you money writes it. A
+    memo reading `[Xac nhan giao dich](https://phish.example/login)` renders as
+    a live, clickable link inside a message the reader trusts as coming from
+    their own bot.
+
+    Wrapping the text in backticks is not a defence — one backtick in the memo
+    closes the code span and everything after it is parsed as fresh Markdown.
+    Removing the four characters that can open an entity is the whole fix; a
+    bank description loses nothing a person needs to read.
+    """
+    return "".join(ch for ch in str(text) if ch not in _MD_ENTITY_CHARS)
+
+
 def parse_budget_amount(text: str) -> int | None:
     """Parse a budget/limit amount: non-negative whole VND.
 
