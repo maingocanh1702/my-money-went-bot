@@ -27,7 +27,9 @@ GOOGLE_CREDS=credentials.json
 pytest tests/unit/ -v
 ```
 
-There are 120 unit tests. They use an in-memory fake spreadsheet and should not call Google APIs.
+There are 440+ unit tests. They use an in-memory fake spreadsheet and never call Google APIs, so the whole suite runs in about a second.
+
+CI also runs `python3 scripts/check_no_personal_data.py`, which fails the build if a real account identifier, secret, or home-directory path lands in the tree. Run it before opening a pull request.
 
 ## Main files
 
@@ -37,12 +39,19 @@ There are 120 unit tests. They use an in-memory fake spreadsheet and should not 
 | `config.py` | Environment variables and sheet tab names |
 | `sheets.py` | Google Sheets read/write logic |
 | `telegram_api.py` | Telegram Bot API wrapper |
-| `zalo_api.py` | Zalo Bot Platform API wrapper |
-| `notifier.py` | Dual-channel notification fan-out (Telegram + Zalo) |
-| `handlers/zalo_render.py` | Plain-text Zalo logged-summary renderer |
-| `handlers/sepay.py` | SePay webhook handling |
+| `messenger.py` | Dual-channel send (Telegram + Zalo); strips markup for Zalo |
+| `utils.py` | Money parsing, and `md_safe` for text that came from outside |
+| `handlers/sepay.py` | SePay + e-mail webhook handling, dedup, exclusion ledger |
+| `handlers/email_parser.py` | Bank notification e-mail → transaction |
+| `handlers/account_resolver.py` | Which account a transaction belongs to |
 | `handlers/transaction.py` | Transaction categorization flow |
 | `handlers/accounts.py` | Account onboarding and assignment |
+| `handlers/cashback.py`, `handlers/cashback_engine.py` | Cashback rules and the pure money math |
+| `handlers/allocation.py`, `handlers/manage.py`, `handlers/keywords.py` | Budgets, category management, auto-categorize rules |
+| `handlers/report.py`, `handlers/reports.py` | `/report` and the scheduled summaries |
+| `handlers/zalo_render.py`, `handlers/zalo_queue.py` | Zalo rendering and picker state |
+| `card_templates/` | YAML card definitions, their schema and validator |
+| `scripts/` | Operational helpers — privacy guard, parity check, webhook simulator |
 | `handlers/report.py` | Reporting |
 | `tests/unit/` | Unit tests |
 

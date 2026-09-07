@@ -1,6 +1,6 @@
 # Zalo Setup
 
-Telegram and Zalo are **two independent channels**. You can run the bot on Telegram, on Zalo, or on both. This page covers the Zalo channel. The Google Sheet, SePay, and the security secrets (`SEPAY_SECRET`, `CRON_SECRET`) are required either way — see [Railway Deployment](Railway-Deployment) and [Google Sheets Setup](Google-Sheets-Setup).
+Zalo is an **additional channel alongside Telegram**, not a replacement for it: `BOT_TOKEN`, `CHAT_ID` and `TELEGRAM_WEBHOOK_SECRET` are required and the bot exits at startup without them (`config.py`). Set Telegram up first, then add Zalo with this page. The Google Sheet, SePay, and the security secrets (`SEPAY_SECRET`, `CRON_SECRET`) are required either way — see [Railway Deployment](Railway-Deployment) and [Google Sheets Setup](Google-Sheets-Setup).
 
 > **What works on Zalo:** transaction notifications, a numbered-text category picker for uncategorized expenses (reply a number), and the commands `/today`, `/report`, `/accounts`, `/keywords`, `/manage`, `/allocate`, `/recat`, `/cancel`. Zalo has no inline buttons, so everything uses numbered menus.
 >

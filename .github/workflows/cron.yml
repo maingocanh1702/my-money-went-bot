@@ -30,6 +30,10 @@ on:
           - daily-recap
 
 env:
+  # REPLACE THIS with your own deployment URL, and add a CRON_SECRET repository
+  # secret (Settings → Secrets and variables → Actions). Until both are done this
+  # workflow runs on schedule and posts to nobody — no weekly recap, no monthly
+  # report, no allocation prompt, and no error to tell you why.
   BOT_URL: https://YOUR-APP.up.railway.app
 
 jobs:
