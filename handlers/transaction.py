@@ -6,6 +6,7 @@ import pytz
 from config import CHAT_ID, DAILY_BUCKET_ID, MERCHANT_NOISE_WORDS, TIMEZONE
 import sheets as sh
 import telegram_api as tg
+from utils import md_safe
 
 _LARGE_TX = 100_000  # alert threshold in VND
 
@@ -318,7 +319,7 @@ async def handle_recategorize(parts: list[str], message_id: int):
     await tg.edit_message(
         message_id,
         f"↩️ *Đổi mục: -{sh.fmt_amount(amount, currency)}*\n"
-        f"`{description}`{old_label}\n\n"
+        f"`{md_safe(description)}`{old_label}\n\n"
         f"Chuyển sang mục nào?"
     )
     await tg.send_with_buttons("Chọn category:", buttons)

@@ -137,15 +137,45 @@ async def test_the_record_carries_enough_to_reconstruct_the_event(fake_world):
 
 
 @pytest.mark.asyncio
-async def test_a_failing_ledger_never_blocks_the_response(fake_world, monkeypatch):
-    """Recording is best-effort. If the tab cannot be written the bot still
-    answers the provider — a bookkeeping failure must not become an outage."""
+async def test_a_failing_ledger_refuses_the_acknowledgement(fake_world, monkeypatch):
+    """If the decline cannot be written down, the webhook must not be answered.
+
+    This reverses the contract this file originally shipped with. Swallowing
+    the failure and returning normally looked like the safe choice — a
+    bookkeeping problem should not become an outage — but every entry point
+    answers 200 on a clean return. The provider stops retrying, Apps Script
+    marks the mail permanently processed, and the event then exists nowhere at
+    all: not in Transactions, not in Excluded Events, not in any retry queue.
+    That is the exact outcome the ledger was added to prevent.
+
+    Raising turns the request into a 503, so the provider retries and the next
+    attempt gets another chance to write it down."""
     _seed_account()
 
     def _boom(*a, **k):
         raise RuntimeError("sheets unavailable")
 
     monkeypatch.setattr(sh, "_ensure_excluded_events_tab", _boom)
-    await sepay.handle_sepay_webhook(_payload(sepay_id=7007, when=_hours_ago(6)))
 
+    with pytest.raises(sepay.ExcludedEventNotRecorded):
+        await sepay.handle_sepay_webhook(_payload(sepay_id=7007, when=_hours_ago(6)))
+
+    # And still no transaction row — the event was declined, not recorded.
     assert _tx_rows() == []
+
+
+@pytest.mark.asyncio
+async def test_the_ledger_layer_itself_still_swallows_and_reports(fake_world, monkeypatch):
+    """The sheet layer stays best-effort: it returns False rather than raising,
+    so the caller decides what a failure means. Only the caller fails closed."""
+    _seed_account()
+
+    def _boom(*a, **k):
+        raise RuntimeError("sheets unavailable")
+
+    monkeypatch.setattr(sh, "_ensure_excluded_events_tab", _boom)
+
+    assert sh.record_excluded_event(
+        ref_code="r1", source="sepay", occurred_at="2026-09-01 10:00:00",
+        amount=1000, currency="VND", tx_type="Tiền ra", reason="older_than_max_age",
+    ) is False
