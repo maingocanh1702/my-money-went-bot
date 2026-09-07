@@ -263,7 +263,7 @@ A subset (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) use **direct API in
 
 #### What SePay costs
 
-SePay's **Free** plan is 0đ/month and includes **50 transactions/month**. Going over is allowed — the extra transactions are billed afterwards (pay-as-you-go) — or you can move to a paid plan: **Startup** from 120,000đ/month with a much larger quota, or **Shop** at 70,000đ per store/month with unlimited transactions. SePay's FAQ counts *incoming* transactions toward the quota. For a one-person bot the free plan is usually enough; check the [pricing page](https://sepay.vn/bang-gia.html) and [FAQ](https://sepay.vn/faq.html) for the current terms, they change.
+SePay's **Free** plan is 0đ/month and includes **50 transactions/month**. Going over is allowed — the extra transactions are billed afterwards (pay-as-you-go) — or you can move to a paid plan: **Startup** from 120,000đ/month with a much larger quota, or **Shop** at 70,000đ per store/month with unlimited transactions. SePay's FAQ counts *incoming* transactions toward the quota. For a one-person bot the free plan is usually enough — the quota counts *incoming* transactions only, and this bot mostly records money going out. See [What it costs to run](#what-it-costs-to-run) for the whole picture; check the [pricing page](https://sepay.vn/bang-gia.html) and [FAQ](https://sepay.vn/faq.html) for current terms, they change.
 
 ### Cards and other banks — via notification email
 
@@ -283,8 +283,92 @@ Cake ships as the worked example. **Any card — credit or debit — and any ban
 | Telegram account | You probably have one |
 | [SePay](https://sepay.vn) account | Connects to your Vietnamese bank accounts (free plan: 50 tx/month) |
 | Google account | For Google Sheets + Google Cloud — and Gmail + Apps Script if you use the email path |
-| Server with public HTTPS | [Railway](https://railway.app) is simplest (free tier OK). Or Ubuntu VPS + [ngrok](https://ngrok.com) for testing. |
+| Server with public HTTPS | [Railway](https://railway.app) is simplest. Or an Ubuntu VPS + [ngrok](https://ngrok.com) for testing. |
 | Python 3.11+ | On your server / Railway |
+
+---
+
+## What it costs to run
+
+Hosting is the only bill. Everything else the bot touches has a free tier that a
+personal user does not come close to exhausting.
+
+| Where you host it | Per month | Per year |
+|---|---|---|
+| **Railway Hobby** | **~$5** (~131,000đ) | ~$60 |
+| Vietnamese VPS (cheapest) + `.id.vn` domain | ~68,000đ | ~813,000đ |
+| Vietnamese VPS (mainstream) + domain | ~108,000đ | ~1,293,000đ |
+| Hetzner CX22 + domain | ~$5.5 (~140,000đ) | ~$66 |
+| Oracle Cloud Always Free + domain | ~8,750đ *(domain only)* | ~105,000đ |
+
+Railway needs no domain — you get an HTTPS `*.up.railway.app` subdomain free. Every
+VPS route does need one, because SePay, Telegram and Apps Script all refuse plain
+HTTP and Let's Encrypt needs a domain to issue against; `.id.vn` is about
+105,000đ/year.
+
+**Railway's own free plan cannot run this.** It grants $1 of credit a month and
+the bot's RAM alone costs about $2.20, so an always-on service needs Hobby. On
+Hobby the $5 covers the usage: measured against Railway's published rates
+($10.01/GB-month RAM, $20.01/vCPU-month), this bot sits at roughly **$2.20–$4.50
+a month** — one uvicorn process, no database, idle between webhooks. You pay the
+$5 minimum, not more.
+
+Oracle's Always Free tier is genuinely 0đ, but Oracle quietly halved the ARM
+allocation in 2026 and does not grandfather existing instances. For something
+holding your real spending history, weigh that against the ~130,000đ/month it saves.
+
+### Everything else: free, with room to spare
+
+| Service | Free tier | What 150 transactions/month uses |
+|---|---|---|
+| **SePay** | 50 transactions/month | Counts **incoming only** — see below |
+| **Telegram Bot API** | unlimited | — |
+| **Zalo Bot Platform** | 3,000 messages/month ([check current terms](https://bot.zapps.me/docs/)) | ~300–440 (10–15%) |
+| **Google Sheets API** | ample quotas | far below them |
+| **Google Apps Script** | 90 min triggers/day, 20,000 URL fetches/day | ~40–50% of the runtime, ~0% of the fetches |
+| **GitHub Actions** (the cron) | unlimited for public repos | a handful of runs a month |
+
+**The SePay number is the one worth reading twice.** Its FAQ defines the quota as
+*"tổng số lượng giao dịch tiền vào"* — **incoming transactions only**. This bot
+mostly tracks money going *out*, and card transactions arrive by e-mail without
+touching SePay at all. A personal user receiving a salary and a few refunds is
+looking at 5–15 counted transactions a month against a limit of 50. SePay does not
+publish its per-transaction overage rate, so if you expect to be near the line, ask
+them before you rely on it.
+
+<details>
+<summary>📐 Work out your own numbers</summary>
+
+**Zalo messages per transaction** (Telegram has no such limit):
+
+| Situation | Messages |
+|---|---|
+| A keyword rule matches → auto-categorized | 1 |
+| No rule matches | 2 (numbered picker + confirmation after you reply) |
+| Money in | 1 |
+| Credit-card swipe with an unmapped MCC | +1 |
+
+So `messages ≈ transactions × (2 − auto_rate) + commands_you_send`. At 0%
+auto-categorization you would need **~1,450 transactions a month** — about 48 a day —
+to reach 3,000. Every `/keywords` rule you add moves a transaction from 2 messages
+to 1, so the channel gets cheaper the longer you use it.
+
+**Apps Script** is the one quota that does *not* scale with your transactions: the
+every-minute Gmail trigger burns 1,440 executions a day whether you spend or not.
+At ~1.5 s per quiet run that is ~36 min/day of the 90 min/day allowance. If triggers
+ever stop silently, drop to every 5 minutes — that costs at most 5 minutes of delay
+on card transactions, and nothing at all on SePay ones, which are pushed rather than
+polled.
+
+**Google Sheets** grows with transactions but stays trivial: a few thousand API
+calls a month against per-minute limits.
+
+</details>
+
+*Prices checked September 2026, converted at ~26,250đ/$: [Railway](https://railway.com/pricing) ·
+[SePay](https://sepay.vn/bang-gia.html) · [Vietnamese VPS survey](https://azdigi.com/blog/kien-thuc-vps/bang-gia-thue-vps-viet-nam) ·
+[Apps Script quotas](https://developers.google.com/apps-script/guides/services/quotas).
+They change — treat this as a starting estimate, not a quote.*
 
 ---
 

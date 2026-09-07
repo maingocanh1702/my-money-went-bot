@@ -263,7 +263,7 @@ Một số bank (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) dùng **API 
 
 #### SePay tính phí thế nào
 
-Gói **Free** của SePay là 0đ/tháng, gồm **50 giao dịch/tháng**. Vượt quota vẫn được — phần vượt tính phí sau theo số giao dịch (pay-as-you-go) — hoặc lên gói trả phí: **Startup** từ 120.000đ/tháng với quota lớn hơn nhiều, hoặc **Shop** 70.000đ/cửa hàng/tháng không giới hạn giao dịch. FAQ của SePay ghi quota đếm theo giao dịch *tiền vào*. Với bot dùng cho một người thì gói Free thường là đủ; xem [bảng giá](https://sepay.vn/bang-gia.html) và [FAQ](https://sepay.vn/faq.html) để biết điều khoản hiện tại, vì họ có thay đổi.
+Gói **Free** của SePay là 0đ/tháng, gồm **50 giao dịch/tháng**. Vượt quota vẫn được — phần vượt tính phí sau theo số giao dịch (pay-as-you-go) — hoặc lên gói trả phí: **Startup** từ 120.000đ/tháng với quota lớn hơn nhiều, hoặc **Shop** 70.000đ/cửa hàng/tháng không giới hạn giao dịch. FAQ của SePay ghi quota đếm theo giao dịch *tiền vào*. Với bot dùng cho một người thì gói Free thường là đủ — quota chỉ đếm giao dịch *tiền vào*, mà bot này chủ yếu ghi tiền đi ra. Xem [Chi phí vận hành](#chi-phí-vận-hành) để có bức tranh đầy đủ; xem [bảng giá](https://sepay.vn/bang-gia.html) và [FAQ](https://sepay.vn/faq.html) để biết điều khoản hiện tại, vì họ có thay đổi.
 
 ### Thẻ và ngân hàng khác — qua email thông báo
 
@@ -283,8 +283,88 @@ Cake là ví dụ có sẵn. **Thẻ nào — tín dụng hay debit — và ngâ
 | Tài khoản Telegram | Chắc bạn có rồi |
 | Tài khoản [SePay](https://sepay.vn) | Kết nối tài khoản bank VN của bạn (gói Free: 50 tx/tháng) |
 | Tài khoản Google | Cho Google Sheets + Google Cloud — và Gmail + Apps Script nếu dùng đường email |
-| Server có HTTPS public | [Railway](https://railway.app) đơn giản nhất (free tier OK). Hoặc Ubuntu VPS + [ngrok](https://ngrok.com) cho test. |
+| Server có HTTPS public | [Railway](https://railway.app) đơn giản nhất. Hoặc Ubuntu VPS + [ngrok](https://ngrok.com) cho test. |
 | Python 3.11+ | Trên server / Railway |
+
+---
+
+## Chi phí vận hành
+
+Hosting là khoản duy nhất phải trả. Mọi dịch vụ khác bot đụng tới đều có gói free
+mà một người dùng cá nhân không cách nào xài hết.
+
+| Chạy ở đâu | Mỗi tháng | Mỗi năm |
+|---|---|---|
+| **Railway Hobby** | **~131.000đ** ($5) | ~1,58 triệu |
+| VPS Việt Nam rẻ nhất + domain `.id.vn` | ~68.000đ | ~813.000đ |
+| VPS Việt Nam phổ biến + domain | ~108.000đ | ~1,29 triệu |
+| Hetzner CX22 + domain | ~140.000đ ($5,5) | ~1,68 triệu |
+| Oracle Cloud Always Free + domain | ~8.750đ *(chỉ tiền domain)* | ~105.000đ |
+
+Railway không cần domain — bạn được sẵn subdomain `*.up.railway.app` có HTTPS. Mọi
+đường VPS đều cần domain, vì SePay, Telegram và Apps Script đều từ chối HTTP thường,
+mà Let's Encrypt thì phải có domain mới cấp cert; `.id.vn` khoảng 105.000đ/năm.
+
+**Gói Free của Railway không chạy được bot này.** Nó chỉ cho $1 credit/tháng, riêng
+RAM đã tốn ~$2,2 — muốn always-on là phải Hobby. Còn trên Hobby thì $5 đã bao hết:
+tính theo biểu giá Railway công bố ($10,01/GB RAM/tháng, $20,01/vCPU/tháng), bot này
+rơi vào khoảng **$2,2–$4,5/tháng** — một tiến trình uvicorn, không database, nằm im
+giữa các webhook. Bạn trả đúng mức tối thiểu $5, không hơn.
+
+Oracle Always Free đúng là 0đ, nhưng năm 2026 Oracle âm thầm cắt một nửa hạn mức ARM
+và không grandfather instance cũ. Với thứ đang giữ lịch sử chi tiêu thật của bạn, cân
+nhắc điều đó so với ~130.000đ/tháng tiết kiệm được.
+
+### Còn lại đều free, và còn dư nhiều
+
+| Dịch vụ | Gói free | 150 giao dịch/tháng dùng hết bao nhiêu |
+|---|---|---|
+| **SePay** | 50 giao dịch/tháng | Chỉ đếm **tiền vào** — xem bên dưới |
+| **Telegram Bot API** | không giới hạn | — |
+| **Zalo Bot Platform** | 3.000 tin/tháng ([kiểm tra điều khoản hiện tại](https://bot.zapps.me/docs/)) | ~300–440 tin (10–15%) |
+| **Google Sheets API** | quota rộng | còn xa mới chạm |
+| **Google Apps Script** | 90 phút trigger/ngày, 20.000 URL fetch/ngày | ~40–50% runtime, ~0% fetch |
+| **GitHub Actions** (cron) | không giới hạn với public repo | vài lần chạy mỗi tháng |
+
+**Con số SePay là chỗ đáng đọc kỹ.** FAQ của họ định nghĩa hạn mức là *"tổng số lượng
+giao dịch tiền vào"* — **chỉ tiền vào**. Mà bot này chủ yếu track tiền **ra**, còn giao
+dịch thẻ thì vào bằng email, không đụng SePay chút nào. Một người nhận lương cộng vài
+khoản hoàn tiền chỉ rơi vào 5–15 giao dịch bị đếm mỗi tháng, trên hạn mức 50. SePay
+không công bố đơn giá vượt gói, nên nếu bạn dự là sẽ sát vạch thì hỏi họ trước khi
+trông cậy vào đó.
+
+<details>
+<summary>📐 Tự tính theo khối lượng của bạn</summary>
+
+**Số tin Zalo cho mỗi giao dịch** (Telegram không có giới hạn này):
+
+| Tình huống | Số tin |
+|---|---|
+| Khớp keyword rule → tự phân loại | 1 |
+| Không khớp rule nào | 2 (danh sách đánh số + xác nhận sau khi bạn reply) |
+| Tiền vào | 1 |
+| Thẻ tín dụng chưa nhận diện MCC | +1 |
+
+Tức là `số tin ≈ số giao dịch × (2 − tỷ lệ auto) + số lệnh bạn gõ`. Với 0% tự phân
+loại, bạn cần **~1.450 giao dịch/tháng** — khoảng 48 giao dịch mỗi ngày — mới chạm
+3.000. Mỗi rule `/keywords` thêm vào đưa một giao dịch từ 2 tin xuống 1 tin, nên dùng
+càng lâu kênh này càng rẻ.
+
+**Apps Script** là quota duy nhất **không** tăng theo số giao dịch: trigger quét Gmail
+mỗi phút tốn 1.440 lần chạy/ngày dù bạn có tiêu tiền hay không. Mỗi lần chạy yên tĩnh
+~1,5 giây → ~36 phút/ngày trên hạn mức 90 phút/ngày. Nếu trigger tự dưng ngừng chạy
+không báo, hạ xuống mỗi 5 phút — đổi lại tối đa 5 phút trễ cho giao dịch thẻ, còn giao
+dịch SePay không ảnh hưởng vì đó là webhook đẩy tới, không phải polling.
+
+**Google Sheets** thì tăng theo số giao dịch nhưng vẫn không đáng kể: vài nghìn API
+call mỗi tháng, trong khi hạn mức tính theo phút.
+
+</details>
+
+*Giá kiểm tra tháng 9/2026, quy đổi ~26.250đ/$: [Railway](https://railway.com/pricing) ·
+[SePay](https://sepay.vn/bang-gia.html) · [khảo sát VPS Việt Nam](https://azdigi.com/blog/kien-thuc-vps/bang-gia-thue-vps-viet-nam) ·
+[quota Apps Script](https://developers.google.com/apps-script/guides/services/quotas).
+Giá có thay đổi — coi đây là ước tính ban đầu, không phải báo giá.*
 
 ---
 
