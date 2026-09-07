@@ -15,9 +15,14 @@ Two mechanisms, because the risks differ:
   publish it again, so only hashes live here.
 
 * Everything else is an allowlist. Shapes that could carry personal data —
-  a SePay source key, a Hang Seng account or transaction id, the Apps Script
-  credentials, any image under docs/ — must match a value that somebody
-  deliberately added below. A new capture cannot arrive silently.
+  a SePay source key, a Hang Seng account or transaction id, a home directory
+  path, the Apps Script credentials, any image under docs/ — must match a value
+  that somebody deliberately added below. A new capture cannot arrive silently.
+
+The allowlists are what catch the leak nobody predicted. The hash list only
+finds what someone already knew to ban, and it passed clean for weeks while
+seven files carried the maintainer's macOS home path — because a username is
+not a token anyone thought to write down.
 
 Run: python3 scripts/check_no_personal_data.py
 """
@@ -80,6 +85,17 @@ SEPAY_KEY = re.compile(r"sepay:([0-9]{6,})")
 # a bank-masked one. A plain run of digits is left to the SePay rule above.
 HANGSENG_ACCT = re.compile(r"\b\d{2,3}-\d{3}[X\d]{3}-\d{3}\b|\b\d{2}X{4}\d{3}\b")
 HANGSENG_ID = re.compile(r"\b(?:HD\d{14,}|N\d{10,})\b")
+# A home directory names the person who owns the machine, and agent prompts and
+# scratch notes carry them in without anyone noticing: seven files reached the
+# public repo with the maintainer's macOS home path in them, past every hash
+# rule above, because a username is not a token anyone thought to ban.
+HOME_PATH = re.compile(r"(?:/Users/|/home/|[Cc]:\\Users\\)([A-Za-z0-9._-]+)")
+# Placeholders a reader is meant to substitute, and the accounts a deploy target
+# actually creates. Anything else is somebody's real machine.
+ALLOWED_HOME_NAMES = {
+    "ubuntu", "root", "runner", "user", "username", "youruser", "your-user",
+    "your_username", "yourname", "your-name", "me", "name", "app",
+}
 TEXT_SUFFIX = {".py", ".js", ".cjs", ".md", ".yml", ".yaml", ".json", ".txt", ".sh", ".ini", ".toml", ".example"}
 
 
@@ -90,7 +106,11 @@ def tracked_files() -> list[str]:
 
 def main() -> int:
     findings: list[str] = []
+    # Two files are exempt because their job is to CONTAIN these shapes: this
+    # script, whose hash list is the ban list, and the test that proves the
+    # rules fire — a rule nothing is allowed to violate cannot be tested.
     self_path = "scripts/check_no_personal_data.py"
+    guard_test_path = "tests/unit/test_privacy_guard.py"
 
     for rel in tracked_files():
         path = Path(rel)
@@ -102,7 +122,7 @@ def main() -> int:
             )
             continue
 
-        if path.suffix not in TEXT_SUFFIX or rel == self_path:
+        if path.suffix not in TEXT_SUFFIX or rel in (self_path, guard_test_path):
             continue
         try:
             text = path.read_text(encoding="utf-8", errors="ignore")
@@ -121,6 +141,13 @@ def main() -> int:
         for match in set(HANGSENG_ACCT.findall(text)) | set(HANGSENG_ID.findall(text)):
             if match not in ALLOWED_HANGSENG:
                 findings.append(f"{rel}: '{match}' looks like a real Hang Seng identifier")
+
+        for name in set(HOME_PATH.findall(text)):
+            if name.lower() not in ALLOWED_HOME_NAMES:
+                findings.append(
+                    f"{rel}: home directory of '{name}' — a real machine's path. Use a "
+                    f"relative path, or a placeholder from ALLOWED_HOME_NAMES."
+                )
 
         if rel == "google_apps_script.js":
             for placeholder in APPS_SCRIPT_PLACEHOLDERS:
