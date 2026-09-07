@@ -16,7 +16,8 @@
 # Usage: scripts/check_parity.sh [path-to-private-checkout]
 set -euo pipefail
 
-PRIVATE="${1:-$HOME/Projects/Bot Finance}"
+PRIVATE="${1:-${MMWB_PRIVATE_CHECKOUT:-}}"
+[ -n "$PRIVATE" ] || { echo "Usage: scripts/check_parity.sh <path-to-private-checkout>"; echo "   or: MMWB_PRIVATE_CHECKOUT=<path> scripts/check_parity.sh"; exit 2; }
 [ -d "$PRIVATE" ] || { echo "No private checkout at: $PRIVATE"; exit 2; }
 
 EXPECTED_DIVERGENCE=(

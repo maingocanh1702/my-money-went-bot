@@ -22,3 +22,7 @@ every push to `main`, so edit them here rather than on the wiki itself.
 agent-assisted development harness and design records. They document how this
 repository is worked on, not how to run the bot. Nothing in the bot depends on
 them and you can skip them.
+
+`audits/` holds the security audits this codebase has been through and what was
+done about each finding. They are kept because a bot that moves real money
+should show its working, not because you need them to run one.
