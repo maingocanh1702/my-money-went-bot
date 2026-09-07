@@ -5,26 +5,86 @@
 
 [🇻🇳 Tiếng Việt](README.vi.md)
 
-![My Money Went Bot — automatic transaction tracking for Vietnamese bank accounts and credit cards, written to a Google Sheet you own and categorized from Telegram or Zalo](docs/screenshots/banner.png)
+![My Money Went Bot — automatic transaction tracking for Vietnamese bank accounts and cards, credit and debit, written to a Google Sheet you own and categorized from Telegram or Zalo](docs/screenshots/banner.png)
 
-**Automatic transaction tracking for your Vietnamese bank accounts and your credit cards.** Every transaction lands in a Google Sheet you own and gets categorized from Telegram or Zalo — no manual entry, no bank login, no third-party data store.
+**Automatic transaction tracking for your Vietnamese bank accounts and your cards — credit and debit alike.** Every transaction lands in a Google Sheet you own and gets categorized from Telegram or Zalo — no manual entry, no bank login, no third-party data store.
 
 > 🙏 **Credits:** built on top of patterns from [`maddyle8124/spend-less-bot`](https://github.com/maddyle8124/spend-less-bot). Big thanks to Maddy — without that seed this wouldn't exist.
 
 ---
 
+## 🤖 Setting it up with an AI assistant
+
+You do not have to be a developer to run this. Setup is mostly collecting a handful of
+values from Telegram, Google and SePay, and pasting them into one dashboard — which is
+exactly the kind of thing an AI assistant is good at walking you through, one step at a
+time, without you touching a line of code.
+
+Open **Claude**, **ChatGPT**, **Gemini**, **Copilot** or **Cursor**, and paste this:
+
+```text
+Help me set up this repo:
+https://github.com/maingocanh1702/my-money-went-bot
+
+I am not technical. Please guide me step by step using the simplest Railway path.
+Do not ask me to edit source code. Ask me for one thing at a time and wait for
+my answer before moving on.
+
+Help me collect the required settings:
+BOT_TOKEN, CHAT_ID, SHEET_ID, GOOGLE_CREDS_JSON, SEPAY_SECRET,
+TELEGRAM_WEBHOOK_SECRET, EMAIL_SECRET, and CRON_SECRET.
+All of them are mandatory — the bot refuses to start if any is missing.
+
+Then help me set the Telegram webhook, set the SePay webhook, add the Google
+Apps Script that forwards my card notification emails, and test the bot.
+
+Important: do not ask me to paste real secrets into a public chat.
+```
+
+<details>
+<summary>🇻🇳 Prompt tiếng Việt</summary>
+
+```text
+Hãy giúp tôi setup repo này:
+https://github.com/maingocanh1702/my-money-went-bot
+
+Tôi không rành kỹ thuật. Hãy hướng dẫn từng bước đơn giản nhất bằng Railway.
+Đừng yêu cầu tôi sửa code. Hỏi tôi từng thứ một và chờ tôi trả lời rồi mới đi tiếp.
+
+Hãy giúp tôi lấy đủ các biến cấu hình:
+BOT_TOKEN, CHAT_ID, SHEET_ID, GOOGLE_CREDS_JSON, SEPAY_SECRET,
+TELEGRAM_WEBHOOK_SECRET, EMAIL_SECRET, và CRON_SECRET.
+Tất cả đều bắt buộc — thiếu một biến là bot không khởi động.
+
+Sau đó hướng dẫn tôi set Telegram webhook, set SePay webhook, thêm Google Apps
+Script để chuyển email thông báo thẻ, và test bot.
+
+Lưu ý: đừng yêu cầu tôi paste secret thật vào chat công khai.
+```
+
+</details>
+
+**One rule, whichever assistant you use: never paste a real secret into a chat.**
+Your bot token, your Google credentials JSON and your `*_SECRET` values go straight
+from where you generate them into your Railway dashboard, and nowhere else. An
+assistant only ever needs to know *where* to click, not what your values are.
+
+[Full AI setup guide →](docs/AI_SETUP.md) · [Setup for non-technical users →](https://github.com/maingocanh1702/my-money-went-bot/wiki/Setup-for-Non-Technical-Users)
+
+---
+
 ## What it does
 
-![How it works — a bank account transaction arrives by SePay webhook and a credit-card swipe arrives as a notification email via Gmail and Apps Script; the bot deduplicates, resolves the account and categorizes it; the row lands in your Google Sheet and comes back to you on Telegram or Zalo](docs/screenshots/how-it-works.png)
+![How it works — a bank account transaction arrives by SePay webhook and a card swipe, credit or debit, arrives as a notification email via Gmail and Apps Script; the bot deduplicates, resolves the account and categorizes it; the row lands in your Google Sheet and comes back to you on Telegram or Zalo](docs/screenshots/how-it-works.png)
 
 **My Money Went Bot is a personal expense tracker that lives in your Telegram (or Zalo) chat.** It catches your transactions the moment they happen, from two sources at once:
 
 - **Vietnamese bank accounts** — link them to [SePay](https://sepay.vn) and every transfer, card payment or salary arrives as a webhook within seconds. SePay's free plan covers 50 transactions a month; see [What SePay costs](#what-sepay-costs).
-- **Credit cards** — your bank emails you for every swipe, and a small Google Apps Script forwards those emails to the bot. This also covers any bank SePay hasn't signed. Costs nothing.
+- **Cards — credit and debit** — your bank emails you for every swipe, and a small Google Apps Script forwards those emails to the bot. Both card types travel the identical path; a debit card needs no code of its own, only an alert email. This also covers any bank SePay hasn't signed. Costs nothing.
 
 Either way the transaction is written to a Google Sheet *you own*, tagged with the account it came from, and categorized with one tap — or with no tap at all, once you've taught the bot a keyword rule. `/report` then slices everything by account, by category, and by week / month / quarter / year.
 
-On top of that tracking sit the things you'd otherwise do by hand: monthly budgets per category, credit-card balances and payments, and **cashback tracking** that tells you what each swipe earned before the statement closes.
+On top of that tracking sit the things you'd otherwise do by hand: monthly budgets per category, credit-card balances and payments, and **cashback tracking** that tells you what each swipe earned before the statement closes. (A debit card spends money you already have, so it skips the statement-cycle machinery and is simply tracked — which is all most people want from one.)
 
 <details>
 <summary>📐 Detailed flow — the two sources, categorizing, and the cashback branch</summary>
@@ -32,8 +92,8 @@ On top of that tracking sit the things you'd otherwise do by hand: monthly budge
 ```mermaid
 flowchart TD
     A[🏦 Bank account<br/>money in / out] -->|SePay webhook| B[🤖 Bot<br/>dedup → resolve account]
-    A2[💳 Card notification<br/>email] -->|Gmail → Apps Script| B
-    B -.->|source not mapped yet| I[📝 Onboard wizard<br/>name → type → done]
+    A2[💳 Card — credit or debit<br/>notification email] -->|Gmail → Apps Script| B
+    B -.->|source not mapped yet| I[📝 Onboard wizard<br/>name → bank/debit/credit/cash → done]
     I -.->|later tx auto-route| B
     B --> C[📊 Row in your<br/>Google Sheet]
     C --> D{Keyword rule<br/>matches?}
@@ -41,7 +101,7 @@ flowchart TD
     D -->|❌ no| F[💬 You tap a category]
     E --> H[📈 /report<br/>account × category × period]
     F --> H
-    C --> K{Credit card?}
+    C --> K{Credit card?<br/>debit stops here}
     K -->|yes| L[💰 Cashback engine<br/>MCC → rate → per-tx tier<br/>→ cycle cap → daily limit → gate]
     L --> M[🧾 Cashback Ledger<br/>one line per swipe]
     M --> N[💳 /cashback<br/>this statement cycle]
@@ -86,11 +146,11 @@ The full feature breakdown.
 
 🏦 **Bank accounts, via SePay** — every transfer, card payment or salary that touches a linked account arrives as a webhook within seconds and is tagged with the account it came from. Enable *Tiền ra* only for spending, or both directions to see income too.
 
-📧 **Credit cards and other banks, via notification email** — `google_apps_script.js` polls Gmail every minute, forwards each notification email exactly once (deduplicated by message id, not by thread) to `/webhook/email`, and `handlers/email_parser.py` turns it into the same transaction payload SePay would have sent. Everything downstream — accounts, categories, reports, cashback — is identical whichever way a transaction arrived.
+📧 **Cards and other banks, via notification email** — `google_apps_script.js` polls Gmail every minute, forwards each notification email exactly once (deduplicated by message id, not by thread) to `/webhook/email`, and `handlers/email_parser.py` turns it into the same transaction payload SePay would have sent. Everything downstream — accounts, categories, reports, cashback — is identical whichever way a transaction arrived. A credit card and a debit card are the same path with a different account type; nothing in the parser or the pipeline distinguishes them.
 
 🔍 **No duplicates, no gaps** — a transaction that arrives twice (once from SePay, once by email) is dropped by a fuzzy cross-source check, and a webhook retried by SePay is caught by a durable reference ledger.
 
-🤖 **Smart account onboarding** — the first time a transaction arrives from an unmapped source, the bot asks. Three-step wizard: name → type → done (a credit card also asks for limit, statement day and due day). Later transactions from that source route themselves.
+🤖 **Smart account onboarding** — the first time a transaction arrives from an unmapped source, the bot asks. Three-step wizard: name → type (bank / debit / credit / cash) → done (a credit card also asks for limit, statement day and due day; a debit card doesn't need any of them). Later transactions from that source route themselves.
 
 🔁 **Historical backfill** — `/accounts assign <slug>` retroactively links unmapped past transactions to a newly-onboarded account, so nothing is lost between "first webhook" and "wizard complete".
 
@@ -181,13 +241,14 @@ A subset (BIDV, MB, VietinBank, ACB, OCB, KienLongBank, MSB) use **direct API in
 
 SePay's **Free** plan is 0đ/month and includes **50 transactions/month**. Going over is allowed — the extra transactions are billed afterwards (pay-as-you-go) — or you can move to a paid plan: **Startup** from 120,000đ/month with a much larger quota, or **Shop** at 70,000đ per store/month with unlimited transactions. SePay's FAQ counts *incoming* transactions toward the quota. For a one-person bot the free plan is usually enough; check the [pricing page](https://sepay.vn/bang-gia.html) and [FAQ](https://sepay.vn/faq.html) for the current terms, they change.
 
-### Credit cards and other banks — via notification email
+### Cards and other banks — via notification email
 
 | Bank / card | Arrives as | Cashback template |
 |---|---|---|
-| Cake by VPBank — Freedom card | notification email | [`card_templates/cake_freedom.yaml`](card_templates/cake_freedom.yaml) |
+| Cake by VPBank — Freedom card (credit) | notification email | [`card_templates/cake_freedom.yaml`](card_templates/cake_freedom.yaml) |
+| Any debit card that emails you per transaction | notification email | — (debit cards are tracked, not scored) |
 
-Cake ships as the worked example. **Any bank that emails you a per-transaction notification can be added**, and it is deliberately small: one sender in `google_apps_script.js`, one `_parse_<bank>` in `handlers/email_parser.py` returning the same dict `_parse_cake` does, and — for a card — a YAML template ([`example_visa.yaml`](card_templates/example_visa.yaml) shows the fields Cake's template doesn't use). Nothing else changes: account resolution, dedup, categories, reports and the cashback engine are shared. The email path also costs nothing — Gmail and Google Apps Script are free — so it is the cheapest way to cover a bank SePay has not signed.
+Cake ships as the worked example. **Any card — credit or debit — and any bank that emails you a per-transaction notification can be added**, and it is deliberately small: one sender in `google_apps_script.js`, one `_parse_<bank>` in `handlers/email_parser.py` returning the same dict `_parse_cake` does, and — for a credit card you also want cashback on — a YAML template ([`example_visa.yaml`](card_templates/example_visa.yaml) shows the fields Cake's template doesn't use). A debit card stops one step earlier: onboard it as type `debit` and it is tracked from then on, no template involved. Nothing else changes: account resolution, dedup, categories, reports and the cashback engine are shared. The email path also costs nothing — Gmail and Google Apps Script are free — so it is the cheapest way to cover a bank SePay has not signed.
 
 ---
 
@@ -261,7 +322,7 @@ The wiki pages are versioned in this repo under `docs/wiki/` — edit them there
    (Income tx are logged but skip the category picker — see [Why this exists](#why-this-exists).)
 3. ⚠️ **Disable SePay's native Google Sheets integration** — this bot writes its own rows; doubling = duplicate transactions.
 
-Credit cards and banks SePay doesn't cover come in through email instead — see [Step 6](#step-6--track-your-credit-cards-too-optional).
+Cards — credit and debit — and banks SePay doesn't cover come in through email instead: see [Step 6](#step-6--track-your-cards-too-credit-and-debit-optional).
 
 ### Step 4 — Deploy
 
@@ -345,9 +406,9 @@ but not the address, so **nothing fires until you do this**:
 
 GitHub pauses scheduled workflows after ~60 days without repository activity; any push re-enables them.
 
-### Step 6 — Track your credit cards too (optional)
+### Step 6 — Track your cards too, credit and debit (optional)
 
-SePay covers bank accounts. Cards — and any bank SePay hasn't signed — reach the bot through their notification emails instead, forwarded by a Google Apps Script. Once a card is tracked you can also turn cashback on for it.
+SePay covers bank accounts. Cards — and any bank SePay hasn't signed — reach the bot through their notification emails instead, forwarded by a Google Apps Script. A debit card works exactly like a credit card here: if your bank emails you when you spend, that email is all the bot needs. The only difference comes at onboarding, where you pick the account type — a credit card then also gets cashback tracking, a debit card is simply tracked.
 
 1. Generate `EMAIL_SECRET` (`openssl rand -hex 16`) and set it on Railway.
 2. Go to [script.google.com](https://script.google.com) → New project → paste [`google_apps_script.js`](google_apps_script.js).
@@ -393,7 +454,7 @@ Every swipe is now tracked like any other transaction. To add cashback on top, r
 Two inputs, one pipeline, one spreadsheet.
 
 ```
- bank accounts                          credit cards / banks outside SePay
+ bank accounts                          cards (credit + debit) / other banks
 ┌──────────────┐                        ┌──────────────┐   ┌─────────────────┐
 │ VN bank      │  money in / out        │ Bank e-mail  │   │ Google Apps     │
 │ (via SePay)  │ ──── webhook ───┐      │ notification │──►│ Script (Gmail,  │

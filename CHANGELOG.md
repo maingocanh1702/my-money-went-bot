@@ -4,6 +4,19 @@ All notable changes to MyMoneyWent will be documented in this file.
 
 ## Unreleased
 
+### Added
+- Debit cards are documented as a first-class thing the bot tracks, alongside
+  credit cards. No code changed — the account type, the e-mail path and the
+  onboarding wizard already supported it; nothing in the docs said so, which is
+  the same as not supporting it. A debit card needs an alert e-mail from its
+  bank and nothing else: no parser of its own, no YAML template. It skips the
+  statement-cycle and cashback machinery, which is what a debit card should do.
+- The AI-assisted setup now sits at the top of both READMEs with the prompt
+  inline, instead of a link two-thirds of the way down. Setup is mostly
+  collecting values and pasting them into one dashboard, which an assistant
+  walks a non-technical person through well — so the shortest path to a running
+  bot is the first thing the page offers.
+
 ### Fixed
 - Money read out of a sheet cell is now read the way the cell is *displayed*.
   Google returns the formatted value, so a Vietnamese-locale sheet shows 50000
