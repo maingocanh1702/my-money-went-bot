@@ -31,6 +31,7 @@ EXPECTED_DIVERGENCE=(
   example_visa.yaml                     # public-only: generic stand-in for it
   test_postgres_direct_creator.py       # public-only: the Postgres source-of-truth work
   requirements-dev.txt                  # storage/ drivers are public-only for now
+  test_privacy_guard.py                 # public-only: private has no check_no_personal_data.py to test
 )
 
 echo "public : $(git rev-parse --short HEAD)"
