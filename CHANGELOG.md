@@ -17,6 +17,9 @@ All notable changes to MyMoneyWent will be documented in this file.
   edited in place, and formatting is stripped — a platform limit, not missing
   work here. Both READMEs and the Zalo wiki page now carry the comparison, and
   say that anything richer than text lands on Telegram first.
+- Setting up the Zalo channel is now part of the guide rather than a page you had
+  to already know existed: a numbered *Step 7* in both READMEs, and the AI setup
+  prompt asks about Zalo once Telegram is working.
 - The AI-assisted setup now sits at the top of both READMEs with the prompt
   inline, instead of a link two-thirds of the way down. Setup is mostly
   collecting values and pasting them into one dashboard, which an assistant
@@ -24,6 +27,13 @@ All notable changes to MyMoneyWent will be documented in this file.
   bot is the first thing the page offers.
 
 ### Fixed
+- `docs/ZALO_BOT_SETUP.md` described a bot that no longer exists: it said Zalo was
+  notification-only, that categorizing had to happen on Telegram, and that
+  `ZALO_SECRET_TOKEN` was an optional extra for a "beta". All three were wrong —
+  every command works on Zalo through numbered replies, and the secret is
+  mandatory whenever the channel is on, because `/zalo/webhook` is public. The
+  wiki page also still claimed a Zalo-only deployment was possible; `config.py`
+  has never allowed one.
 - Money read out of a sheet cell is now read the way the cell is *displayed*.
   Google returns the formatted value, so a Vietnamese-locale sheet shows 50000
   as `50.000` — which `float()` read as fifty. Amounts with repeated separators

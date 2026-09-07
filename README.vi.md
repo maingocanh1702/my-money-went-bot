@@ -37,6 +37,12 @@ Tất cả đều bắt buộc — thiếu một biến là bot không khởi đ
 Sau đó hướng dẫn tôi set Telegram webhook, set SePay webhook, thêm Google Apps
 Script để chuyển email thông báo thẻ, và test bot.
 
+Tôi có dùng Zalo. Khi Telegram chạy được rồi, hướng dẫn tôi thêm Zalo làm kênh
+thứ hai: tạo bot trong Zalo Bot Manager, lấy ZALO_CHAT_ID bằng
+scripts/zalo_get_updates.py, set ZALO_ENABLED, ZALO_BOT_TOKEN, ZALO_CHAT_ID và
+ZALO_SECRET_TOKEN, rồi đăng ký webhook Zalo.
+(Bỏ qua phần này nếu tôi nói tôi không dùng Zalo.)
+
 Lưu ý: đừng yêu cầu tôi paste secret thật vào chat công khai.
 ```
 
@@ -58,6 +64,12 @@ All of them are mandatory — the bot refuses to start if any is missing.
 
 Then help me set the Telegram webhook, set the SePay webhook, add the Google
 Apps Script that forwards my card notification emails, and test the bot.
+
+I also use Zalo. After Telegram works, walk me through adding Zalo as a second
+channel: creating the bot in Zalo Bot Manager, finding my ZALO_CHAT_ID with
+scripts/zalo_get_updates.py, and setting ZALO_ENABLED, ZALO_BOT_TOKEN,
+ZALO_CHAT_ID and ZALO_SECRET_TOKEN, then registering the Zalo webhook.
+(Skip this if I say I do not use Zalo.)
 
 Important: do not ask me to paste real secrets into a public chat.
 ```
@@ -428,6 +440,44 @@ SePay phủ tài khoản ngân hàng. Thẻ — và bất kỳ ngân hàng nào 
 6. Quẹt thẻ một khoản nhỏ. Bot ping; onboard nguồn này là **🧾 Credit** (bot hỏi hạn mức, ngày sao kê, ngày đến hạn).
 
 Từ đây mỗi lần quẹt được track như mọi giao dịch khác. Muốn thêm cashback thì chạy `/cashback templates` → `/cashback seed cake_freedom <slug-thẻ>` (hoặc `/cashback setup <slug-thẻ>` với thẻ chưa có template); sau đó mỗi lần quẹt bot trả lời kèm số tiền hoàn và `/cashback` cho thấy kỳ sao kê hiện tại.
+
+### Bước 7 — Thêm Zalo bên cạnh Telegram (tùy chọn)
+
+Nếu Zalo mới là chỗ bạn thật sự đọc tin nhắn, bot chạy được ở đó luôn — **thêm vào**, không phải thay cho Telegram. Telegram vẫn bắt buộc (`BOT_TOKEN`, `CHAT_ID`, `TELEGRAM_WEBHOOK_SECRET`); bước này thêm một chỗ nữa để cùng con bot đó nói chuyện với bạn. Đọc [Zalo làm được gì và không làm được gì](#ở-mọi-kênh) trước — tóm tắt: reply số thay vì tap nút.
+
+1. **Tạo bot.** Mở Zalo → tìm OA **Zalo Bot Manager** → tạo bot. Tên bắt buộc bắt đầu bằng `Bot` (VD `Bot ChiTieu`). Zalo nhắn lại **bot token** — copy nó.
+2. **Lấy chat id.** Nhắn cho bot vừa tạo một tin bất kỳ ("hi" là được), rồi chạy:
+
+   ```bash
+   ZALO_BOT_TOKEN=<token-của-bạn> python3 scripts/zalo_get_updates.py
+   ```
+
+   Script kiểm tra token trước, rồi in ra id của người vừa nhắn cho bot. Id đó là `ZALO_CHAT_ID` — và cũng là người gửi *duy nhất* bot chấp nhận; ai khác đều bị bỏ qua.
+3. **Tạo webhook secret:** `openssl rand -hex 32` → đây là `ZALO_SECRET_TOKEN`.
+4. **Set bốn biến trên Railway** rồi redeploy:
+
+   | Biến | Giá trị |
+   |---|---|
+   | `ZALO_ENABLED` | `true` |
+   | `ZALO_BOT_TOKEN` | từ bước 1 |
+   | `ZALO_CHAT_ID` | từ bước 2 |
+   | `ZALO_SECRET_TOKEN` | từ bước 3 |
+
+   `ZALO_SECRET_TOKEN` là **bắt buộc** một khi `ZALO_ENABLED=true` — thiếu nó bot không khởi động, vì `/zalo/webhook` là endpoint công khai.
+
+5. **Đăng ký webhook** để Zalo gọi được tới bot:
+
+   ```bash
+   curl -X POST "https://bot-api.zaloplatforms.com/bot<ZALO_BOT_TOKEN>/setWebhook" \
+     -H "Content-Type: application/json" \
+     -d '{"url":"https://<domain-của-bạn>/zalo/webhook","secret_token":"<ZALO_SECRET_TOKEN>"}'
+   ```
+
+6. **Test.** Gửi `/today` trên Zalo — bot phải trả lời. Rồi tạo một giao dịch nhỏ: nó về cả Telegram *và* Zalo, và nếu không khớp keyword rule nào thì Zalo hiện danh sách category đánh số để bạn reply.
+
+Tắt đi cũng chỉ một biến: `ZALO_ENABLED=false` rồi redeploy. Nếu API Zalo lỗi giữa chừng thì giao dịch vẫn được ghi vào Sheet và Telegram vẫn nhận tin — gửi Zalo là best-effort, không bao giờ chặn thứ gì.
+
+Chi tiết đầy đủ kèm troubleshooting: [Zalo setup](docs/ZALO_BOT_SETUP.md) · [trang wiki](https://github.com/maingocanh1702/my-money-went-bot/wiki/Zalo-Setup).
 
 ---
 
