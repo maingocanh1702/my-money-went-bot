@@ -11,6 +11,7 @@ import pytz
 from config import INGESTION_START_AT, SEPAY_LEGACY_REF_LOOKUP, CHAT_ID, TIMEZONE, SEPAY_SECRET
 from config import TX_MAX_AGE_MINUTES, EMAIL_TX_MAX_AGE_MINUTES
 from config import ZALO_ENABLED, ZALO_CHAT_ID
+from utils import md_safe
 import messenger
 import sheets as sh
 import telegram_api as tg
@@ -60,6 +61,30 @@ def _parse_ingestion_start(tz):
         print(f"[sepay] INGESTION_START_AT={raw!r} is not an ISO date/timestamp — ignoring it")
         return None
     return tz.localize(parsed) if parsed.tzinfo is None else parsed.astimezone(tz)
+
+
+class ExcludedEventNotRecorded(RuntimeError):
+    """The ledger write for a declined event failed, so the event is unrecorded."""
+
+
+def _require_recorded(**fields) -> None:
+    """Record a declined event, or refuse to acknowledge the webhook.
+
+    Recording is best-effort at the sheet layer — a bookkeeping failure must
+    not become an outage mid-write. But the caller cannot then return normally:
+    every entry point answers 200 on a clean return, the provider stops
+    retrying, and Apps Script marks the mail permanently processed. The event
+    would exist nowhere at all, which is the exact outcome the ledger was added
+    to prevent.
+
+    Raising instead turns the whole request into a 503, so the provider retries
+    and the next attempt gets another chance to write it down.
+    """
+    if not sh.record_excluded_event(**fields):
+        raise ExcludedEventNotRecorded(
+            f"could not record excluded event ({fields.get('reason')}) "
+            f"for ref={fields.get('ref_code')!r}"
+        )
 
 
 async def _append_claimed_transaction(ref_code: str, *args, **kwargs) -> int:
@@ -177,7 +202,10 @@ async def _handle_transaction(payload: dict, *, trusted_email: bool, authenticat
         print(f"[sepay] skipping unknown tx type={tx_type_raw!r}")
         return
 
-    description = (data.get("description") or data.get("content") or "Không có mô tả").strip()
+    # str(): every neighbouring field is coerced, and a payload with a numeric
+    # description would otherwise raise on .strip() — after the webhook was
+    # authenticated, so the sender retries the same bytes forever.
+    description = str(data.get("description") or data.get("content") or "Không có mô tả").strip()
 
     # Currency: VND default cho mọi nguồn cũ (SePay luôn là VND).
     # Email parsers tự set currency đọc được (Cake: "VND"); parser ngoại tệ set của nó.
@@ -248,7 +276,7 @@ async def _handle_transaction(payload: dict, *, trusted_email: bool, authenticat
 
     if excluded_reason:
         print(f"[sepay] excluding tx: {excluded_reason} ref={ref_code!r}")
-        sh.record_excluded_event(
+        _require_recorded(
             ref_code=ref_code, source=source_family,
             occurred_at=tx_date_aware.strftime("%Y-%m-%d %H:%M:%S"),
             amount=amount, currency=currency, tx_type=tx_type_label,
@@ -263,7 +291,7 @@ async def _handle_transaction(payload: dict, *, trusted_email: bool, authenticat
                                 source=source_family):
         print(f"[dedup] skipped cross-source duplicate: {amount} {currency} "
               f"{tx_type_label} ref={ref_code!r}")
-        sh.record_excluded_event(
+        _require_recorded(
             ref_code=ref_code, source=source_family,
             occurred_at=tx_date_aware.strftime("%Y-%m-%d %H:%M:%S"),
             amount=amount, currency=currency, tx_type=tx_type_label,
@@ -337,7 +365,7 @@ async def _handle_transaction(payload: dict, *, trusted_email: bool, authenticat
         # is out of scope for the tracking goal.
         await tg.send_text(
             f"💚 *+{sh.fmt_amount(amount, currency)} vừa vào tài khoản!*\n"
-            f"`{description}`"
+            f"`{md_safe(description)}`"
         )
 
         # Parallel Zalo notification (income = info only, no category picker)
@@ -471,7 +499,7 @@ async def _handle_transaction(payload: dict, *, trusted_email: bool, authenticat
         sh.set_state(CHAT_ID, {**existing_state, "pending_tx_queue": pending})
         await tg.send_text(
             f"💸 *-{sh.fmt_amount(amount, currency)}*\n"
-            f"`{description}`\n\n"
+            f"`{md_safe(description)}`\n\n"
             f"📌 _Giao dịch đã ghi nhận. Hoàn tất thao tác hiện tại rồi dùng /pending để phân loại._"
         )
     else:
@@ -488,7 +516,7 @@ async def _handle_transaction(payload: dict, *, trusted_email: bool, authenticat
 
         await tg.send_with_buttons(
             f"💸 *-{sh.fmt_amount(amount, currency)}*\n"
-            f"`{description}`\n\n"
+            f"`{md_safe(description)}`\n\n"
             f"Khoản này thuộc mục nào? 🤔",
             buttons,
         )
@@ -642,7 +670,7 @@ async def _ask_cashback_learn(account_id: str, row_num: int):
         desc_short = description[:35] + ("…" if len(description) > 35 else "")
 
         msg = (
-            f"💳 *{card_name}* · {desc_short}\n"
+            f"💳 *{md_safe(card_name)}* · {md_safe(desc_short)}\n"
             f"{sh.fmt_amount(amount)} — chưa nhận diện MCC\n\n"
             f"Chọn nhóm hoàn tiền:"
         )
