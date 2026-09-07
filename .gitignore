@@ -26,3 +26,6 @@ HOW_IT_WORKS.md
 
 # Autopilot transient state / Codex review artifacts
 .autopilot/
+
+# Working drafts that are not part of the repo
+docs/postgres-migration-plan.md
