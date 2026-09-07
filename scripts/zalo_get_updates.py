@@ -62,6 +62,25 @@ def main() -> int:
         print("    python3 scripts/zalo_get_updates.py <bot-token>")
         return 2
 
+    # Check the token first. Without this, a bad token and "you haven't messaged
+    # the bot yet" both look like an empty result, and people spend an hour on
+    # the wrong one.
+    try:
+        me = httpx.get(f"{API_BASE}/bot{token}/getMe", timeout=15)
+    except httpx.HTTPError as e:
+        print(f"Could not reach the Zalo Bot API: {e}")
+        return 1
+    if me.status_code != 200:
+        print(f"Zalo rejected the token (HTTP {me.status_code}). Check ZALO_BOT_TOKEN")
+        print("against the value Zalo Bot Manager messaged you.")
+        return 1
+    try:
+        name = ((me.json().get("result") or me.json().get("data") or {})
+                .get("display_name") or (me.json().get("result") or {}).get("name") or "")
+    except ValueError:
+        name = ""
+    print(f"Token OK{f' — bot: {name}' if name else ''}\n")
+
     try:
         r = httpx.get(f"{API_BASE}/bot{token}/getUpdates", timeout=15)
     except httpx.HTTPError as e:

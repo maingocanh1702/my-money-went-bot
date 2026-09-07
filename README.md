@@ -38,6 +38,12 @@ All of them are mandatory — the bot refuses to start if any is missing.
 Then help me set the Telegram webhook, set the SePay webhook, add the Google
 Apps Script that forwards my card notification emails, and test the bot.
 
+I also use Zalo. After Telegram works, walk me through adding Zalo as a second
+channel: creating the bot in Zalo Bot Manager, finding my ZALO_CHAT_ID with
+scripts/zalo_get_updates.py, and setting ZALO_ENABLED, ZALO_BOT_TOKEN,
+ZALO_CHAT_ID and ZALO_SECRET_TOKEN, then registering the Zalo webhook.
+(Skip this if I say I do not use Zalo.)
+
 Important: do not ask me to paste real secrets into a public chat.
 ```
 
@@ -58,6 +64,12 @@ Tất cả đều bắt buộc — thiếu một biến là bot không khởi đ
 
 Sau đó hướng dẫn tôi set Telegram webhook, set SePay webhook, thêm Google Apps
 Script để chuyển email thông báo thẻ, và test bot.
+
+Tôi có dùng Zalo. Khi Telegram chạy được rồi, hướng dẫn tôi thêm Zalo làm kênh
+thứ hai: tạo bot trong Zalo Bot Manager, lấy ZALO_CHAT_ID bằng
+scripts/zalo_get_updates.py, set ZALO_ENABLED, ZALO_BOT_TOKEN, ZALO_CHAT_ID và
+ZALO_SECRET_TOKEN, rồi đăng ký webhook Zalo.
+(Bỏ qua phần này nếu tôi nói tôi không dùng Zalo.)
 
 Lưu ý: đừng yêu cầu tôi paste secret thật vào chat công khai.
 ```
@@ -430,6 +442,43 @@ SePay covers bank accounts. Cards — and any bank SePay hasn't signed — reach
 6. Make one small purchase with the card. The bot pings; onboard the source as **🧾 Credit** (it asks for limit, statement day and due day).
 
 Every swipe is now tracked like any other transaction. To add cashback on top, run `/cashback templates` → `/cashback seed cake_freedom <card-slug>` (or `/cashback setup <card-slug>` for a card no template covers); from then on each swipe replies with what it earned and `/cashback` shows the current statement cycle.
+
+### Step 7 — Add Zalo alongside Telegram (optional)
+
+If Zalo is where you actually read messages, the bot can run there too — **as well as** Telegram, not instead of it. Telegram stays required (`BOT_TOKEN`, `CHAT_ID`, `TELEGRAM_WEBHOOK_SECRET`); this adds a second place the same bot talks to you. Read [what Zalo can and cannot do](#everywhere) first — the short version is numbered replies instead of buttons.
+
+1. **Create the bot.** Open Zalo → find the **Zalo Bot Manager** OA → create a bot. The name must start with `Bot` (e.g. `Bot ChiTieu`). Zalo messages you the **bot token**; copy it.
+2. **Find your chat id.** Send your new bot any message ("hi" is fine), then run:
+
+   ```bash
+   ZALO_BOT_TOKEN=<your-token> python3 scripts/zalo_get_updates.py
+   ```
+
+   It checks the token, then prints the id of whoever messaged the bot. That id is `ZALO_CHAT_ID` — and it is also the *only* sender the bot will accept; everyone else is ignored.
+3. **Generate a webhook secret:** `openssl rand -hex 32` → this is `ZALO_SECRET_TOKEN`.
+4. **Set four variables on Railway** and redeploy:
+
+   | Variable | Value |
+   |---|---|
+   | `ZALO_ENABLED` | `true` |
+   | `ZALO_BOT_TOKEN` | from step 1 |
+   | `ZALO_CHAT_ID` | from step 2 |
+   | `ZALO_SECRET_TOKEN` | from step 3 |
+
+   `ZALO_SECRET_TOKEN` is **mandatory** once `ZALO_ENABLED=true` — the bot refuses to start without it, because `/zalo/webhook` is a public endpoint.
+5. **Register the webhook** so Zalo can reach the bot:
+
+   ```bash
+   curl -X POST "https://bot-api.zaloplatforms.com/bot<ZALO_BOT_TOKEN>/setWebhook" \
+     -H "Content-Type: application/json" \
+     -d '{"url":"https://<your-domain>/zalo/webhook","secret_token":"<ZALO_SECRET_TOKEN>"}'
+   ```
+
+6. **Test it.** Send `/today` on Zalo — it should reply. Then make one small transaction: it lands on Telegram *and* Zalo, and if no keyword rule matches, Zalo shows a numbered category list you answer with a number.
+
+Turning it off is one variable: `ZALO_ENABLED=false` and redeploy. If the Zalo API fails at any point the transaction is still written to your Sheet and Telegram still gets its message — the Zalo send is best-effort and never blocks anything.
+
+Full details, including troubleshooting: [Zalo setup](docs/ZALO_BOT_SETUP.md) · [wiki page](https://github.com/maingocanh1702/my-money-went-bot/wiki/Zalo-Setup).
 
 ---
 

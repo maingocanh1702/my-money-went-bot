@@ -21,6 +21,12 @@ All of them are mandatory — the bot refuses to start if any is missing.
 Then help me set the Telegram webhook, set the SePay webhook, add the Google
 Apps Script that forwards my card notification emails, and test the bot.
 
+I also use Zalo. After Telegram works, walk me through adding Zalo as a second
+channel: creating the bot in Zalo Bot Manager, finding my ZALO_CHAT_ID with
+scripts/zalo_get_updates.py, and setting ZALO_ENABLED, ZALO_BOT_TOKEN,
+ZALO_CHAT_ID and ZALO_SECRET_TOKEN, then registering the Zalo webhook.
+(Skip this if I say I do not use Zalo.)
+
 Important: do not ask me to paste real secrets into a public chat.
 ```
 
@@ -38,6 +44,12 @@ TELEGRAM_WEBHOOK_SECRET, EMAIL_SECRET, và CRON_SECRET.
 Tất cả đều bắt buộc — thiếu một biến là bot không khởi động.
 Sau đó hướng dẫn tôi set Telegram webhook, set SePay webhook, thêm Google Apps
 Script để chuyển email thông báo thẻ, và test bot.
+
+Tôi có dùng Zalo. Khi Telegram chạy được rồi, hướng dẫn tôi thêm Zalo làm kênh
+thứ hai: tạo bot trong Zalo Bot Manager, lấy ZALO_CHAT_ID bằng
+scripts/zalo_get_updates.py, set ZALO_ENABLED, ZALO_BOT_TOKEN, ZALO_CHAT_ID và
+ZALO_SECRET_TOKEN, rồi đăng ký webhook Zalo.
+(Bỏ qua phần này nếu tôi nói tôi không dùng Zalo.)
 
 Lưu ý: đừng yêu cầu tôi paste secret thật vào chat công khai.
 ```
@@ -60,6 +72,13 @@ Do:
 - Help the user set Telegram webhook with `secret_token=<TELEGRAM_WEBHOOK_SECRET>`.
 - Help the user configure SePay webhook URL as `https://<railway-domain>/webhook` and API Key as `SEPAY_SECRET`.
 - Test by sending `/today` to the bot and making one small transaction.
+- Ask whether the user uses Zalo. If they do, add it **after** Telegram is working:
+  create the bot in Zalo Bot Manager (the name must start with `Bot`), find
+  `ZALO_CHAT_ID` with `python3 scripts/zalo_get_updates.py` after they message the
+  bot once, generate `ZALO_SECRET_TOKEN`, set the four Zalo variables on Railway,
+  and register the webhook at `https://<domain>/zalo/webhook` with that secret.
+  Tell them what they are getting: the same bot, same commands, but numbered
+  replies instead of buttons, because Zalo's API sends plain text only.
 - Ask whether the user has cards they want tracked. Any card whose bank emails them per
   transaction can be added — **credit and debit alike, the same way**. Point them at the
   Gmail + Apps Script step (README *Step 6*) and at the onboarding wizard's account type:
@@ -89,6 +108,27 @@ Do not:
 
 Every one of these is required. The bot handles money over public webhooks, so it fails fast at startup rather than running with an unauthenticated endpoint.
 
+## Optional: the Zalo channel
+
+Telegram is required whether or not Zalo is used — there is no Zalo-only mode, and the bot exits at startup without `BOT_TOKEN`, `CHAT_ID` and `TELEGRAM_WEBHOOK_SECRET`. Zalo is a second channel on top.
+
+| Env var | Meaning |
+|---|---|
+| `ZALO_ENABLED` | `true` to turn the channel on |
+| `ZALO_BOT_TOKEN` | Bot token messaged to the user by Zalo Bot Manager |
+| `ZALO_CHAT_ID` | The user's Zalo sender id — also the only sender the bot accepts |
+| `ZALO_SECRET_TOKEN` | Random token; **required** once `ZALO_ENABLED=true`, because `/zalo/webhook` is public |
+
+Then register the webhook:
+
+```bash
+curl -X POST "https://bot-api.zaloplatforms.com/bot<ZALO_BOT_TOKEN>/setWebhook" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://<your-app>.up.railway.app/zalo/webhook","secret_token":"<ZALO_SECRET_TOKEN>"}'
+```
+
+Set expectations honestly: every command works on Zalo, but Zalo's Bot API sends plain text only, so a category picker is a numbered list the user replies to rather than buttons to tap.
+
 ## Happy path checklist
 
 1. User creates Telegram bot and saves `BOT_TOKEN`.
@@ -107,6 +147,8 @@ Every one of these is required. The bot handles money over public webhooks, so i
 14. User tests one small transaction.
 15. Optional — user sets up the Gmail → Apps Script forwarder and onboards each card,
     credit or debit, as it first spends.
+16. Optional — user adds Zalo: bot created, `ZALO_CHAT_ID` found, four Zalo variables
+    set, webhook registered, `/today` answered on Zalo.
 
 ## Verification commands
 

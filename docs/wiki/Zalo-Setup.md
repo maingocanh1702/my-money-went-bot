@@ -52,7 +52,7 @@ Create a bot on the [Zalo Bot Platform](https://bot.zapps.me/) and copy its **bo
 
 ### 3. Set the environment variables
 
-On Railway (or your `.env`), set the Zalo vars above plus the always-required ones (`SHEET_ID`, Google credentials, `SEPAY_SECRET`, `CRON_SECRET`). You do **not** need `BOT_TOKEN` / `CHAT_ID` / `TELEGRAM_WEBHOOK_SECRET` for a Zalo-only deployment.
+On Railway (or your `.env`), set the Zalo vars above **on top of** everything Telegram already needs. There is no Zalo-only deployment: `config.py` exits at startup without `BOT_TOKEN`, `CHAT_ID` and `TELEGRAM_WEBHOOK_SECRET`, whatever `ZALO_ENABLED` is set to.
 
 Generate the webhook secret with any random string, e.g.:
 
