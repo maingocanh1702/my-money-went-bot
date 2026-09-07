@@ -18,7 +18,7 @@ This wiki is the longer, task-based manual for My Money Went Bot. The README is 
 My Money Went Bot tracks your transactions automatically, into a Google Sheet you own, driven from **Telegram**, with **Zalo** available as a second channel alongside it. Transactions reach it from two sources:
 
 - **Vietnamese bank accounts.** SePay turns each bank notification into a webhook; the bot writes the row, tags the account, and asks for a category (or applies a keyword rule). SePay's free plan covers 50 transactions a month — see [SePay Setup](SePay-Setup).
-- **Credit cards.** The bank's own notification emails reach the bot through a Google Apps Script, which also covers any bank SePay hasn't signed.
+- **Cards — credit and debit.** The bank's own notification emails reach the bot through a Google Apps Script. Both card types use the identical path; a debit card needs nothing but an alert email. This also covers any bank SePay hasn't signed.
 
 Reports slice by account, category, and week/month/quarter/year. On top of the tracking sit monthly budgets, credit-card balances, and cashback tracking — for every swipe the bot works out what it earned (MCC, the card's rate, per-transaction tiers, per-category caps, daily limits, activation gate), and `/cashback` shows the whole statement cycle. Cards are YAML templates in `card_templates/`.
 
@@ -33,7 +33,7 @@ Telegram is the primary channel: `BOT_TOKEN`, `CHAT_ID` and `TELEGRAM_WEBHOOK_SE
 5. Connect SePay to the Railway webhook URL.
 6. Set the Telegram webhook.
 7. Test `/today` and one small transaction.
-8. Optional — track credit cards too: set up the Gmail → Apps Script forwarder (`google_apps_script.js`) and onboard the card; add cashback on top with `/cashback seed <template>`. Steps are in the README under *Step 6*.
+8. Optional — track your cards too, credit or debit: set up the Gmail → Apps Script forwarder (`google_apps_script.js`) and onboard the card. A credit card can then have cashback added with `/cashback seed <template>`; a debit card is simply tracked. Steps are in the README under *Step 6*.
 
 Detailed guide: [Setup for Non-Technical Users](Setup-for-Non-Technical-Users)
 

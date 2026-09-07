@@ -2,6 +2,8 @@
 
 This guide is written for AI assistants helping a non-technical user set up My Money Went Bot.
 
+The short version of it lives at the top of the README, so a reader can copy one prompt and start. This page is the longer brief for the assistant.
+
 Recommended path: Railway first. Do not recommend VPS, Docker, or source-code edits unless the user asks for them.
 
 ## Copy-paste prompt for users
@@ -16,7 +18,8 @@ Help me collect the required settings:
 BOT_TOKEN, CHAT_ID, SHEET_ID, GOOGLE_CREDS_JSON, SEPAY_SECRET,
 TELEGRAM_WEBHOOK_SECRET, EMAIL_SECRET, and CRON_SECRET.
 All of them are mandatory — the bot refuses to start if any is missing.
-Then help me set the Telegram webhook, set the SePay webhook, and test the bot.
+Then help me set the Telegram webhook, set the SePay webhook, add the Google
+Apps Script that forwards my card notification emails, and test the bot.
 
 Important: do not ask me to paste real secrets into a public chat.
 ```
@@ -33,7 +36,8 @@ Hãy giúp tôi lấy đủ các biến cấu hình:
 BOT_TOKEN, CHAT_ID, SHEET_ID, GOOGLE_CREDS_JSON, SEPAY_SECRET,
 TELEGRAM_WEBHOOK_SECRET, EMAIL_SECRET, và CRON_SECRET.
 Tất cả đều bắt buộc — thiếu một biến là bot không khởi động.
-Sau đó hướng dẫn tôi set Telegram webhook, set SePay webhook, và test bot.
+Sau đó hướng dẫn tôi set Telegram webhook, set SePay webhook, thêm Google Apps
+Script để chuyển email thông báo thẻ, và test bot.
 
 Lưu ý: đừng yêu cầu tôi paste secret thật vào chat công khai.
 ```
@@ -56,6 +60,11 @@ Do:
 - Help the user set Telegram webhook with `secret_token=<TELEGRAM_WEBHOOK_SECRET>`.
 - Help the user configure SePay webhook URL as `https://<railway-domain>/webhook` and API Key as `SEPAY_SECRET`.
 - Test by sending `/today` to the bot and making one small transaction.
+- Ask whether the user has cards they want tracked. Any card whose bank emails them per
+  transaction can be added — **credit and debit alike, the same way**. Point them at the
+  Gmail + Apps Script step (README *Step 6*) and at the onboarding wizard's account type:
+  `credit` if they also want cashback tracking, `debit` if they just want the spending
+  recorded. A debit card needs no template and no code.
 
 Do not:
 
@@ -96,6 +105,8 @@ Every one of these is required. The bot handles money over public webhooks, so i
 12. User sets SePay webhook URL and API Key.
 13. User sends `/today`.
 14. User tests one small transaction.
+15. Optional — user sets up the Gmail → Apps Script forwarder and onboards each card,
+    credit or debit, as it first spends.
 
 ## Verification commands
 

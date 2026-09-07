@@ -1,6 +1,6 @@
 # SePay Setup
 
-SePay sends bank transaction notifications to the bot. This is the path for **bank accounts** (money in / out). Credit cards and banks SePay does not cover come in through notification emails instead — see *Step 6 — Turn on credit-card cashback* in the README.
+SePay sends bank transaction notifications to the bot. This is the path for **bank accounts** (money in / out). Cards — credit and debit — and banks SePay does not cover come in through notification emails instead: see *Step 6 — Track your cards too, credit and debit* in the README.
 
 ## 0. What it costs
 

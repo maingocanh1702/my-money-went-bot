@@ -1,6 +1,6 @@
 # My Money Went Bot
 
-![My Money Went Bot — automatic transaction tracking for Vietnamese bank accounts and credit cards, written to a Google Sheet you own and categorized from Telegram or Zalo](screenshots/banner.png)
+![My Money Went Bot — automatic transaction tracking for Vietnamese bank accounts and cards, credit and debit, written to a Google Sheet you own and categorized from Telegram or Zalo](screenshots/banner.png)
 
 [English](../README.md) | [Tiếng Việt](../README.vi.md) | [Setup bằng AI](AI_SETUP.md)
 
@@ -14,7 +14,7 @@
 
 # My Money Went Bot - tự động theo dõi giao dịch thẻ và ngân hàng, ngay trong Telegram
 
-Bot tự ghi mọi giao dịch **thẻ tín dụng** và **tài khoản ngân hàng Việt Nam** vào Google Sheet của bạn, hỏi bạn phân loại bằng nút bấm (hoặc tự phân loại nếu đã có keyword rule), rồi báo cáo theo ngày, tuần, tháng, quý, năm. Trên nền đó có thêm ngân sách theo danh mục, dư nợ thẻ, và theo dõi cashback.
+Bot tự ghi mọi giao dịch **thẻ — tín dụng lẫn debit** — và **tài khoản ngân hàng Việt Nam** vào Google Sheet của bạn, hỏi bạn phân loại bằng nút bấm (hoặc tự phân loại nếu đã có keyword rule), rồi báo cáo theo ngày, tuần, tháng, quý, năm. Trên nền đó có thêm ngân sách theo danh mục, dư nợ thẻ, và theo dõi cashback.
 
 ---
 
@@ -35,12 +35,12 @@ My Money Went Bot nối những thứ bạn đã dùng:
 ```text
 Tài khoản ngân hàng  ── SePay webhook ─────────────┐
                                                    ├─> Bot (Telegram / Zalo) ─> Google Sheet của bạn
-Thẻ tín dụng / bank ── email thông báo ─ Apps Script ┘        └─ cashback engine: MCC · rate · cap · cổng
+Thẻ (tín dụng/debit) ── email thông báo ─ Apps Script ┘        └─ cashback engine: MCC · rate · cap · cổng
 ```
 
 Với tài khoản ngân hàng, SePay nhận thông báo từ ngân hàng và gửi webhook cho bot. Gói Free của SePay là 0đ với 50 giao dịch/tháng; vượt thì tính phí phần vượt hoặc lên gói trả phí — xem [bảng giá SePay](https://sepay.vn/bang-gia.html).
 
-Với thẻ tín dụng, bot đọc chính email thông báo mà ngân hàng gửi cho bạn — cách này cũng phủ luôn ngân hàng nào SePay chưa hỗ trợ, và không tốn phí.
+Với thẻ — tín dụng hay debit đều vậy — bot đọc chính email thông báo mà ngân hàng gửi cho bạn. Thẻ debit không cần thêm gì về code, chỉ cần ngân hàng có gửi email báo giao dịch. Cách này cũng phủ luôn ngân hàng nào SePay chưa hỗ trợ, và không tốn phí.
 
 Vì bot đã thấy mọi lần quẹt, nó tính luôn được cashback: mỗi lần quẹt trả lời ngay được hoàn bao nhiêu, `/cashback` cho thấy cả kỳ sao kê. Rule của từng thẻ là file YAML trong `card_templates/` — thêm thẻ khác chỉ cần thêm một file, không sửa code.
 
@@ -73,7 +73,7 @@ Khi có giao dịch mới:
 | Tính năng | Tác dụng |
 |---|---|
 | Tracking qua SePay | Mỗi giao dịch của tài khoản đã link về trong vài giây, gắn đúng tài khoản |
-| Tracking thẻ qua email | Thẻ tín dụng và ngân hàng ngoài SePay vào qua Gmail + Apps Script |
+| Tracking thẻ qua email | Thẻ tín dụng, thẻ debit và ngân hàng ngoài SePay vào qua Gmail + Apps Script |
 | Telegram / Zalo category picker | Tap nút để phân loại giao dịch mới |
 | Auto-categorize | Rule kiểu `GRAB -> Daily Spending`, `Spotify -> Subscription` |
 | Per-account tracking | Biết giao dịch đến từ account nào |
@@ -115,7 +115,7 @@ Tôi không rành kỹ thuật. Hãy làm theo docs/AI_SETUP.md và hướng d�
 | Cần có | Dùng để làm gì |
 |---|---|
 | Telegram account | Chat với bot |
-| Google account | Tạo Sheet và service account; Gmail + Apps Script nếu dùng đường email cho thẻ tín dụng |
+| Google account | Tạo Sheet và service account; Gmail + Apps Script nếu dùng đường email cho thẻ |
 | SePay account | Nhận webhook giao dịch ngân hàng Việt Nam (gói Free: 50 giao dịch/tháng) |
 | Railway account | Deploy bot có HTTPS public |
 
