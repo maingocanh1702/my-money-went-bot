@@ -7,7 +7,7 @@
 
 ![My Money Went Bot — automatic transaction tracking for Vietnamese bank accounts and cards, credit and debit, written to a Google Sheet you own and categorized from Telegram or Zalo](docs/screenshots/banner.png)
 
-**Automatic transaction tracking for your Vietnamese bank accounts and your cards — credit and debit alike.** Every transaction lands in a Google Sheet you own and gets categorized from Telegram or Zalo — no manual entry, no bank login, no third-party data store.
+**Automatic transaction tracking for your Vietnamese bank accounts and your cards — credit and debit alike.** Every transaction lands in a Google Sheet you own and gets categorized from **Telegram** — or from **Zalo**, if that is where you live. No manual entry, no bank login, no third-party data store.
 
 > 🙏 **Credits:** built on top of patterns from [`maddyle8124/spend-less-bot`](https://github.com/maddyle8124/spend-less-bot). Big thanks to Maddy — without that seed this wouldn't exist.
 
@@ -77,7 +77,7 @@ assistant only ever needs to know *where* to click, not what your values are.
 
 ![How it works — a bank account transaction arrives by SePay webhook and a card swipe, credit or debit, arrives as a notification email via Gmail and Apps Script; the bot deduplicates, resolves the account and categorizes it; the row lands in your Google Sheet and comes back to you on Telegram or Zalo](docs/screenshots/how-it-works.png)
 
-**My Money Went Bot is a personal expense tracker that lives in your Telegram (or Zalo) chat.** It catches your transactions the moment they happen, from two sources at once:
+**My Money Went Bot is a personal expense tracker that lives in your Telegram — or Zalo — chat.** It catches your transactions the moment they happen, from two sources at once:
 
 - **Vietnamese bank accounts** — link them to [SePay](https://sepay.vn) and every transfer, card payment or salary arrives as a webhook within seconds. SePay's free plan covers 50 transactions a month; see [What SePay costs](#what-sepay-costs).
 - **Cards — credit and debit** — your bank emails you for every swipe, and a small Google Apps Script forwards those emails to the bot. Both card types travel the identical path; a debit card needs no code of its own, only an alert email. This also covers any bank SePay hasn't signed. Costs nothing.
@@ -174,7 +174,19 @@ The full feature breakdown.
 
 ### Everywhere
 
-💬 **Zalo channel** — the same flows on Zalo Bot Platform via numbered text menus: category picker, `/report`, `/manage`, `/allocate`, `/keywords`, `/cashback`, `/recat`, `/pending`.
+💬 **Two channels — Telegram first, Zalo alongside it.** Every flow exists on both: the category picker, `/report`, `/manage`, `/allocate`, `/keywords`, `/cashback`, `/recat`, `/pending`. But they do not feel the same, and the reason is the platforms, not the bot.
+
+| | Telegram | Zalo Bot Platform |
+|---|---|---|
+| Pick a category | tap an inline button | reply with a number (`1`, `2`, `0`) |
+| Message updates | edited in place as you go | a new message each time |
+| Formatting | bold, italic, `code` | stripped to plain text |
+| Command menu | the `/` list, published to the client | type the command from memory |
+| Long reports | sent whole | chunked at `ZALO_TEXT_LIMIT` (2000 chars) |
+
+Zalo Bot's API sends plain text and nothing else — no inline keyboards, no message editing, no callback answers — so the bot renders every button set as a numbered list and asks you to reply with the number. It works, and people use it daily. It is just more typing.
+
+**So Telegram is the channel that gets the best of this bot, and the one to pick if you have no strong preference.** It is also required either way: `BOT_TOKEN`, `CHAT_ID` and `TELEGRAM_WEBHOOK_SECRET` are mandatory and the bot will not start without them, so Zalo is something you turn on *in addition*, not instead. Anything richer than text that comes later — a spending chart, an image, a document export — can only land on Telegram until Zalo's API grows the ability to carry it.
 
 🌐 **Bilingual UI** — `/lang` switches the whole bot between Vietnamese and English.
 
@@ -445,7 +457,7 @@ Every swipe is now tracked like any other transaction. To add cashback on top, r
 | `/cancel` | Abort the current multi-step flow. |
 | `/help` | Command list. |
 
-💡 Wherever the bot asks for an amount, Vietnamese shorthand works: `500k`, `3tr`, `3tr5`, `1m2`, `2 triệu` — all parsed as VND. Most commands also work on Zalo via numbered menus.
+💡 Wherever the bot asks for an amount, Vietnamese shorthand works: `500k`, `3tr`, `3tr5`, `1m2`, `2 triệu` — all parsed as VND. Every command also works on Zalo; where Telegram shows buttons, Zalo shows a numbered list you reply to.
 
 ---
 

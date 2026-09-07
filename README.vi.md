@@ -8,7 +8,7 @@
 
 ![My Money Went Bot — automatic transaction tracking for Vietnamese bank accounts and cards, credit and debit, written to a Google Sheet you own and categorized from Telegram or Zalo](docs/screenshots/banner.png)
 
-**Tự động theo dõi giao dịch thẻ — tín dụng lẫn ghi nợ — và tài khoản ngân hàng Việt Nam.** Mỗi giao dịch tự vào Google Sheet của bạn và được phân loại ngay trong Telegram hoặc Zalo — không nhập tay, không đưa login ngân hàng, không lưu data ở bên thứ ba.
+**Tự động theo dõi giao dịch thẻ — tín dụng lẫn ghi nợ — và tài khoản ngân hàng Việt Nam.** Mỗi giao dịch tự vào Google Sheet của bạn và được phân loại ngay trong **Telegram** — hoặc **Zalo**, nếu đó là chỗ bạn ở. Không nhập tay, không đưa login ngân hàng, không lưu data ở bên thứ ba.
 
 > 🙏 **Credits:** xây dựng dựa trên các pattern từ [`maddyle8124/spend-less-bot`](https://github.com/maddyle8124/spend-less-bot). Cảm ơn Maddy rất nhiều — không có repo gốc này thì My Money Went cũng không có.
 
@@ -77,7 +77,7 @@ vào *đâu*, không cần biết giá trị của bạn là gì.
 
 ![How it works — a bank account transaction arrives by SePay webhook and a card swipe, credit or debit, arrives as a notification email via Gmail and Apps Script; the bot deduplicates, resolves the account and categorizes it; the row lands in your Google Sheet and comes back to you on Telegram or Zalo](docs/screenshots/how-it-works.png)
 
-**My Money Went Bot là bot theo dõi chi tiêu cá nhân sống trong chat Telegram (hoặc Zalo) của bạn.** Nó bắt giao dịch ngay khi vừa phát sinh, từ hai nguồn cùng lúc:
+**My Money Went Bot là bot theo dõi chi tiêu cá nhân sống trong chat Telegram — hoặc Zalo — của bạn.** Nó bắt giao dịch ngay khi vừa phát sinh, từ hai nguồn cùng lúc:
 
 - **Tài khoản ngân hàng Việt Nam** — link với [SePay](https://sepay.vn), mọi khoản chuyển khoản, thanh toán thẻ hay nhận lương đều về dưới dạng webhook trong vài giây. Gói Free của SePay đủ 50 giao dịch/tháng — xem [SePay tính phí thế nào](#sepay-tính-phí-thế-nào).
 - **Thẻ — tín dụng và ghi nợ (debit)** — ngân hàng gửi email cho mỗi lần quẹt, và một Google Apps Script nhỏ chuyển email đó tới bot. Hai loại thẻ đi chung một đường; thẻ debit không cần code riêng, chỉ cần ngân hàng có gửi email báo giao dịch. Cách này cũng phủ luôn các ngân hàng SePay chưa ký. Không tốn phí.
@@ -174,7 +174,19 @@ Chi tiết từng tính năng.
 
 ### Ở mọi kênh
 
-💬 **Kênh Zalo** — cùng các flow trên Zalo Bot Platform qua menu đánh số: category picker, `/report`, `/manage`, `/allocate`, `/keywords`, `/cashback`, `/recat`, `/pending`.
+💬 **Hai kênh — Telegram là chính, Zalo chạy song song.** Mọi flow đều có ở cả hai: category picker, `/report`, `/manage`, `/allocate`, `/keywords`, `/cashback`, `/recat`, `/pending`. Nhưng trải nghiệm không giống nhau, và lý do nằm ở nền tảng chứ không phải ở bot.
+
+| | Telegram | Zalo Bot Platform |
+|---|---|---|
+| Chọn danh mục | tap nút inline | reply một con số (`1`, `2`, `0`) |
+| Cập nhật tin nhắn | sửa tại chỗ | mỗi lần một tin mới |
+| Định dạng | in đậm, in nghiêng, `code` | bị lược về text thuần |
+| Menu lệnh | danh sách `/` hiện sẵn trong app | tự nhớ mà gõ |
+| Báo cáo dài | gửi nguyên | cắt theo `ZALO_TEXT_LIMIT` (2000 ký tự) |
+
+API của Zalo Bot chỉ gửi được text thuần, không hơn — không inline keyboard, không sửa tin nhắn, không callback — nên bot render mọi bộ nút thành danh sách đánh số và bảo bạn reply con số. Vẫn chạy tốt, vẫn có người dùng hằng ngày. Chỉ là gõ nhiều hơn.
+
+**Nên Telegram là kênh nhận được nhiều nhất từ bot này, và là kênh nên chọn nếu bạn không nghiêng hẳn về bên nào.** Telegram cũng bắt buộc dù thế nào: `BOT_TOKEN`, `CHAT_ID` và `TELEGRAM_WEBHOOK_SECRET` là bắt buộc, thiếu là bot không khởi động — nên Zalo là thứ bạn bật **thêm**, không phải bật **thay**. Sau này có gì phong phú hơn text — biểu đồ chi tiêu, ảnh, file export — cũng chỉ về được Telegram, cho tới khi API Zalo đủ sức chở.
 
 🌐 **Song ngữ** — `/lang` đổi toàn bộ bot giữa Tiếng Việt và English.
 
@@ -443,7 +455,7 @@ Từ đây mỗi lần quẹt được track như mọi giao dịch khác. Muố
 | `/cancel` | Hủy flow nhiều bước đang làm dở. |
 | `/help` | Danh sách lệnh. |
 
-💡 Chỗ nào bot hỏi số tiền đều nhập tắt được: `500k`, `3tr`, `3tr5`, `1m2`, `2 triệu` — bot tự hiểu là VND. Đa số lệnh cũng chạy trên Zalo qua menu đánh số.
+💡 Chỗ nào bot hỏi số tiền đều nhập tắt được: `500k`, `3tr`, `3tr5`, `1m2`, `2 triệu` — bot tự hiểu là VND. Mọi lệnh đều chạy trên Zalo; chỗ nào Telegram hiện nút thì Zalo hiện danh sách đánh số để bạn reply.
 
 ---
 

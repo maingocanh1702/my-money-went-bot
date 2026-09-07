@@ -1,6 +1,22 @@
 # Zalo Setup
 
-Zalo is an **additional channel alongside Telegram**, not a replacement for it: `BOT_TOKEN`, `CHAT_ID` and `TELEGRAM_WEBHOOK_SECRET` are required and the bot exits at startup without them (`config.py`). Set Telegram up first, then add Zalo with this page. The Google Sheet, SePay, and the security secrets (`SEPAY_SECRET`, `CRON_SECRET`) are required either way — see [Railway Deployment](Railway-Deployment) and [Google Sheets Setup](Google-Sheets-Setup).
+Zalo is an **additional channel alongside Telegram**, not a replacement for it: `BOT_TOKEN`, `CHAT_ID` and `TELEGRAM_WEBHOOK_SECRET` are required and the bot exits at startup without them (`config.py`). Set Telegram up first, then add Zalo with this page.
+
+## What Zalo can and cannot do
+
+Zalo's Bot API sends plain text and nothing else. Every difference below follows from that one fact — none of it is missing work in this bot:
+
+| | Telegram | Zalo |
+|---|---|---|
+| Category picker | inline buttons you tap | a numbered list you reply to (`1`, `2`, `0`) |
+| Message updates | edited in place | a new message each time |
+| Bold / italic / `code` | rendered | stripped before sending (`messenger._strip_markdown`) |
+| Command menu | published to the client | type it from memory |
+| Long output | sent whole | chunked at `ZALO_TEXT_LIMIT`, default 2000 characters |
+
+`ZALO_INLINE_KEYBOARD` is `False` on purpose: Zalo callbacks must not enter Telegram's state and transport handlers, so the numbered flow stays until a channel-safe callback core exists. The bot still attempts an inline keyboard on top of the numbered text, so if Zalo ever renders one you get both.
+
+Everything the bot *does* — every command, every report, every cashback figure — is available on Zalo. It is the interaction that costs more typing, and anything richer than text that arrives later will land on Telegram first. The Google Sheet, SePay, and the security secrets (`SEPAY_SECRET`, `CRON_SECRET`) are required either way — see [Railway Deployment](Railway-Deployment) and [Google Sheets Setup](Google-Sheets-Setup).
 
 > **What works on Zalo:** transaction notifications, a numbered-text category picker for uncategorized expenses (reply a number), and the commands `/today`, `/report`, `/accounts`, `/keywords`, `/manage`, `/allocate`, `/recat`, `/cancel`. Zalo has no inline buttons, so everything uses numbered menus.
 >

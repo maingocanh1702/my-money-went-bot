@@ -11,6 +11,12 @@ All notable changes to MyMoneyWent will be documented in this file.
   the same as not supporting it. A debit card needs an alert e-mail from its
   bank and nothing else: no parser of its own, no YAML template. It skips the
   statement-cycle and cashback machinery, which is what a debit card should do.
+- The two channels are described honestly: Telegram is the one this bot is best
+  on, Zalo runs alongside it. Zalo's Bot API sends plain text and nothing else,
+  so a category picker becomes a numbered list you reply to, messages are never
+  edited in place, and formatting is stripped — a platform limit, not missing
+  work here. Both READMEs and the Zalo wiki page now carry the comparison, and
+  say that anything richer than text lands on Telegram first.
 - The AI-assisted setup now sits at the top of both READMEs with the prompt
   inline, instead of a link two-thirds of the way down. Setup is mostly
   collecting values and pasting them into one dashboard, which an assistant

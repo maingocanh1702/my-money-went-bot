@@ -15,7 +15,7 @@ This wiki is the longer, task-based manual for My Money Went Bot. The README is 
 
 ## What the bot does
 
-My Money Went Bot tracks your transactions automatically, into a Google Sheet you own, driven from **Telegram**, with **Zalo** available as a second channel alongside it. Transactions reach it from two sources:
+My Money Went Bot tracks your transactions automatically, into a Google Sheet you own, driven from **Telegram** — the channel this bot is best on — with **Zalo** available as a second channel alongside it. Transactions reach it from two sources:
 
 - **Vietnamese bank accounts.** SePay turns each bank notification into a webhook; the bot writes the row, tags the account, and asks for a category (or applies a keyword rule). SePay's free plan covers 50 transactions a month — see [SePay Setup](SePay-Setup).
 - **Cards — credit and debit.** The bank's own notification emails reach the bot through a Google Apps Script. Both card types use the identical path; a debit card needs nothing but an alert email. This also covers any bank SePay hasn't signed.
