@@ -2,7 +2,7 @@
 
 Trang này là bản tiếng Việt của flow setup khuyến nghị. Nếu bạn không quen server Linux, hãy dùng Railway để khỏi phải tự cài nginx, systemd, hay SSL.
 
-> **Telegram hay Zalo?** Hai kênh độc lập — dùng kênh nào cũng được, hoặc cả hai. Trang này hướng dẫn **Telegram**. Nếu dùng **Zalo** (thay cho hoặc bên cạnh Telegram), xem [Zalo Setup](Zalo-Setup) để lấy các biến Zalo; Google Sheet, SePay, và các secret bảo mật thì giống nhau.
+> **Telegram hay Zalo?** Telegram là bắt buộc — thiếu ba biến của nó thì bot không khởi động được. Zalo là kênh **thêm vào bên cạnh** Telegram, không thay thế được. Trang này hướng dẫn Telegram; xong rồi thì thêm Zalo theo [Zalo Setup](Zalo-Setup).
 
 ## Bạn cần chuẩn bị
 

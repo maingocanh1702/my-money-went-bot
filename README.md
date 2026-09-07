@@ -69,7 +69,7 @@ flowchart TD
 Most personal finance apps (Money Lover, Misa, MoneyKeeper, ...) want your bank credentials, run on their cloud, and gatekeep your data behind a freemium wall. This bot does the opposite:
 
 - **You own the data.** It lives in your Google Sheet. Export, fork, archive, pivot — your call.
-- **You see every line of code.** ~3,000 LOC of Python. Audit, customize, ship.
+- **You see every line of code.** ~16k lines of Python, 440+ tests, no obfuscation and no service in the middle. Audit it, change it, run it.
 - **You categorize once.** Auto-categorization via `/keywords` means recurring tx (Spotify, Grab, ...) skip the picker.
 - **Reports match your real model** — per-account *and* per-category, across week/month/quarter/year. Not just "monthly category bar chart".
 - **Nothing is entered by hand.** Both a bank transfer and a card swipe reach the sheet on their own, so the record is complete rather than whatever you remembered to type in.
@@ -247,6 +247,8 @@ The wiki pages are versioned in this repo under `docs/wiki/` — edit them there
 | `Cashback Card Config` | Card cashback settings (rate, gate, period) |
 | `Cashback Ledger` | Per-MCC cashback earned per cycle |
 | `MCC Map` | Keyword → MCC code mapping |
+| `Processed Refs` | Durable idempotency claims — one row per transaction identity |
+| `Archive` | Rows moved out of the working sheet |
 | `Excluded Events` | Every event the bot declined, with the reason why |
 
 ### Step 3 — Set up SePay
@@ -273,6 +275,20 @@ cp .env.example .env
 # (plus ZALO_SECRET_TOKEN when ZALO_ENABLED=true)
 ```
 
+Those are the ones the bot refuses to start without. Everything else has a
+working default — `.env.example` documents each one in full, and these are the
+ones most people eventually touch:
+
+| Optional | Default | Set it when |
+|---|---|---|
+| `INGESTION_START_AT` | unset | You want a clean start date. Transactions before it are declined (and logged); after it, a late arrival is recorded rather than dropped. Recommended on a fresh install. |
+| `MERCHANT_NOISE_WORDS` | empty | Vietnamese transfers carry the sender's name — add yours so the bot does not learn it as a merchant. |
+| `TX_MAX_AGE_MINUTES` | `10` | Only while `INGESTION_START_AT` is unset. Raise it if your bot can be down longer than 10 minutes. |
+| `EMAIL_TX_MAX_AGE_MINUTES` | `10080` | Same, for the e-mail path, where Gmail polling adds delay. |
+| `SEPAY_LEGACY_REF_LOOKUP` | `true` | Leave on. Turn off once SePay's retry window has passed since the identity upgrade deployed. |
+| `ZALO_TEXT_LIMIT` | `2000` | Zalo truncates long messages differently than documented. |
+
+
 **Railway** (recommended):
 
 1. Push your fork to GitHub.
@@ -286,31 +302,26 @@ cp .env.example .env
      -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>"
    ```
 
-**VPS** (Ubuntu 22.04):
+**VPS** (Ubuntu 22.04). The webhooks must be reachable over **HTTPS** — SePay,
+Telegram and Apps Script all refuse plain HTTP — so `setup.sh` does the whole
+thing: virtualenv, a `mmwbot` systemd unit that reads your `.env`, an nginx
+reverse proxy, and a Let's Encrypt certificate.
 
 ```bash
-sudo apt install -y python3.11 python3-pip python3-venv
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-chmod 600 .env credentials.json
+# on your machine
+scp -r ./my-money-went-bot ubuntu@<vps-ip>:~/
 
-# systemd service
-sudo tee /etc/systemd/system/mmwbot.service <<EOF
-[Unit]
-Description=My Money Went Bot
-After=network.target
-[Service]
-WorkingDirectory=$(pwd)
-ExecStart=$(pwd)/.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
-EnvironmentFile=$(pwd)/.env
-Restart=always
-[Install]
-WantedBy=multi-user.target
-EOF
+# on the VPS, with .env and credentials.json already in place
+cd ~/my-money-went-bot
+sudo bash setup.sh your-domain.com
 
-sudo systemctl enable --now mmwbot
-journalctl -u mmwbot -f   # watch logs
+systemctl status mmwbot
+journalctl -u mmwbot -f          # watch logs
+curl https://your-domain.com/healthz
 ```
+
+Point your DNS A record at the VPS before running it — certbot verifies the
+domain over HTTP and fails without it.
 
 ### Step 5 — First run
 
@@ -321,6 +332,18 @@ journalctl -u mmwbot -f   # watch logs
 5. Type `/report` → see your spending breakdown.
 
 Future tx from the same account auto-route. Set up `/keywords` rules to auto-categorize recurring tx.
+
+### Step 5b — Turn on the scheduled reports (two minutes, easy to forget)
+
+The weekly recap, the monthly report and the month-start allocation prompt are
+fired by GitHub Actions, not by the bot itself. A fresh fork has the schedule
+but not the address, so **nothing fires until you do this**:
+
+1. Edit `.github/workflows/cron.yml` and replace `BOT_URL: https://YOUR-APP.up.railway.app` with your own deployment URL.
+2. In your repo: **Settings → Secrets and variables → Actions → New repository secret** → name `CRON_SECRET`, value the same as your `CRON_SECRET` env var.
+3. Commit. Fire one by hand to check: **Actions → Scheduled triggers → Run workflow → `weekly`**.
+
+GitHub pauses scheduled workflows after ~60 days without repository activity; any push re-enables them.
 
 ### Step 6 — Track your credit cards too (optional)
 
@@ -431,6 +454,7 @@ Two inputs, one pipeline, one spreadsheet.
 │   └── example_visa.yaml         # Sample template: per-rule rates, calendar month
 ├── scripts/
 │   ├── sim_webhook.py            # POST fake SePay / Cake payloads to a local bot
+│   ├── zalo_get_updates.py       # Print the Zalo sender ids that messaged your bot
 │   ├── cashback_reconcile.py     # End of cycle: ledger estimate vs what the bank actually paid
 │   ├── check_no_personal_data.py # CI guard: no real account ids / secrets in the tree
 │   └── check_parity.sh           # Diff this repo against a private fork
