@@ -153,11 +153,15 @@ def test_durable_claim_expands_processed_refs_past_initial_sheet_capacity(fake_s
 
 
 def test_fuzzy_dedup_reads_canonical_datetime_written_to_transactions(fake_ss):
+    """Both sides name their source, which is the shape production always has:
+    handlers/sepay.py passes source=<family> on every call."""
     _setup_tx_tab()
     tx_date = datetime(2026, 9, 1, 14, 0, tzinfo=timezone(timedelta(hours=7)))
-    sh.append_transaction(tx_date, "Coffee", 50_000, "first-ref", "2026-09", tx_type="Tiền ra")
+    sh.append_transaction(tx_date, "Coffee", 50_000, "first-ref", "2026-09",
+                          tx_type="Tiền ra", account_source_key="email_cake:cake_cc")
 
-    assert sh.find_recent_duplicate(50_000, "out", tx_date.isoformat()) is True
+    assert sh.find_recent_duplicate(50_000, "out", tx_date.isoformat(),
+                                    source="sepay") is True
 
 
 def test_calendar_month_cap_period_ignores_statement_day(fake_ss):

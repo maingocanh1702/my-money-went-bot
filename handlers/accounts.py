@@ -628,6 +628,8 @@ async def _cmd_accounts_assign(slug: str):
     for i, r in enumerate(rows):
         if len(r) < 8:
             continue
+        if sh.is_cancelled(r):
+            continue   # a cancelled row is not money this account holds
         existing_acc = (r[16] if len(r) > 16 else "").strip()
         if existing_acc:
             continue   # already mapped — skip

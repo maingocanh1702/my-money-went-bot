@@ -18,6 +18,8 @@ import re
 import hashlib
 from datetime import datetime
 
+from utils import resolve_separators
+
 
 # ─── Sender → parser mapping ──────────────────────────────────────────────────
 
@@ -302,20 +304,19 @@ def _extract_email_addr(from_str: str) -> str:
 
 
 def _parse_amount_str(s: str) -> float:
-    """'500,000 VND' hoặc '-50.000đ' → float"""
-    # Xóa ký tự không phải số và dấu chấm/phẩy/dấu trừ
-    cleaned = re.sub(r'[^\d,\.\-\+]', '', s.strip())
-    # Xác định separator: nếu kết thúc bằng 3 chữ số sau dấu phẩy → dấu phẩy là thousand sep
-    if re.search(r',\d{3}$', cleaned):
-        cleaned = cleaned.replace(',', '')
-    elif re.search(r'\.\d{3}$', cleaned):
-        cleaned = cleaned.replace('.', '')
-    else:
-        cleaned = cleaned.replace(',', '')
-    try:
-        return abs(float(cleaned))
-    except ValueError:
+    """'500,000 VND' hoặc '-50.000đ' → float. 0.0 when unreadable.
+
+    Separator resolution is `utils.resolve_separators`, the same rules the
+    sheet reader and the typed-amount parser use. The hand-rolled version this
+    replaces stripped dots but never commas, so "1.234.567,89" raised inside
+    float() and returned 0.0 — and a 0đ transaction is written, skipped by the
+    ledger, skipped by every report, and never flagged to anyone.
+    """
+    cleaned = re.sub(r'[^\d,.]', '', s.strip())
+    resolved = resolve_separators(cleaned)
+    if resolved is None:
         return 0.0
+    return abs(float(resolved))
 
 
 def _find_ref_code(body: str) -> str | None:

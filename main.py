@@ -1611,6 +1611,8 @@ async def _zalo_cmd_accounts_assign(chat_id: str, slug: str, state_key: str):
     for i, row in enumerate(rows):
         if len(row) < 8:
             continue
+        if sh.is_cancelled(row):
+            continue   # a cancelled row is not money this account holds
         if (row[16] if len(row) > 16 else "").strip():
             continue
         if sh.row_currency(row) != acc["currency"]:

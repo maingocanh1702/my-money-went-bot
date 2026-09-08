@@ -810,7 +810,12 @@ def find_recent_duplicate(amount: float, tx_type: str, tx_date: str, currency: s
                     continue
 
                 # Same source → distinct events are distinct transactions.
-                if new_source and row_source and row_source == new_source:
+                # An unknown source on EITHER side is not evidence of anything,
+                # and this function only ever removes money, so it fails open.
+                # Rows with no source are routine — append_transfer and both
+                # cc-payment writers never set one — and pairing against them
+                # swallowed real spends that merely happened to match.
+                if not new_source or not row_source or row_source == new_source:
                     continue
 
                 if (

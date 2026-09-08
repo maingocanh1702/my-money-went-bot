@@ -363,6 +363,15 @@ async def _finalize(
     else:
         state = sh.get_state(CHAT_ID) or {}
         pending = state.get("pending_tx_queue") or []
+        # The amount, date and currency below come from the state. If it
+        # belongs to a different row — a webhook that landed between the
+        # picker and the tap — every one of them is wrong, and the sheet is
+        # the only source that isn't. Keep the queue either way.
+        state_row = state.get("row_num")
+        if state_row is not None and int(state_row) != int(row_num):
+            print(f"[transaction] state row={state_row} != finalizing row={row_num}; "
+                  "reading the transaction from the sheet")
+            state = {"pending_tx_queue": pending}
         sh.clear_state(CHAT_ID)
 
     # Cashback recompute only when this finalize follows a recat (flag set in
