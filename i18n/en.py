@@ -286,6 +286,7 @@ STRINGS: dict[str, str] = {
         "/cc pay — record a credit-card payment\n\n"
         "*Other:*\n"
         "/recat — re-categorize a past transaction\n"
+        "/cancel_tx — cancel a transaction (refunds credit + claws back cashback)\n"
         "/pending — categorize queued transactions\n"
         "/lang — switch language vi/en\n"
         "/cancel — abort the current flow\n\n"

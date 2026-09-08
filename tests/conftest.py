@@ -40,6 +40,7 @@ class FakeWorksheet:
     def __init__(self, header: list[str] | None = None):
         self._rows: list[list[str]] = []
         self._row_count: int = 100_000  # simulate large sheet
+        self._col_count: int = 26       # gspread's default new-sheet width
         self.title: str = "FakeSheet"
         if header:
             self._rows.append([str(c) for c in header])
@@ -48,10 +49,16 @@ class FakeWorksheet:
     def row_count(self) -> int:
         return max(self._row_count, len(self._rows))
 
+    @property
+    def col_count(self) -> int:
+        return max(self._col_count, max((len(r) for r in self._rows), default=0))
+
     def resize(self, rows: int = 0, cols: int = 0) -> None:
         """Simulate gspread worksheet resize."""
         if rows:
             self._row_count = rows
+        if cols:
+            self._col_count = cols
 
     def _ensure_size(self, row_idx: int, col_idx: int):
         while len(self._rows) <= row_idx:

@@ -8,7 +8,7 @@ import gspread
 from gspread.exceptions import APIError
 from gspread.http_client import HTTPClient
 from google.oauth2.service_account import Credentials
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timedelta, timezone
 import pytz
 from config import SHEET_ID, CREDS_FILE, GOOGLE_CREDS_JSON, TIMEZONE, DAILY_BUCKET_ID
 from config import SHEETS as S
@@ -162,6 +162,20 @@ def _auto_expand(ws, needed_row: int, batch_size: int = 1000) -> None:
     print(f"[sheets] auto-expanded {ws.title!r}: {current} → {new_count} rows")
 
 
+def _ensure_min_cols(ws, needed_col: int) -> None:
+    """Widen a worksheet so `needed_col` exists.
+
+    A tab created before a column was added is narrower than the code expects,
+    and gspread raises rather than growing it — writing col V on a sheet still
+    21 columns wide would fail for exactly the users with the oldest sheets.
+    """
+    current = ws.col_count
+    if needed_col <= current:
+        return
+    ws.resize(cols=needed_col)
+    print(f"[sheets] auto-expanded {ws.title!r}: {current} → {needed_col} cols")
+
+
 def _last_col_letter(n: int) -> str:
     """1-based column count → A1 column letter (1→"A", 26→"Z", 27→"AA").
 
@@ -213,6 +227,18 @@ def is_confirmed(row: list) -> bool:
     meant. One predicate, one meaning.
     """
     return len(row) > 13 and str(row[13]).upper() == "TRUE"
+
+
+def is_cancelled(row: list) -> bool:
+    """Read column V (index 21) — the user cancelled this transaction.
+
+    A cancelled row keeps its position in the sheet on purpose: both the
+    Cashback Ledger and the Account Ledger key on `tx_row_num`, so deleting a
+    row would silently repoint every reference below it. Instead the row stays,
+    its ledger + cashback lines are voided, and every money total skips it.
+    Empty col V = live transaction.
+    """
+    return len(row) > 21 and bool(str(row[21]).strip())
 
 
 _SCIENTIFIC = re.compile(r"[-+]?\d+(?:\.\d+)?[eE][-+]?\d+")
@@ -317,6 +343,8 @@ def get_bucket_status(bucket_id: str, month_key: str) -> dict:
             continue
         if not is_confirmed(r):
             continue
+        if is_cancelled(r):
+            continue
         # Only count outgoing transactions as "spent"
         if len(r) > 6 and r[6] == "Tiền vào":
             continue
@@ -348,6 +376,8 @@ def get_income_total(bucket_id: str, month_key: str) -> float:
             continue
         if not is_confirmed(r):
             continue
+        if is_cancelled(r):
+            continue
         # Chỉ tính incoming
         if len(r) > 6 and r[6] != "Tiền vào":
             continue
@@ -377,6 +407,8 @@ def get_daily_status(tx_date: datetime) -> dict:
     for r in rows:
         if not is_confirmed(r):
             continue
+        if is_cancelled(r):
+            continue
         if r[10] != DAILY_BUCKET_ID:
             continue
         # Only count outgoing transactions as "spent"
@@ -400,16 +432,28 @@ def get_daily_status(tx_date: datetime) -> dict:
 
 
 def get_recent_transactions(limit: int = 10, month_key: str = None,
-                            only_uncategorized: bool = False) -> list[dict]:
-    """Recent outgoing transactions for the /recat picker.
+                            only_uncategorized: bool = False,
+                            within_days: int | None = None,
+                            offset: int = 0,
+                            include_cancelled: bool = False) -> list[dict]:
+    """Recent outgoing transactions for the /recat and /cancel_tx pickers.
 
     Returns: [{"row_num", "amount", "description", "bucket_id",
-               "bucket_name", "date", "currency", "is_finalized"}, ...]
+               "bucket_name", "date", "currency", "is_finalized",
+               "is_cancelled"}, ...]
     Most recent first. Transfers/cc payments are excluded (own ledger).
+
+    `within_days` selects by a rolling date window instead of the calendar
+    month — /cancel_tx allows 30 days, which routinely straddles a month
+    boundary that `month_key` would cut in half. `offset` skips that many of
+    the newest matches so the caller can page backwards through the window;
+    `include_cancelled` keeps already-cancelled rows in the list so the picker
+    can offer to restore them.
     """
     tz = pytz.timezone(TIMEZONE)
     if not month_key:
         month_key = fmt_month(datetime.now(tz))
+    cutoff = (datetime.now(tz) - timedelta(days=within_days)) if within_days else None
 
     rows = _get_tx_rows()
     results: list[dict] = []
@@ -417,8 +461,14 @@ def get_recent_transactions(limit: int = 10, month_key: str = None,
     for idx, r in enumerate(rows):
         if len(r) < 8:
             continue
+        if cutoff is not None:
+            tx_dt = _parse_local_datetime(r[1] if len(r) > 1 else "")
+            if tx_dt is None or tx_dt < cutoff:
+                continue
         # Only the requested month
-        if len(r) > 14 and r[14] and r[14] != month_key:
+        elif len(r) > 14 and r[14] and r[14] != month_key:
+            continue
+        if not include_cancelled and is_cancelled(r):
             continue
         # Only outgoing
         if len(r) > 6 and r[6] == "Tiền vào":
@@ -445,10 +495,11 @@ def get_recent_transactions(limit: int = 10, month_key: str = None,
             "date": r[1] if len(r) > 1 else "",
             "currency": cur,
             "is_finalized": is_finalized,
+            "is_cancelled": is_cancelled(r),
         })
 
     results.sort(key=lambda x: x["row_num"], reverse=True)
-    return results[:limit]
+    return results[offset:offset + limit] if offset else results[:limit]
 
 
 def get_frequent_categories(n: int = 3) -> list[str]:
@@ -461,6 +512,8 @@ def get_frequent_categories(n: int = 3) -> list[str]:
     counts: dict[str, int] = {}
     for r in rows:
         if not is_confirmed(r):
+            continue
+        if is_cancelled(r):
             continue
         # Only outgoing
         if len(r) > 6 and r[6] == "Tiền vào":
@@ -740,6 +793,11 @@ def find_recent_duplicate(amount: float, tx_type: str, tx_date: str, currency: s
             new_source = "email"
 
         for row in rows[-DEDUP_LOOKBACK_ROWS:]:
+            # A cancelled row is not a claim on this event. Cancelling is
+            # exactly when a merchant re-charges, so pairing against it would
+            # silently swallow the real second charge.
+            if is_cancelled(row):
+                continue
             try:
                 # B=row[1]: Ngày GD | G=row[6]: Loại | H=row[7]: Số tiền | P=row[15]: Currency
                 row_dt     = _parse_dt(str(row[1]))
@@ -1208,6 +1266,37 @@ def finalize_transaction(row_num: int, parent_category: str, sub_label: str):
 def get_transaction_row(row_num: int) -> list:
     ws = _sheet(S.TRANSACTIONS)
     return ws.row_values(row_num)
+
+
+def set_transaction_cancelled(row_num: int, cancelled_at: str) -> None:
+    """Stamp col V with the cancellation instant; "" restores the row.
+
+    Deliberately the only writer of col V, so `is_cancelled` has exactly one
+    counterpart. Orchestration (voiding ledgers, giving back the credit line,
+    rebuilding the cashback cycle) lives in handlers/cancel_tx.py — this just
+    moves the flag.
+    """
+    ws = _sheet(S.TRANSACTIONS)
+    _ensure_min_cols(ws, 22)   # col V — append_transaction only writes A:U
+    ws.update_cell(row_num, 22, cancelled_at)
+    _invalidate_tx_rows_cache()
+
+
+def cashback_total_for_tx(row_num: int) -> float:
+    """Σ non-void cashback currently credited to one transaction.
+
+    Read before cancelling so the confirmation can name the amount that is
+    about to be clawed back, and after restoring to report what came back.
+    """
+    ws = _ensure_cashback_ledger_tab()
+    total = 0.0
+    for r in ws.get_all_values()[1:]:
+        if len(r) < 11 or str(r[1]).strip() != str(row_num):
+            continue
+        if str(r[10]).strip().lower() == "void":
+            continue
+        total += (_to_num(r[7]) or 0.0) if len(r) > 7 else 0.0
+    return total
 
 
 def reset_transaction_row(row_num: int):
@@ -2415,6 +2504,8 @@ def compute_and_record_cashback(tx_row_num: int) -> dict:
         # cashback rows instead of leaving them active. The state reads below all
         # exclude this tx anyway, so voiding early doesn't change their results.
         void_cashback_for_tx(tx_row_num)
+        if is_cancelled(row):   # cancelled tx: lines voided above, nothing earned
+            return _empty_cashback_result()
         if not account_id:
             return _empty_cashback_result()
         if not account or account.get("type") != "credit":
@@ -2558,6 +2649,7 @@ def _recompute_cycle_in_memory(account_id: str, account: dict, statement_day,
     #    fresh read: the rebuild must see a just-appended/updated tx, never a
     #    still-valid TTL cache that could omit it (Codex round 02).
     cycle_items = []  # (ts, row_num, amount, description, currency)
+    cancelled_rows: set[int] = set()
     for i, r in enumerate(_get_tx_rows(force_refresh=True)):
         row_num = i + 2
         if (r[16] if len(r) > 16 else "").strip() != account_id:
@@ -2567,13 +2659,19 @@ def _recompute_cycle_in_memory(account_id: str, account: dict, statement_day,
         ts = r[1] if len(r) > 1 else ""
         if cashback_cycle_id(account_id, ts, account, config) != cycle:
             continue
+        # A cancelled tx earns nothing, but its old lines must still be voided
+        # — that is the whole point of cancelling: the cap it was holding is
+        # released to the later transactions replayed below.
+        if is_cancelled(r):
+            cancelled_rows.add(row_num)
+            continue
         amount = _parse_amount(r[7]) if len(r) > 7 and r[7] else 0.0
         cycle_items.append((ts, row_num, amount,
                             r[5] if len(r) > 5 else "", row_currency(r)))
     cycle_items.sort(key=lambda x: (_parse_local_datetime(x[0]) or datetime.max.replace(
         tzinfo=pytz.timezone(TIMEZONE)), x[1]))
 
-    void_targets = {it[1] for it in cycle_items}
+    void_targets = {it[1] for it in cycle_items} | cancelled_rows
     void_targets.add(target_tx_row)  # void target even if now non-expense (parity)
 
     # 2. Ledger read-once → batch-void old cycle rows; find append start.
@@ -3112,7 +3210,8 @@ def count_bucket_transactions(bucket_id: str, month_key: str) -> int:
     count = 0
     for r in rows:
         if (len(r) >= 15 and r[14] == month_key
-                and r[10] == bucket_id and is_confirmed(r)):
+                and r[10] == bucket_id and is_confirmed(r)
+                and not is_cancelled(r)):
             count += 1
     return count
 
@@ -3354,6 +3453,21 @@ def _get_ledger_rows() -> list[list[str]]:
     relative to writes, and stale reads would corrupt idempotency checks)."""
     ws = _ensure_ledger_tab()
     return ws.get_all_values()[1:]
+
+
+def had_ledger_entry(tx_row_num: int) -> bool:
+    """True when this row has EVER had an Account Ledger entry, void included.
+
+    `get_ledger_entries_for_tx` hides void rows, so it cannot answer "did this
+    tx move money before it was cancelled?" — and that is the only question
+    restore may act on. Asking `is_confirmed` instead would re-apply a ledger
+    entry for a row finalized via "skip categorization" (Confirmed=TRUE, no
+    ledger entry, col T FALSE), inventing a balance movement out of nothing.
+    """
+    return any(
+        len(r) >= 9 and str(r[1]).strip() == str(tx_row_num)
+        for r in _get_ledger_rows()
+    )
 
 
 def get_ledger_entries_for_tx(tx_row_num: int) -> list[dict]:
