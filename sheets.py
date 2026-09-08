@@ -1567,8 +1567,44 @@ def invalidate_cashback_caches():
     _mcc_exclusion_cache = None
 
 
+def _to_ratio(val):
+    """Parse a fraction cell (a rate in 0–1) → float, or None when blank.
+
+    A rate is not money, so it must never go through `_parse_amount`. That
+    function reads "exactly three digits after the separator" as thousands
+    grouping — correct for "50.000" đồng, catastrophic for a rate: 0.015 (a
+    perfectly ordinary 1.5% card) came back as 15.0, and a 1.000.000đ purchase
+    then earned fifteen million đồng of cashback and filled the cycle cap on
+    the spot.
+
+    A trailing "%" is honoured, so a cell displayed as "1,5%" means 0.015.
+    Anything outside 0–1 is refused rather than paid out: `update_card_config`
+    already rejects it at write time, so a cell holding it was hand-edited and
+    is a configuration error, not an instruction to pay 2000% back.
+    """
+    s = str(val).strip()
+    if not s:
+        return None
+    percent = s.endswith("%")
+    if percent:
+        s = s[:-1].strip()
+    s = s.replace(",", ".")          # a VN sheet shows the decimal as a comma
+    try:
+        value = float(s)
+    except (ValueError, TypeError):
+        return None
+    if percent:
+        value /= 100
+    if not math.isfinite(value) or not 0 <= value <= 1:
+        print(f"[cashback] ignoring out-of-range rate cell {val!r} (must be 0-1)")
+        return None
+    return value
+
+
 def _to_num(val):
-    """Parse a numeric cell → float, or None when blank (rate inherit etc.)."""
+    """Parse a MONEY cell → float, or None when blank (cap inherit etc.).
+
+    For a rate or any other fraction use `_to_ratio` — see why there."""
     s = str(val).strip()
     if s == "":
         return None
@@ -1625,7 +1661,7 @@ def _rule_from_row(r: list, row_num: int) -> dict:
         "rule_name":               r[2] if len(r) > 2 else "",
         "match_type":              (r[3] if len(r) > 3 else "").strip(),
         "match_value":             str(r[4]).strip() if len(r) > 4 else "",
-        "rate":                    _to_num(r[5]) if len(r) > 5 else None,
+        "rate":                    _to_ratio(r[5]) if len(r) > 5 else None,
         "monthly_cap":             (_to_num(r[6]) or 0.0) if len(r) > 6 else 0.0,
         "per_tx_cap_tier":         (r[7] if len(r) > 7 else "").strip(),
         "max_eligible_tx_per_day": int(_to_num(r[8]) or 0) if len(r) > 8 else 0,
@@ -1793,10 +1829,10 @@ def get_card_config(account_id: str, force_refresh: bool = False) -> dict | None
             d[r[0]] = {
                 "row_num":            i + 2,
                 "account_id":         r[0],
-                "cashback_rate":      _to_num(r[1]) or 0.0 if len(r) > 1 else 0.0,
+                "cashback_rate":      _to_ratio(r[1]) or 0.0 if len(r) > 1 else 0.0,
                 "min_eligible_spend": _to_num(r[2]) or 0.0 if len(r) > 2 else 0.0,
                 "cap_period":         r[3] if len(r) > 3 else "statement_cycle",
-                "alert_pct":          _to_num(r[4]) or 0.0 if len(r) > 4 else 0.0,
+                "alert_pct":          _to_ratio(r[4]) or 0.0 if len(r) > 4 else 0.0,
                 "active":             str(r[5]).upper() == "TRUE" if len(r) > 5 else True,
             }
         _card_config_cache = d
