@@ -288,26 +288,12 @@ async def _handle_zalo_text(body: dict):
             prev = sh.get_state(zalo_state_key) or {}
             zq.park_active_picker(chat_id, prev)
             sh.clear_state(zalo_state_key)
-            msg = (
-                "Chào bạn! Đây là Financial Tracking Bot.\n\n"
-                "Bot tự động nhận giao dịch qua SePay/email và gửi thông báo tới đây.\n"
-                "Khi nhận được giao dịch, bạn chọn category bằng cách reply số.\n\n"
-                "Lệnh hỗ trợ:\n"
-                "- /today — Chi tiêu hôm nay\n"
-                "- /report — Báo cáo chi tiêu\n"
-                "- /accounts — Xem tài khoản\n"
-                "- /transfer — Ghi nhận chuyển tiền nội bộ\n"
-                "- /cc pay — Ghi nhận trả thẻ tín dụng\n"
-                "- /manage — Quản lý category\n"
-                "- /allocate — Đặt budget\n"
-                "- /keywords — Quản lý keyword auto-category\n"
-                "- /cashback — Cashback thẻ tín dụng\n"
-                "- /recat — Phân loại lại giao dịch\n"
-                "- /pending — Phân loại giao dịch đang chờ\n"
-                "- /lang — Đổi ngôn ngữ vi/en\n"
-                "- /cancel — Hủy thao tác\n\n"
-                "Mẹo: nhập số tiền có thể viết tắt — 500k, 3tr, 3tr5, 1m2."
-            )
+            # One help text for both channels. This block used to be a second,
+            # hand-maintained copy of the command list — hardcoded in Vietnamese,
+            # so /lang did nothing here, and every command added since had to be
+            # remembered in two places. messenger strips the markdown for Zalo.
+            from i18n.core import t as _t
+            msg = _t("help") + "\n\n" + _t("help.zalo_note")
             parked = zq.parked_count(chat_id)
             if parked:
                 msg += f"\n\nCòn {parked} giao dịch chờ phân loại — gửi /pending."

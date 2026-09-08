@@ -275,6 +275,12 @@ STRINGS: dict[str, str] = {
         "/allocate — đặt budget cho từng mục\n"
         "/keywords — rule auto-phân loại theo keyword\n"
         "/cashback — cashback thẻ tín dụng\n\n"
+        "*🏷️ Sửa MCC map* (trong /cashback → thẻ → MCC, gõ thẳng):\n"
+        "`WINMART 5411 Siêu thị` — thêm, hoặc đổi MCC của pattern đã có\n"
+        "`ren <cũ> <mới>` — đổi tên keyword, giữ nguyên MCC\n"
+        "`del <pattern>` — bỏ pattern khỏi map\n"
+        "`skip <pattern>` — không tính cashback ở đây nữa\n"
+        "`unskip <pattern>` — bỏ chặn\n\n"
         "*💰 Ghi tay:*\n"
         "/transfer — chuyển tiền giữa các account\n"
         "/cc pay — ghi nhận trả thẻ tín dụng\n\n"
@@ -284,5 +290,10 @@ STRINGS: dict[str, str] = {
         "/lang — đổi ngôn ngữ vi/en\n"
         "/cancel — hủy thao tác đang làm dở\n\n"
         "💡 _Mẹo: khi nhập số tiền có thể viết tắt — `500k`, `3tr`, `3tr5`, `1m2`._"
+    ),
+    "help.zalo_note": (
+        "Trên Zalo: khi có giao dịch mới, bot gửi danh sách category đánh số — "
+        "reply đúng con số để phân loại. Zalo không có nút bấm nên mọi lựa chọn "
+        "đều theo kiểu đánh số."
     ),
 }
