@@ -84,10 +84,22 @@ name into an MCC code, which is what decides the cashback rate:
 | `WINMART 5411 Siêu thị` | adds the pattern, or **re-points it** to a different MCC if it already exists |
 | `ren WIMART WINMART` | **renames the keyword**, keeping its MCC and label |
 | `del WINMART` | turns the pattern off (the row stays in the sheet with `active=FALSE`) |
+| `skip TIKTOKSHOP` | never earn cashback here, and stop the bot asking about it |
+| `unskip TIKTOKSHOP` | undo that |
 
 Renaming onto a keyword that already exists is refused rather than merged — two
 rows would have to collapse into one MCC, and which one to keep is your call.
 Delete one first, then rename.
+
+`skip` writes to the **no-cashback list**, not the map. The two are resolved
+together by longest-pattern-wins, with exclusion taking ties — so skipping a
+merchant overrides a map entry of the same name without deleting it, and a
+*more specific* map pattern still wins over a broader skip. The list is shown at
+the bottom of the MCC screen, which is the only place it appears.
+
+Use `skip` when a merchant should never score (the bank stopped giving cashback
+there); use `del` when the merchant is fine but its **category** is wrong, and
+re-point it instead.
 
 The MCC must be **four digits**. A pattern is a case- and accent-insensitive
 substring of the transaction description, so `tiktok` also matches `TIKTOKSHOP` —

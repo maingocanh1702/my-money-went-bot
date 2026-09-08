@@ -216,3 +216,72 @@ async def test_del_turns_a_pattern_off(quiet_tg):
 
     await cb.handle_cashback_mcc_input("del WINMART", {})
     assert "winmart" not in _active_patterns()
+
+
+# ── the no-cashback list ─────────────────────────────────────────────────────
+
+def test_an_excluded_pattern_beats_a_map_entry_of_the_same_name():
+    """This is why `skip` exists as well as `del`: resolution takes the longest
+    pattern and gives exclusion the tie, so skipping a merchant overrides its
+    map entry without having to delete it."""
+    sh.add_mcc_map("tiktokshop", "5611", "Thời trang")
+    assert sh.resolve_mcc_or_exclusion("TIKTOKSHOP ORDER 123")["mcc_code"] == "5611"
+
+    sh.add_mcc_exclusion("tiktokshop")
+    assert sh.resolve_mcc_or_exclusion("TIKTOKSHOP ORDER 123") is None
+
+
+def test_a_longer_map_pattern_still_beats_a_shorter_exclusion():
+    """Exclusion only wins on ties or when it is more specific — a broader
+    'skip' must not silently swallow a precise mapping."""
+    sh.add_mcc_exclusion("tiktok")
+    sh.add_mcc_map("tiktokshop", "5262", "Sàn TMĐT")
+    assert sh.resolve_mcc_or_exclusion("TIKTOKSHOP ORDER")["mcc_code"] == "5262"
+
+
+def test_removing_an_exclusion_restores_scoring():
+    sh.add_mcc_map("tiktokshop", "5611", "Thời trang")
+    sh.add_mcc_exclusion("tiktokshop")
+    assert sh.remove_mcc_exclusion("TIKTOKSHOP") is True
+    assert sh.resolve_mcc_or_exclusion("TIKTOKSHOP ORDER")["mcc_code"] == "5611"
+
+
+def test_removing_something_never_excluded_reports_it():
+    assert sh.remove_mcc_exclusion("nothing-here") is False
+
+
+def test_removal_is_soft_and_re_skipping_reuses_the_row():
+    """Skip → unskip → skip must not leave two rows disagreeing."""
+    sh.add_mcc_exclusion("tiktokshop")
+    sh.remove_mcc_exclusion("tiktokshop")
+    assert sh.add_mcc_exclusion("tiktokshop") is True
+
+    rows = [r for r in sh._sheet("MCC Exclusions").get_all_values()[1:] if r and r[0]]
+    assert len(rows) == 1
+    assert sh.is_mcc_excluded("TIKTOKSHOP ORDER") is True
+
+
+def test_a_row_written_before_the_active_column_existed_still_counts():
+    """Sheets created earlier have three cells per row. A missing fourth cell
+    has to read as active, or every existing exclusion would silently lapse."""
+    ws = sh._ensure_mcc_exclusion_tab()
+    ws.update("A2:C2", [["oldpattern", "2026-01-01T00:00:00", "legacy row"]])
+    sh._mcc_exclusion_cache = None
+    assert sh.is_mcc_excluded("OLDPATTERN SOMETHING") is True
+
+
+def test_the_exclusion_list_is_visible_in_the_overview():
+    """Otherwise `unskip` is unusable — the list appears nowhere else."""
+    sh.add_mcc_map("winmart", "5411", "Siêu thị")
+    sh.add_mcc_exclusion("tiktokshop")
+    text = cb.mcc_pattern_overview_text()
+    assert "TIKTOKSHOP" in text and "Không hoàn tiền" in text
+
+
+@pytest.mark.asyncio
+async def test_skip_and_unskip_from_the_chat(quiet_tg):
+    await cb.handle_cashback_mcc_input("skip TIKTOKSHOP", {})
+    assert sh.is_mcc_excluded("TIKTOKSHOP ORDER") is True
+
+    await cb.handle_cashback_mcc_input("unskip TIKTOKSHOP", {})
+    assert sh.is_mcc_excluded("TIKTOKSHOP ORDER") is False

@@ -167,8 +167,10 @@ def mcc_pattern_overview_text(account_id: str | None = None) -> str:
     the /report cashback section for visual consistency.
     """
     mcc_map = sh.get_mcc_map()
+    skipped = [p.upper() for p in sh.get_mcc_exclusions() if p]
     if not mcc_map:
-        return "🏷️ *MCC Map*\n\n_Chưa có pattern nào._ Seed template hoặc thêm thủ công."
+        head = "🏷️ *MCC Map*\n\n_Chưa có pattern nào._ Seed template hoặc thêm thủ công."
+        return head + (f"\n\n🚫 *Không hoàn tiền*: {', '.join(sorted(skipped))}" if skipped else "")
 
     # Build emoji map from rules of the given card (dynamic, not hardcoded)
     emoji_by_mcc = _get_emoji_map(account_id) if account_id else {}
@@ -193,6 +195,11 @@ def mcc_pattern_overview_text(account_id: str | None = None) -> str:
         label = label_by_mcc.get(code, f"MCC {code}")
         pats = ", ".join(by_mcc[code])
         lines.append(f"{emoji} *{label}* ({code}): {pats}")
+    if skipped:
+        # Without this you cannot unskip anything: the exclusion list is
+        # invisible everywhere else, so a decision made by one tap months ago
+        # has no way of being found again.
+        lines.append(f"🚫 *Không hoàn tiền* ({len(skipped)}): {', '.join(sorted(skipped))}")
     return "\n".join(lines)
 
 
@@ -609,6 +616,7 @@ async def _tg_mcc_prompt(account_id: str):
         "   Pattern đã có sẽ được trỏ sang MCC mới.\n"
         "✏️ Đổi tên keyword: `ren <cũ> <mới>` (vd `ren WIMART WINMART`) — giữ nguyên MCC.\n"
         "🗑️ Xoá: `del <pattern>` (vd `del WINMART`).\n"
+        "🚫 Không hoàn tiền: `skip <pattern>` · bỏ chặn: `unskip <pattern>`.\n"
         "MCC phải là 4 chữ số. Pattern là substring khớp mô tả giao dịch "
         "(không phân biệt hoa/thường, không phân biệt dấu)."
     )
@@ -623,6 +631,13 @@ async def handle_cashback_mcc_input(text: str, state: dict):
         <pattern> <mcc> [label]   add, or re-point a pattern that exists
         ren <old> <new>           rename the keyword, keeping its MCC and label
         del <pattern>             turn a pattern off
+        skip <pattern>            never earn cashback here
+        unskip <pattern>          undo that
+
+    `skip` writes to the exclusion list rather than the map, and the two are
+    resolved by longest-pattern-wins with exclusion taking ties — so skipping a
+    merchant beats a map entry of the same name without having to delete it, and
+    it also stops the bot asking about that merchant again.
 
 
     The MCC code is validated as four digits. It was not, and the cost of that
@@ -633,6 +648,30 @@ async def handle_cashback_mcc_input(text: str, state: dict):
     list.
     """
     parts = (text or "").split()
+
+    if parts and parts[0].lower() in ("skip", "bo", "bỏ", "noCB".lower()):
+        if len(parts) < 2:
+            await tg.send_text(t("cb.mcc_skip_need_input"))
+            return
+        pattern = parts[1]
+        ok = sh.add_mcc_exclusion(pattern, notes="skipped from /cashback mcc")
+        sh.set_state(CHAT_ID, {"step": "cashback"})
+        await tg.send_text(t("cb.mcc_skipped", pattern=pattern) if ok
+                           else t("cb.mcc_skip_exists", pattern=pattern))
+        await _tg_card_view(state.get("account_id"))
+        return
+
+    if parts and parts[0].lower() in ("unskip", "bochan", "unbo"):
+        if len(parts) < 2:
+            await tg.send_text(t("cb.mcc_unskip_need_input"))
+            return
+        pattern = parts[1]
+        ok = sh.remove_mcc_exclusion(pattern)
+        sh.set_state(CHAT_ID, {"step": "cashback"})
+        await tg.send_text(t("cb.mcc_unskipped", pattern=pattern) if ok
+                           else t("cb.mcc_skip_not_found", pattern=pattern))
+        await _tg_card_view(state.get("account_id"))
+        return
 
     if parts and parts[0].lower() in ("ren", "rename", "sua", "sửa", "edit"):
         if len(parts) < 3:

@@ -2045,7 +2045,10 @@ def resolve_mcc_or_exclusion(description: str) -> dict | None:
 
 # ── MCC Exclusion (learned "no cashback" decisions) ────────────
 
-MCC_EXCLUSION_HEADER = ["pattern", "created_at", "notes"]
+# `active` is appended, not inserted: a sheet created before this column exists
+# has three cells per row, and a row with no fourth cell reads as active. So the
+# column arrives for new sheets and costs old ones nothing.
+MCC_EXCLUSION_HEADER = ["pattern", "created_at", "notes", "active"]
 
 _mcc_exclusion_cache: list[str] | None = None
 
@@ -2061,7 +2064,8 @@ def get_mcc_exclusions(force_refresh: bool = False) -> list[str]:
         ws = _ensure_mcc_exclusion_tab()
         rows = ws.get_all_values()[1:]
         _mcc_exclusion_cache = [
-            _normalize_for_match(r[0]) for r in rows if r and r[0]
+            _normalize_for_match(r[0]) for r in rows
+            if r and r[0] and not (len(r) > 3 and str(r[3]).upper() == "FALSE")
         ]
     return list(_mcc_exclusion_cache)
 
@@ -2083,13 +2087,46 @@ def add_mcc_exclusion(pattern: str, notes: str = "") -> bool:
     if pat in get_mcc_exclusions():
         return False
     ws = _ensure_mcc_exclusion_tab()
+
+    # A pattern that was skipped, un-skipped, then skipped again belongs in the
+    # row it already has — appending a twin would leave two rows disagreeing.
+    for i, r in enumerate(ws.get_all_values()[1:]):
+        if r and r[0] and _normalize_for_match(r[0]) == pat:
+            ws.update(f"C{i + 2}:D{i + 2}", [[notes, "TRUE"]])
+            _mcc_exclusion_cache = None
+            return True
+
     next_row = _next_row(ws, col=1)
     _auto_expand(ws, next_row)
-    ws.update(f"A{next_row}:C{next_row}", [
-        [pat, datetime.utcnow().isoformat(), notes]
+    ws.update(f"A{next_row}:D{next_row}", [
+        [pat, datetime.utcnow().isoformat(), notes, "TRUE"]
     ])
     _mcc_exclusion_cache = None  # bust cache
     return True
+
+
+def remove_mcc_exclusion(pattern: str) -> bool:
+    """Stop excluding a pattern. Returns False if it was not excluded.
+
+    Soft, like every other removable row here: the line stays with active=FALSE,
+    so you can still see that the decision was once made and when.
+    """
+    global _mcc_exclusion_cache
+    pat = _normalize_for_match(pattern)
+    if not pat:
+        return False
+    ws = _ensure_mcc_exclusion_tab()
+    hit = False
+    for i, r in enumerate(ws.get_all_values()[1:]):
+        if not r or not r[0] or _normalize_for_match(r[0]) != pat:
+            continue
+        if len(r) > 3 and str(r[3]).upper() == "FALSE":
+            continue
+        ws.update_cell(i + 2, 4, "FALSE")
+        hit = True
+    if hit:
+        _mcc_exclusion_cache = None
+    return hit
 
 
 
