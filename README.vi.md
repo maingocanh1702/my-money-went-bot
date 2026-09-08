@@ -580,6 +580,7 @@ Chi tiết đầy đủ kèm troubleshooting: [Zalo setup](docs/ZALO_BOT_SETUP.m
 | `/transfer <số tiền> <from> <to>` | Ghi nhận chuyển tiền nội bộ giữa các account. |
 | `/cc pay <số tiền> [bank] <cc>` | Ghi nhận trả thẻ tín dụng. |
 | `/recat [row]` | Phân loại lại giao dịch cũ. Không có tham số → chọn từ 8 giao dịch gần nhất; `/recat <row>` nhắm thẳng số dòng. |
+| `/cancel_tx [row]` | Huỷ một giao dịch cũ: hoàn lại hạn mức và thu hồi cashback đã ghi. Không tham số → chọn từ 3 giao dịch gần nhất, lật ngược tới 30 ngày. Khôi phục lại được. |
 | `/pending` | Phân loại các giao dịch bị xếp hàng khi bạn đang dở thao tác khác. |
 | `/lang` | Đổi ngôn ngữ bot (vi/en). |
 | `/cancel` | Hủy flow nhiều bước đang làm dở. |

@@ -42,8 +42,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      # Upstream ships BOT_URL as a placeholder, so on this repository every
+      # scheduled run posted to a host that does not resolve and went red —
+      # about seven failed runs a month and a permanently red Actions tab.
+      # Fork it, set BOT_URL, and the schedule starts working.
+      - name: Skip while BOT_URL is still the placeholder
+        id: guard
+        run: |
+          if [ "${BOT_URL#https://YOUR-APP}" != "$BOT_URL" ]; then
+            echo "BOT_URL is unset (still the template placeholder) — nothing to fire."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Resolve endpoint
         id: ep
+        if: steps.guard.outputs.skip == 'false'
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             ep="${{ inputs.endpoint }}"
@@ -60,6 +75,7 @@ jobs:
           echo "Firing: $ep"
 
       - name: Fire trigger
+        if: steps.guard.outputs.skip == 'false'
         run: |
           # The secret goes in a header, not the query string: a URL is copied
           # into the runner log, the bot host's access log, and every proxy in

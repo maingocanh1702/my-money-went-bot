@@ -11,3 +11,7 @@ freezegun==1.5.1
 # bot yet, so its drivers stay out of the deploy image until the cutover lands.
 SQLAlchemy==2.0.52
 psycopg[binary]==3.3.5
+
+# The only lint CI enforces (E9,F63,F7,F82). Pinned so a local run and the
+# CI run agree; CONTRIBUTING tells contributors to install this file.
+ruff==0.15.14

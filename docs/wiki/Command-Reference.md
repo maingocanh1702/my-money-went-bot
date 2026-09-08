@@ -116,6 +116,28 @@ Templates live in `card_templates/` as YAML. Adding a card for a bank nobody has
 
 Lists transactions that arrived while you were in the middle of another flow and shows the category picker for them. Nothing is lost when a bank notification interrupts you mid-command.
 
+## `/cancel_tx [row]`
+
+Cancels a transaction that already happened — a refund, a charge that never
+landed, a duplicate. With no argument it offers the 3 most recent and pages
+back through older ones up to 30 days; `/cancel_tx 218` targets a sheet row.
+
+Cancelling is a soft delete, not a row deletion: the Cashback Ledger and the
+Account Ledger both key on the transaction's row number, so removing the row
+would break every reference underneath it. The row stays and is marked
+cancelled, which means the reverse is available too — pick a cancelled row and
+the bot offers to restore it.
+
+What it puts back:
+
+- the account's outstanding balance and available credit limit
+- the cashback that transaction earned, and the cycle cap it consumed — the
+  whole billing cycle is recomputed, so a later transaction that was refused
+  as `mcc_cap_full` can become eligible again
+
+Income rows are refused: the confirmation would promise the opposite of what
+the ledger does. So is anything older than 30 days, in both directions.
+
 ## `/transfer` and `/cc pay`
 
 Records money you moved yourself: `/transfer` between two of your accounts, `/cc pay` for a credit-card payment. Neither counts as spending.
