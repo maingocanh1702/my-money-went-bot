@@ -753,7 +753,7 @@ def record_excluded_event(*, ref_code: str, source: str, occurred_at: str, amoun
             str(reason or ""),
             str(description or "")[:200],
         ])
-        print(f"[excluded] recorded {reason!r} ref={ref_code!r} amount={amount} {currency}")
+        print(f"[excluded] recorded {reason!r} ref={ref_code!r} {currency}")
         return True
     except Exception as e:
         print(f"[excluded] could not record {reason!r} ref={ref_code!r}: {e}")
@@ -819,7 +819,7 @@ def find_recent_duplicate(amount: float, tx_type: str, tx_date: str, currency: s
                     and row_cur == new_cur
                     and abs((new_dt - row_dt).total_seconds()) < DEDUP_WINDOW_SEC
                 ):
-                    print(f"[dedup] cross-source duplicate: amount={amount} {new_cur} "
+                    print(f"[dedup] cross-source duplicate: {new_cur} "
                           f"type={tx_type} source={new_source or '?'} vs {row_source or '?'} "
                           f"diff={abs((new_dt - row_dt).total_seconds()):.0f}s")
                     return True
@@ -1170,8 +1170,11 @@ def append_transaction(
         ws.update(f"A{next_row}:U{next_row}", [row_data])
 
     _invalidate_tx_rows_cache()  # cache stale sau khi write
-    print(f"DEBUG append_transaction: wrote row {next_row}, amount={amount} {cur} "
-          f"account={account_id!r} src_key={src_key!r} type={ledger_tx_type!r}")
+    # No amount and no source key: stdout is retained by the host and shipped
+    # to whatever log drain is attached, and the source key IS the bank account
+    # number. Whether one was resolved is the part worth debugging.
+    print(f"DEBUG append_transaction: wrote row {next_row} {cur} "
+          f"account={account_id!r} src_key_set={bool(src_key)} type={ledger_tx_type!r}")
     return next_row
 
 
@@ -3553,7 +3556,7 @@ def append_ledger_entry(
         notes,
     ]
     ws.update(f"A{next_row}:I{next_row}", [row])
-    print(f"[ledger] appended: {ledger_id} tx={tx_row_num} {direction_norm}{amount} "
+    print(f"[ledger] appended: {ledger_id} tx={tx_row_num} dir={direction_norm} "
           f"{currency} acc={account_id} type={tx_type}")
     return ledger_id
 
