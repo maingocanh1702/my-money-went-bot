@@ -345,12 +345,12 @@ async def _handle_zalo_text(body: dict):
 
         # /transfer command
         if cmd == "/transfer":
-            await _zalo_cmd_transfer(chat_id, text)
+            await _cmd_transfer(text, channel="zalo", chat_id=chat_id)
             return
 
         # /cc pay command
         if cmd == "/cc":
-            await _zalo_cmd_cc_pay(chat_id, text)
+            await _cmd_cc_pay(text, channel="zalo", chat_id=chat_id)
             return
 
         # /recat command
@@ -605,7 +605,7 @@ async def _zalo_send(chat_id: str, text: str):
     await messenger.send_text(text, channel="zalo", recipient_id=chat_id)
 
 
-def _zalo_now_for_tx() -> tuple[str, str, str]:
+def _now_for_tx() -> tuple[str, str, str]:
     import time
     from datetime import datetime
     import pytz
@@ -1646,153 +1646,6 @@ async def _zalo_accounts_handle_assign_confirm(
     ws.batch_update([{"range": f"Q{rn}:Q{rn}", "values": [[slug]]} for rn in rows])
     sh.clear_state(state_key)
     await _zalo_send(chat_id, f"Đã assign {len(rows)} tx → {slug}. Gửi /report để kiểm tra.")
-
-
-async def _zalo_cmd_transfer(chat_id: str, text: str):
-    parts = text.strip().split()
-    if len(parts) < 4:
-        await _zalo_send(chat_id, "Usage: /transfer <amount> <from> <to>\nVd: /transfer 1000000 bank_main cake_main")
-        return
-    amount = parse_money(parts[1])
-    if amount is None or amount <= 0:
-        await _zalo_send(chat_id, "Số tiền không hợp lệ.")
-        return
-    from_id, to_id = parts[2].strip(), parts[3].strip()
-    if from_id == to_id:
-        await _zalo_send(chat_id, "from và to phải khác account.")
-        return
-
-    from_acc = sh.find_account_by_id(from_id)
-    to_acc = sh.find_account_by_id(to_id)
-    if not from_acc:
-        await _zalo_send(chat_id, f"Account {from_id} không tồn tại. Gửi /accounts để xem list.")
-        return
-    if not to_acc:
-        await _zalo_send(chat_id, f"Account {to_id} không tồn tại.")
-        return
-    if from_acc["currency"] != to_acc["currency"]:
-        await _zalo_send(chat_id, f"Currency mismatch: {from_acc['currency']} → {to_acc['currency']}.")
-        return
-
-    iso, month_key, ts = _zalo_now_for_tx()
-    row_num, status = sh.append_transfer(
-        from_account_id=from_id,
-        to_account_id=to_id,
-        amount=amount,
-        currency=from_acc["currency"],
-        description=f"transfer {from_id} → {to_id}",
-        tx_date=iso,
-        ref_code=f"TRANSFER_{from_id}_{to_id}_{ts}",
-        month_key=month_key,
-    )
-    if status != "ok":
-        await _zalo_send(chat_id, status)
-        return
-
-    sh.invalidate_accounts_cache()
-    from_after = sh.find_account_by_id(from_id)
-    to_after = sh.find_account_by_id(to_id)
-    cur = from_acc["currency"]
-    await _zalo_send(
-        chat_id,
-        f"Transfer ghi nhận\n"
-        f"{from_acc['name']} → {to_acc['name']}\n"
-        f"Số tiền: {sh.fmt_amount(amount, cur)}\n\n"
-        f"Số dư mới:\n"
-        f"{from_acc['name']}: {sh.fmt_amount(from_after['running_balance'], cur)}\n"
-        f"{to_acc['name']}: {sh.fmt_amount(to_after['running_balance'], cur)}",
-    )
-
-
-async def _zalo_cmd_cc_pay(chat_id: str, text: str):
-    parts = text.strip().split()
-    if len(parts) not in (4, 5) or parts[1].lower() != "pay":
-        await _zalo_send(
-            chat_id,
-            "Usage:\n"
-            "/cc pay <amount> <cc_id> — trả từ nguồn ngoài\n"
-            "/cc pay <amount> <bank_id> <cc_id> — trả từ bank account đã onboard",
-        )
-        return
-    amount = parse_money(parts[2])
-    if amount is None or amount <= 0:
-        await _zalo_send(chat_id, "Số tiền không hợp lệ.")
-        return
-
-    iso, month_key, ts = _zalo_now_for_tx()
-    if len(parts) == 4:
-        cc_id = parts[3].strip()
-        cc_acc = sh.find_account_by_id(cc_id)
-        if not cc_acc:
-            await _zalo_send(chat_id, f"CC {cc_id} không tồn tại.")
-            return
-        if cc_acc["type"] != "credit":
-            await _zalo_send(chat_id, f"{cc_id} không phải credit card (type={cc_acc['type']}).")
-            return
-
-        row_num, status = sh.append_cc_payment_external(
-            cc_account_id=cc_id,
-            amount=amount,
-            currency=cc_acc["currency"],
-            description=f"cc payment external → {cc_id}",
-            tx_date=iso,
-            ref_code=f"CCPAYEXT_{cc_id}_{ts}",
-            month_key=month_key,
-        )
-        if status != "ok":
-            await _zalo_send(chat_id, status)
-            return
-        sh.invalidate_accounts_cache()
-        cc_after = sh.find_account_by_id(cc_id)
-        cur = cc_acc["currency"]
-        await _zalo_send(
-            chat_id,
-            f"CC payment ghi nhận (external)\n"
-            f"→ {cc_acc['name']}\n"
-            f"Số tiền: {sh.fmt_amount(amount, cur)}\n\n"
-            f"{cc_acc['name']} dư nợ: {sh.fmt_amount(cc_after['outstanding_balance'], cur)}",
-        )
-        return
-
-    bank_id, cc_id = parts[3].strip(), parts[4].strip()
-    bank_acc = sh.find_account_by_id(bank_id)
-    cc_acc = sh.find_account_by_id(cc_id)
-    if not bank_acc:
-        await _zalo_send(chat_id, f"Bank {bank_id} không tồn tại.")
-        return
-    if not cc_acc:
-        await _zalo_send(chat_id, f"CC {cc_id} không tồn tại.")
-        return
-    if cc_acc["type"] != "credit":
-        await _zalo_send(chat_id, f"{cc_id} không phải credit card (type={cc_acc['type']}).")
-        return
-
-    row_num, status = sh.append_cc_payment(
-        bank_account_id=bank_id,
-        cc_account_id=cc_id,
-        amount=amount,
-        currency=bank_acc["currency"],
-        description=f"cc payment {bank_id} → {cc_id}",
-        tx_date=iso,
-        ref_code=f"CCPAY_{bank_id}_{cc_id}_{ts}",
-        month_key=month_key,
-    )
-    if status != "ok":
-        await _zalo_send(chat_id, status)
-        return
-
-    sh.invalidate_accounts_cache()
-    bank_after = sh.find_account_by_id(bank_id)
-    cc_after = sh.find_account_by_id(cc_id)
-    cur = bank_acc["currency"]
-    await _zalo_send(
-        chat_id,
-        f"CC payment ghi nhận\n"
-        f"{bank_acc['name']} → {cc_acc['name']}\n"
-        f"Số tiền: {sh.fmt_amount(amount, cur)}\n\n"
-        f"{bank_acc['name']}: {sh.fmt_amount(bank_after['running_balance'], cur)}\n"
-        f"{cc_acc['name']} dư nợ: {sh.fmt_amount(cc_after['outstanding_balance'], cur)}",
-    )
 
 
 async def _zalo_cmd_recat(chat_id: str, text: str, state_key: str):
@@ -3224,35 +3077,46 @@ async def _handle_message(message: dict):
         await _tg_cmd_help()
 
 
-async def _tg_cmd_transfer(text: str):
-    """Telegram /transfer <amount> <from> <to>"""
+# ─── Commands shared by Telegram and Zalo ─────────────────────
+# One implementation per command; the channel only decides where the reply
+# goes. Markdown is written once — messenger.send_text renders it on Telegram
+# and strips it for Zalo.
+
+
+async def _cmd_transfer(text: str, *, channel: str = "telegram",
+                        chat_id: str | None = None):
+    """/transfer <amount> <from> <to>"""
+    async def reply(msg: str) -> None:
+        await messenger.send_text(msg, channel=channel, recipient_id=chat_id)
+
     parts = text.strip().split()
     if len(parts) < 4:
-        await tg.send_text("Usage: `/transfer <amount> <from> <to>`\nVd: `/transfer 1000000 bank_main cake_main`")
+        await reply("Usage: `/transfer <amount> <from> <to>`\n"
+                    "Vd: `/transfer 1000000 bank_main cake_main`")
         return
     amount = parse_money(parts[1])
     if amount is None or amount <= 0:
-        await tg.send_text("⚠️ Số tiền không hợp lệ.")
+        await reply("⚠️ Số tiền không hợp lệ.")
         return
     from_id, to_id = parts[2].strip(), parts[3].strip()
     if from_id == to_id:
-        await tg.send_text("⚠️ from và to phải khác account.")
+        await reply("⚠️ from và to phải khác account.")
         return
 
     from_acc = sh.find_account_by_id(from_id)
     to_acc = sh.find_account_by_id(to_id)
     if not from_acc:
-        await tg.send_text(f"⚠️ Account `{from_id}` không tồn tại. Gửi /accounts để xem list.")
+        await reply(f"⚠️ Account `{from_id}` không tồn tại. Gửi /accounts để xem list.")
         return
     if not to_acc:
-        await tg.send_text(f"⚠️ Account `{to_id}` không tồn tại.")
+        await reply(f"⚠️ Account `{to_id}` không tồn tại.")
         return
     if from_acc["currency"] != to_acc["currency"]:
-        await tg.send_text(f"⚠️ Currency mismatch: {from_acc['currency']} → {to_acc['currency']}.")
+        await reply(f"⚠️ Currency mismatch: {from_acc['currency']} → {to_acc['currency']}.")
         return
 
-    iso, month_key, ts = _zalo_now_for_tx()
-    row_num, status = sh.append_transfer(
+    iso, month_key, ts = _now_for_tx()
+    _, status = sh.append_transfer(
         from_account_id=from_id, to_account_id=to_id,
         amount=amount, currency=from_acc["currency"],
         description=f"transfer {from_id} → {to_id}",
@@ -3260,14 +3124,14 @@ async def _tg_cmd_transfer(text: str):
         month_key=month_key,
     )
     if status != "ok":
-        await tg.send_text(f"⚠️ {status}")
+        await reply(f"⚠️ {status}")
         return
 
     sh.invalidate_accounts_cache()
     from_after = sh.find_account_by_id(from_id)
     to_after = sh.find_account_by_id(to_id)
     cur = from_acc["currency"]
-    await tg.send_text(
+    await reply(
         f"✅ *Transfer ghi nhận*\n"
         f"{from_acc['name']} → {to_acc['name']}\n"
         f"Số tiền: *{sh.fmt_amount(amount, cur)}*\n\n"
@@ -3277,45 +3141,49 @@ async def _tg_cmd_transfer(text: str):
     )
 
 
-async def _tg_cmd_cc_pay(text: str):
-    """Telegram /cc pay <amount> <cc_id> or /cc pay <amount> <bank_id> <cc_id>"""
+async def _cmd_cc_pay(text: str, *, channel: str = "telegram",
+                      chat_id: str | None = None):
+    """/cc pay <amount> <cc_id> — or /cc pay <amount> <bank_id> <cc_id>"""
+    async def reply(msg: str) -> None:
+        await messenger.send_text(msg, channel=channel, recipient_id=chat_id)
+
     parts = text.strip().split()
     if len(parts) not in (4, 5) or parts[1].lower() != "pay":
-        await tg.send_text(
+        await reply(
             "Usage:\n"
             "`/cc pay <amount> <cc_id>` — trả từ nguồn ngoài\n"
-            "`/cc pay <amount> <bank_id> <cc_id>` — trả từ bank account"
+            "`/cc pay <amount> <bank_id> <cc_id>` — trả từ bank account đã onboard"
         )
         return
     amount = parse_money(parts[2])
     if amount is None or amount <= 0:
-        await tg.send_text("⚠️ Số tiền không hợp lệ.")
+        await reply("⚠️ Số tiền không hợp lệ.")
         return
 
-    iso, month_key, ts = _zalo_now_for_tx()
+    iso, month_key, ts = _now_for_tx()
     if len(parts) == 4:
         cc_id = parts[3].strip()
         cc_acc = sh.find_account_by_id(cc_id)
         if not cc_acc:
-            await tg.send_text(f"⚠️ CC `{cc_id}` không tồn tại.")
+            await reply(f"⚠️ CC `{cc_id}` không tồn tại.")
             return
         if cc_acc["type"] != "credit":
-            await tg.send_text(f"⚠️ `{cc_id}` không phải credit card (type={cc_acc['type']}).")
+            await reply(f"⚠️ `{cc_id}` không phải credit card (type={cc_acc['type']}).")
             return
 
-        row_num, status = sh.append_cc_payment_external(
+        _, status = sh.append_cc_payment_external(
             cc_account_id=cc_id, amount=amount, currency=cc_acc["currency"],
             description=f"cc payment external → {cc_id}",
             tx_date=iso, ref_code=f"CCPAYEXT_{cc_id}_{ts}",
             month_key=month_key,
         )
         if status != "ok":
-            await tg.send_text(f"⚠️ {status}")
+            await reply(f"⚠️ {status}")
             return
         sh.invalidate_accounts_cache()
         cc_after = sh.find_account_by_id(cc_id)
         cur = cc_acc["currency"]
-        await tg.send_text(
+        await reply(
             f"✅ *CC payment ghi nhận (external)*\n"
             f"→ {cc_acc['name']}\n"
             f"Số tiền: *{sh.fmt_amount(amount, cur)}*\n\n"
@@ -3327,16 +3195,16 @@ async def _tg_cmd_cc_pay(text: str):
     bank_acc = sh.find_account_by_id(bank_id)
     cc_acc = sh.find_account_by_id(cc_id)
     if not bank_acc:
-        await tg.send_text(f"⚠️ Bank `{bank_id}` không tồn tại.")
+        await reply(f"⚠️ Bank `{bank_id}` không tồn tại.")
         return
     if not cc_acc:
-        await tg.send_text(f"⚠️ CC `{cc_id}` không tồn tại.")
+        await reply(f"⚠️ CC `{cc_id}` không tồn tại.")
         return
     if cc_acc["type"] != "credit":
-        await tg.send_text(f"⚠️ `{cc_id}` không phải credit card (type={cc_acc['type']}).")
+        await reply(f"⚠️ `{cc_id}` không phải credit card (type={cc_acc['type']}).")
         return
 
-    row_num, status = sh.append_cc_payment(
+    _, status = sh.append_cc_payment(
         bank_account_id=bank_id, cc_account_id=cc_id,
         amount=amount, currency=bank_acc["currency"],
         description=f"cc payment {bank_id} → {cc_id}",
@@ -3344,14 +3212,14 @@ async def _tg_cmd_cc_pay(text: str):
         month_key=month_key,
     )
     if status != "ok":
-        await tg.send_text(f"⚠️ {status}")
+        await reply(f"⚠️ {status}")
         return
 
     sh.invalidate_accounts_cache()
     bank_after = sh.find_account_by_id(bank_id)
     cc_after = sh.find_account_by_id(cc_id)
     cur = bank_acc["currency"]
-    await tg.send_text(
+    await reply(
         f"✅ *CC payment ghi nhận*\n"
         f"{bank_acc['name']} → {cc_acc['name']}\n"
         f"Số tiền: *{sh.fmt_amount(amount, cur)}*\n\n"
@@ -3468,8 +3336,8 @@ async def _handle_command(text: str):
     elif cmd == "/keywords":  await start_keywords()
     elif cmd == "/cashback":  await start_cashback(text)
     elif cmd == "/allocate":  await start_monthly_allocation()
-    elif cmd == "/transfer":  await _tg_cmd_transfer(text)
-    elif cmd == "/cc":        await _tg_cmd_cc_pay(text)
+    elif cmd == "/transfer":  await _cmd_transfer(text)
+    elif cmd == "/cc":        await _cmd_cc_pay(text)
     elif cmd == "/recat":     await _tg_cmd_recat(text)
     elif cmd == "/pending":   await _tg_cmd_pending()
     elif cmd == "/lang":      await cmd_lang()

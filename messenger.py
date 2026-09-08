@@ -20,6 +20,7 @@ Usage:
 """
 
 import html
+import re
 
 import httpx
 
@@ -144,17 +145,28 @@ def _is_new_category_button(btn: dict) -> bool:
 # ─── Markdown stripping ───────────────────────────────────────
 
 
+# Italic is _text_, but "_" is also an ordinary word character: account ids,
+# bucket ids and ref codes are full of them (bank_main, TRANSFER_a_b_1757…).
+# Only a matched pair whose ends touch no word character is markdown.
+_ITALIC_PAIR = re.compile(r"(?<!\w)_([^_\n]+)_(?!\w)")
+
+
 def _strip_markdown(text: str) -> str:
     """Strip Markdown formatting tokens for plain-text channels.
 
     Handles the common tokens used by telegram_api.py:
     bold (*text* or **text**), italic (_text_), monospace (`text`).
+
+    Stripping every "_" used to mangle the identifiers the message was about:
+    "Account bank_main không tồn tại" reached Zalo as "Account bankmain",
+    naming an account the user never typed, and /transfer's own usage example
+    printed a command that would not work if copied.
     """
     plain = html.unescape(text)
     # Order matters: strip ** before * to avoid partial matches
-    for token in ("**", "__", "`", "*", "_"):
+    for token in ("**", "__", "`", "*"):
         plain = plain.replace(token, "")
-    return plain
+    return _ITALIC_PAIR.sub(r"\1", plain)
 
 
 # ─── Zalo inline keyboard (experimental) ─────────────────────
