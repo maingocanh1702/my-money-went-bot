@@ -162,6 +162,8 @@ def _scan_period(period_code: str) -> dict:
         tx_type = r[6] if len(r) > 6 else ""
         if tx_type not in ("Tiền ra", "Tiền vào"):
             continue
+        if sh.is_cancelled(r):   # cancelled tx never happened, moneywise
+            continue
         amount = sh._parse_amount(r[7]) or 0.0
         if amount <= 0:
             continue

@@ -286,6 +286,7 @@ STRINGS: dict[str, str] = {
         "/cc pay — ghi nhận trả thẻ tín dụng\n\n"
         "*Khác:*\n"
         "/recat — sửa phân loại giao dịch cũ\n"
+        "/cancel_tx — huỷ giao dịch (hoàn hạn mức + thu hồi cashback)\n"
         "/pending — phân loại giao dịch đang chờ\n"
         "/lang — đổi ngôn ngữ vi/en\n"
         "/cancel — hủy thao tác đang làm dở\n\n"
