@@ -135,9 +135,14 @@ def test_durable_claim_expands_processed_refs_past_initial_sheet_capacity(fake_s
     _setup_tx_tab()
     processed = sh._ensure_processed_refs_tab()
     processed._row_count = 500
+    # Inside the retention window, so none of these can be evicted and the tab
+    # has to grow. A hardcoded date here is a fuse: PROCESSED_REF_RETENTION_SECONDS
+    # is seven days, so a fixed timestamp passes for a week and then fails every
+    # day after, for reasons that have nothing to do with the code under test.
+    recent = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
     processed.update(
         "A2:C500",
-        [[f"old-{index}", "committed", "2026-09-01T00:00:00+00:00"] for index in range(499)],
+        [[f"old-{index}", "committed", recent] for index in range(499)],
     )
     sh._processed_refs.clear()
     monkeypatch.setattr(sh, "_ref_in_sheet", lambda _ref_code: False)
