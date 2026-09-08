@@ -37,14 +37,20 @@ def _parse_shorthand(s: str) -> float | None:
 
     `s` must already be lowercased, diacritics-stripped, whitespace-free.
     Returns the VND value, or None when `s` is not shorthand-shaped.
+
+    The number in front of the unit is read by `resolve_separators`, the same
+    way a bare amount is. Treating every separator here as a decimal point
+    made the unit vanish: "1.500k" is 1500 thousand, and reading it as 1.5
+    thousand wrote 1.500đ into the ledger where 1.500.000đ was meant.
     """
-    m = re.fullmatch(r"(\d+)(?:[.,](\d+))?(k|nghin|ngan|trieu|tr|m|ty)(\d{1,2})?", s)
+    m = re.fullmatch(r"([\d.,]+)(k|nghin|ngan|trieu|tr|m|ty)(\d{1,2})?", s)
     if not m:
         return None
-    whole, frac, unit, tail = m.groups()
-    value = float(whole)
-    if frac:
-        value += float(f"0.{frac}")
+    number, unit, tail = m.groups()
+    resolved = resolve_separators(number)
+    if resolved is None:
+        return None
+    value = float(resolved)
     if tail:  # "3tr5" → 3.5tr, "2k5" → 2.5k
         value += float(f"0.{tail}")
     return value * _UNIT_MULTIPLIERS[unit]
