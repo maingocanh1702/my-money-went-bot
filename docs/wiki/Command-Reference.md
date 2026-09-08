@@ -75,6 +75,26 @@ Tracks credit-card cashback per card, using MCC-based rules.
 - `/cashback templates` — list the built-in card templates.
 - `/cashback seed <template> [card]` — apply a template to one of your cards.
 - `/cashback setup [card]` — wizard for a card no template covers: rate, cap, gate, cycle, then MCC rules.
+
+**Editing the MCC map** (`/cashback` → a card → 🏷️ MCC). The map turns a merchant
+name into an MCC code, which is what decides the cashback rate:
+
+| Type this | What happens |
+|---|---|
+| `WINMART 5411 Siêu thị` | adds the pattern, or **re-points it** to a different MCC if it already exists |
+| `ren WIMART WINMART` | **renames the keyword**, keeping its MCC and label |
+| `del WINMART` | turns the pattern off (the row stays in the sheet with `active=FALSE`) |
+
+Renaming onto a keyword that already exists is refused rather than merged — two
+rows would have to collapse into one MCC, and which one to keep is your call.
+Delete one first, then rename.
+
+The MCC must be **four digits**. A pattern is a case- and accent-insensitive
+substring of the transaction description, so `tiktok` also matches `TIKTOKSHOP` —
+keep patterns specific enough not to catch merchants you did not mean.
+
+If your pattern contains a space, remove it (`TIKTOKSHOP`, not `TIKTOK SHOP`):
+the first word is read as the pattern and the second as the MCC.
 - `/cashback export [card]` — dump the card's config as YAML.
 - `/cashback savetemplate [card]` — save the card's config as a reusable template.
 

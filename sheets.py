@@ -1788,6 +1788,97 @@ def add_mcc_map(pattern: str, mcc_code: str, mcc_label: str = "",
     return True
 
 
+def set_mcc_map(pattern: str, mcc_code: str, mcc_label: str = "") -> str:
+    """Point an existing pattern at a different MCC, or add it if it is new.
+
+    add_mcc_map only ever appends, and refuses when (pattern, mcc) already
+    exists — so a pattern filed under the wrong MCC could not be corrected from
+    the bot at all. This updates the row in place instead.
+
+    Returns "updated", "added", or "unchanged".
+    """
+    pat = _normalize_for_match(pattern)
+    code = str(mcc_code).strip()
+    if not pat or not code:
+        return "unchanged"
+    ws = _ensure_mcc_map_tab()
+    rows = ws.get_all_values()[1:]
+    for i, r in enumerate(rows):
+        if not r or _normalize_for_match(r[0]) != pat:
+            continue
+        if len(r) > 5 and str(r[5]).upper() != "TRUE":
+            continue
+        same_code = str(r[1]).strip() == code
+        same_label = (r[2] if len(r) > 2 else "") == mcc_label
+        if same_code and (same_label or not mcc_label):
+            return "unchanged"
+        ws.update(f"B{i + 2}:C{i + 2}", [[code, mcc_label or (r[2] if len(r) > 2 else "")]])
+        invalidate_cashback_caches()
+        return "updated"
+    return "added" if add_mcc_map(pattern, code, mcc_label) else "unchanged"
+
+
+def rename_mcc_map(old_pattern: str, new_pattern: str) -> str:
+    """Change the keyword itself, keeping its MCC and label.
+
+    Without this, fixing a typo means deleting the row and retyping the MCC and
+    the label from memory — and getting either of them wrong is silent.
+
+    Returns "renamed", "not_found", "unchanged", or "conflict" (the new spelling
+    is already an active pattern of its own; merging two rows would have to pick
+    one MCC to keep, and that is the caller's decision, not this function's).
+    """
+    old = _normalize_for_match(old_pattern)
+    new = _normalize_for_match(new_pattern)
+    if not old or not new:
+        return "not_found"
+    if old == new:
+        return "unchanged"
+
+    ws = _ensure_mcc_map_tab()
+    rows = ws.get_all_values()[1:]
+    target = None
+    for i, r in enumerate(rows):
+        if not r or not r[0]:
+            continue
+        if len(r) > 5 and str(r[5]).upper() != "TRUE":
+            continue
+        if _normalize_for_match(r[0]) == new:
+            return "conflict"
+        if _normalize_for_match(r[0]) == old and target is None:
+            target = i + 2
+    if target is None:
+        return "not_found"
+
+    ws.update_cell(target, 1, new)
+    invalidate_cashback_caches()
+    return "renamed"
+
+
+def deactivate_mcc_map(pattern: str) -> bool:
+    """Turn a pattern off (active=FALSE, col F). Returns False if not found.
+
+    Soft-delete, like every other removable row in this sheet: the line stays
+    so you can see what the bot used to think, and turn it back on by hand.
+    """
+    pat = _normalize_for_match(pattern)
+    if not pat:
+        return False
+    ws = _ensure_mcc_map_tab()
+    rows = ws.get_all_values()[1:]
+    hit = False
+    for i, r in enumerate(rows):
+        if not r or _normalize_for_match(r[0]) != pat:
+            continue
+        if len(r) > 5 and str(r[5]).upper() != "TRUE":
+            continue
+        ws.update_cell(i + 2, 6, "FALSE")
+        hit = True
+    if hit:
+        invalidate_cashback_caches()
+    return hit
+
+
 def add_cashback_rules_bulk(specs: list[dict]) -> int:
     """Batch add_cashback_rule — ONE read + ONE write for many rules (seed 429 fix).
 

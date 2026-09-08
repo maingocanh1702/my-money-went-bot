@@ -5,6 +5,12 @@ All notable changes to MyMoneyWent will be documented in this file.
 ## Unreleased
 
 ### Added
+- The MCC map can be corrected, not just extended. `<pattern> <mcc> [label]` now
+  re-points a pattern that already exists instead of refusing it as a duplicate,
+  `ren <old> <new>` fixes the keyword itself while keeping its MCC and label, and
+  `del <pattern>` turns one off. Both were only possible by opening the Google
+  Sheet by hand — which the bot then ignored, because the MCC cache has no TTL and
+  a manual sheet edit invalidates nothing.
 - Debit cards are documented as a first-class thing the bot tracks, alongside
   credit cards. No code changed — the account type, the e-mail path and the
   onboarding wizard already supported it; nothing in the docs said so, which is
@@ -32,6 +38,11 @@ All notable changes to MyMoneyWent will be documented in this file.
   bot is the first thing the page offers.
 
 ### Fixed
+- The MCC code is validated as four digits. It was not, and the failure was
+  silent: one extra word — `TIKTOK SHOP 5611 Thoi trang` — filed the pattern
+  under an MCC of `SHOP`, which matches no rule on any card, so those swipes
+  quietly earned the card's default rate instead of the one they should have.
+  The entry looked perfectly normal in the list.
 - `docs/ZALO_BOT_SETUP.md` described a bot that no longer exists: it said Zalo was
   notification-only, that categorizing had to happen on Telegram, and that
   `ZALO_SECRET_TOKEN` was an optional extra for a "beta". All three were wrong —

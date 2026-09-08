@@ -14,6 +14,7 @@ The channel-agnostic core (seed_from_template / list_cashback_cards / recompute_
 / card_overview_text) is unit-tested; the TG/Zalo glue is thin around it.
 """
 from datetime import datetime
+import re
 import pytz
 
 from config import CHAT_ID, TIMEZONE
@@ -604,22 +605,80 @@ async def _tg_mcc_prompt(account_id: str):
     sh.set_state(CHAT_ID, {"step": "cb_mcc", "account_id": account_id})
     await tg.send_text(
         mcc_pattern_overview_text(account_id) + "\n\n"
-        "➕ Thêm pattern: `<pattern> <mcc> [label]` (vd `WINMART 5411 Siêu thị`).\n"
-        "Pattern là substring khớp mô tả giao dịch (không phân biệt hoa/thường)."
+        "➕ Thêm / đổi MCC: `<pattern> <mcc> [label]` (vd `WINMART 5411 Siêu thị`).\n"
+        "   Pattern đã có sẽ được trỏ sang MCC mới.\n"
+        "✏️ Đổi tên keyword: `ren <cũ> <mới>` (vd `ren WIMART WINMART`) — giữ nguyên MCC.\n"
+        "🗑️ Xoá: `del <pattern>` (vd `del WINMART`).\n"
+        "MCC phải là 4 chữ số. Pattern là substring khớp mô tả giao dịch "
+        "(không phân biệt hoa/thường, không phân biệt dấu)."
     )
 
 
+_MCC_CODE = re.compile(r"^\d{4}$")
+
+
 async def handle_cashback_mcc_input(text: str, state: dict):
+    """Edit the MCC map from one line of text.
+
+        <pattern> <mcc> [label]   add, or re-point a pattern that exists
+        ren <old> <new>           rename the keyword, keeping its MCC and label
+        del <pattern>             turn a pattern off
+
+
+    The MCC code is validated as four digits. It was not, and the cost of that
+    was silent: typing one word too many ("TIKTOK SHOP 5611 Thoi trang") filed
+    the pattern under an MCC of "SHOP", which matches no rule on any card, so
+    those transactions quietly earned the card's default rate instead of the
+    one they should have. Nothing reported it — the entry looked fine in the
+    list.
+    """
     parts = (text or "").split()
+
+    if parts and parts[0].lower() in ("ren", "rename", "sua", "sửa", "edit"):
+        if len(parts) < 3:
+            await tg.send_text(t("cb.mcc_ren_need_input"))
+            return
+        old_pat, new_pat = parts[1], parts[2]
+        result = sh.rename_mcc_map(old_pat, new_pat)
+        if result == "renamed":
+            sh.set_state(CHAT_ID, {"step": "cashback"})
+            await tg.send_text(t("cb.mcc_renamed", old=old_pat, new=new_pat))
+            await _tg_card_view(state.get("account_id"))
+            return
+        await tg.send_text({
+            "not_found": t("cb.mcc_not_found", pattern=old_pat),
+            "conflict":  t("cb.mcc_ren_conflict", pattern=new_pat),
+        }.get(result, t("cb.mcc_ren_same", pattern=old_pat)))
+        return
+
+    if parts and parts[0].lower() in ("del", "xoa", "xóa", "delete", "rm"):
+        if len(parts) < 2:
+            await tg.send_text(t("cb.mcc_del_need_input"))
+            return
+        pattern = parts[1]
+        ok = sh.deactivate_mcc_map(pattern)
+        sh.set_state(CHAT_ID, {"step": "cashback"})
+        await tg.send_text(t("cb.mcc_deleted", pattern=pattern) if ok
+                           else t("cb.mcc_not_found", pattern=pattern))
+        await _tg_card_view(state.get("account_id"))
+        return
+
     if len(parts) < 2:
         await tg.send_text(t("cb.mcc_need_input"))
         return
+
     pattern, mcc = parts[0], parts[1]
+    if not _MCC_CODE.match(mcc):
+        await tg.send_text(t("cb.mcc_bad_code", mcc=mcc))
+        return
+
     label = " ".join(parts[2:]) if len(parts) > 2 else ""
-    ok = sh.add_mcc_map(pattern, mcc, label)
+    result = sh.set_mcc_map(pattern, mcc, label)
     sh.set_state(CHAT_ID, {"step": "cashback"})
-    msg = (t("cb.mcc_added", pattern=pattern, mcc=mcc) if ok
-           else t("cb.mcc_exists", pattern=pattern, mcc=mcc))
+    msg = {
+        "added":   t("cb.mcc_added", pattern=pattern, mcc=mcc),
+        "updated": t("cb.mcc_updated", pattern=pattern, mcc=mcc),
+    }.get(result, t("cb.mcc_exists", pattern=pattern, mcc=mcc))
     await tg.send_text(msg)
     await _tg_card_view(state.get("account_id"))
 
