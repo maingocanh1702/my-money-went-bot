@@ -1,5 +1,5 @@
 fastapi==0.136.1
-starlette==1.3.1
+starlette==1.6.0
 uvicorn[standard]==0.52.4
 gspread==6.2.1
 google-auth==2.57.1
