@@ -204,6 +204,17 @@ def row_currency(row: list) -> str:
     return "VND"
 
 
+def is_confirmed(row: list) -> bool:
+    """Read column N (index 13) safely — the user has categorized this row.
+
+    Nine call sites open-coded this same length-check-plus-string-compare and
+    drifted apart: some guarded the short row, some did not, and the Telegram
+    and Zalo pending queues ended up disagreeing about what "already handled"
+    meant. One predicate, one meaning.
+    """
+    return len(row) > 13 and str(row[13]).upper() == "TRUE"
+
+
 _SCIENTIFIC = re.compile(r"[-+]?\d+(?:\.\d+)?[eE][-+]?\d+")
 
 
@@ -304,7 +315,7 @@ def get_bucket_status(bucket_id: str, month_key: str) -> dict:
             continue
         if r[10] != bucket_id:
             continue
-        if str(r[13]).upper() != "TRUE":
+        if not is_confirmed(r):
             continue
         # Only count outgoing transactions as "spent"
         if len(r) > 6 and r[6] == "Tiền vào":
@@ -335,7 +346,7 @@ def get_income_total(bucket_id: str, month_key: str) -> float:
             continue
         if r[10] != bucket_id:
             continue
-        if str(r[13]).upper() != "TRUE":
+        if not is_confirmed(r):
             continue
         # Chỉ tính incoming
         if len(r) > 6 and r[6] != "Tiền vào":
@@ -364,7 +375,7 @@ def get_daily_status(tx_date: datetime) -> dict:
     rows = _get_tx_rows()
     spent = 0
     for r in rows:
-        if len(r) < 14 or str(r[13]).upper() != "TRUE":
+        if not is_confirmed(r):
             continue
         if r[10] != DAILY_BUCKET_ID:
             continue
@@ -417,7 +428,7 @@ def get_recent_transactions(limit: int = 10, month_key: str = None,
             continue
 
         row_num = idx + 2
-        is_finalized = len(r) > 13 and str(r[13]).upper() == "TRUE"
+        is_finalized = is_confirmed(r)
         bucket_id = r[10] if len(r) > 10 else ""
 
         if only_uncategorized and (is_finalized and bucket_id):
@@ -449,7 +460,7 @@ def get_frequent_categories(n: int = 3) -> list[str]:
     rows = _get_tx_rows()
     counts: dict[str, int] = {}
     for r in rows:
-        if len(r) < 14 or str(r[13]).upper() != "TRUE":
+        if not is_confirmed(r):
             continue
         # Only outgoing
         if len(r) > 6 and r[6] == "Tiền vào":
@@ -3101,7 +3112,7 @@ def count_bucket_transactions(bucket_id: str, month_key: str) -> int:
     count = 0
     for r in rows:
         if (len(r) >= 15 and r[14] == month_key
-                and r[10] == bucket_id and str(r[13]).upper() == "TRUE"):
+                and r[10] == bucket_id and is_confirmed(r)):
             count += 1
     return count
 

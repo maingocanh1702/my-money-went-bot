@@ -87,7 +87,7 @@ def pop_next_unconfirmed(chat_id: str) -> dict | None:
             row = sh.get_transaction_row(int(candidate.get("row_num") or 0))
         except Exception:
             row = []
-        if row and len(row) > 13 and str(row[13]).upper() == "TRUE":
+        if sh.is_confirmed(row):
             continue  # finalized elsewhere — skip
         picked = candidate
         break

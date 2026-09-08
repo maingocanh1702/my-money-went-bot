@@ -655,7 +655,7 @@ async def _handle_zalo_category_reply(
         return
 
     row = sh.get_transaction_row(row_num)
-    if len(row) > 13 and str(row[13]).upper() == "TRUE":
+    if sh.is_confirmed(row):
         parent = row[10] if len(row) > 10 else ""
         parent_label = sh.bucket_label(parent) if parent else "đã có category"
         promoted = await _promote_next_zalo_queue_item(
@@ -941,7 +941,7 @@ async def _promote_next_zalo_queue_item(
         except Exception as e:
             print(f"[zalo] queued row read error row={row_num}: {e}")
             continue
-        if len(next_row) > 13 and str(next_row[13]).upper() == "TRUE":
+        if sh.is_confirmed(next_row):
             continue
 
         sh.set_state(state_key, {
@@ -1552,7 +1552,7 @@ def _zalo_backfill_account(account_id: str, source_key: str, trigger_row: int | 
             row_num = int(trigger_row)
             sh.set_tx_account(row_num, account_id)
             row = sh.get_transaction_row(row_num)
-            confirmed = len(row) > 13 and str(row[13]).upper() == "TRUE"
+            confirmed = sh.is_confirmed(row)
             if confirmed and not sh.is_ledger_applied(row_num):
                 from handlers.transaction import _apply_ledger_for_row
                 _apply_ledger_for_row(row_num)
@@ -3505,7 +3505,24 @@ async def _tg_cmd_pending():
         await tg.send_text("✅ Không có giao dịch nào chờ phân loại.")
         return
 
-    item = pending.pop(0)
+    # Drop anything categorized meanwhile (e.g. on Zalo) — the same guard
+    # zalo_queue.pop_next_unconfirmed() applies to the parked Zalo queue.
+    item = None
+    while pending:
+        candidate = pending.pop(0)
+        try:
+            row = sh.get_transaction_row(int(candidate.get("row_num") or 0))
+        except Exception:
+            row = []
+        if sh.is_confirmed(row):
+            continue
+        item = candidate
+        break
+    if item is None:
+        sh.set_state(CHAT_ID, {**state, "pending_tx_queue": []})
+        await tg.send_text("✅ Không có giao dịch nào chờ phân loại.")
+        return
+
     row_num = item["row_num"]
     amount = item.get("amount", 0)
     currency = item.get("currency", "VND")

@@ -181,6 +181,33 @@ async def test_pending_command_promotes_queue_item(fake_world, monkeypatch):
     assert fake_world.sent["buttons"], "picker must be shown"
 
 
+@pytest.mark.asyncio
+async def test_pending_skips_rows_confirmed_elsewhere(fake_world):
+    """A queued tx categorized on Zalo must not come back on Telegram.
+
+    Mirrors test_zalo_pending_skips_confirmed_rows — before this guard the
+    two channels disagreed about what "already handled" meant.
+    """
+    ws = fake_world.worksheet(S.TRANSACTIONS)
+    ws.update("A2:T2", [[
+        "", "2026-08-20T10:00:00", "", "", "", "done", "Tiền ra", "9000",
+        "R2", "0", "food", "", "FALSE", "TRUE", "2026-08", "VND",
+        "", "expense", "", "FALSE",
+    ]])
+    sh._invalidate_tx_rows_cache()
+    sh.set_state(CHAT_ID, {"pending_tx_queue": [
+        {"row_num": 2, "amount": 9000, "currency": "VND",
+         "description": "done", "tx_direction": "out"},
+    ]})
+
+    await main._tg_cmd_pending()
+
+    state = sh.get_state(CHAT_ID) or {}
+    assert not state.get("step"), "no picker for an already-categorized tx"
+    assert state.get("pending_tx_queue") == []
+    assert any("Không có giao dịch nào chờ" in t for t in fake_world.sent["texts"])
+
+
 # ─── Auto-categorize must not touch stored state ─────────────────
 
 
