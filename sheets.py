@@ -204,6 +204,17 @@ def row_currency(row: list) -> str:
     return "VND"
 
 
+def is_confirmed(row: list) -> bool:
+    """Read column N (index 13) safely — the user has categorized this row.
+
+    Nine call sites open-coded this same length-check-plus-string-compare and
+    drifted apart: some guarded the short row, some did not, and the Telegram
+    and Zalo pending queues ended up disagreeing about what "already handled"
+    meant. One predicate, one meaning.
+    """
+    return len(row) > 13 and str(row[13]).upper() == "TRUE"
+
+
 _SCIENTIFIC = re.compile(r"[-+]?\d+(?:\.\d+)?[eE][-+]?\d+")
 
 
@@ -258,13 +269,6 @@ def make_bar(pct: int, length: int = 10) -> str:
     return "█" * filled + "░" * (length - filled)
 
 
-def days_left_in_month() -> int:
-    tz = pytz.timezone(TIMEZONE)
-    now = datetime.now(tz)
-    last = date(now.year, now.month + 1, 1) if now.month < 12 else date(now.year + 1, 1, 1)
-    return (last - now.date()).days
-
-
 # ─── Bucket helpers ───────────────────────────────────────────
 def get_active_buckets(month_key: str, force_refresh: bool = False) -> list[dict]:
     global _buckets_cache
@@ -311,7 +315,7 @@ def get_bucket_status(bucket_id: str, month_key: str) -> dict:
             continue
         if r[10] != bucket_id:
             continue
-        if str(r[13]).upper() != "TRUE":
+        if not is_confirmed(r):
             continue
         # Only count outgoing transactions as "spent"
         if len(r) > 6 and r[6] == "Tiền vào":
@@ -342,7 +346,7 @@ def get_income_total(bucket_id: str, month_key: str) -> float:
             continue
         if r[10] != bucket_id:
             continue
-        if str(r[13]).upper() != "TRUE":
+        if not is_confirmed(r):
             continue
         # Chỉ tính incoming
         if len(r) > 6 and r[6] != "Tiền vào":
@@ -371,7 +375,7 @@ def get_daily_status(tx_date: datetime) -> dict:
     rows = _get_tx_rows()
     spent = 0
     for r in rows:
-        if len(r) < 14 or str(r[13]).upper() != "TRUE":
+        if not is_confirmed(r):
             continue
         if r[10] != DAILY_BUCKET_ID:
             continue
@@ -424,7 +428,7 @@ def get_recent_transactions(limit: int = 10, month_key: str = None,
             continue
 
         row_num = idx + 2
-        is_finalized = len(r) > 13 and str(r[13]).upper() == "TRUE"
+        is_finalized = is_confirmed(r)
         bucket_id = r[10] if len(r) > 10 else ""
 
         if only_uncategorized and (is_finalized and bucket_id):
@@ -456,7 +460,7 @@ def get_frequent_categories(n: int = 3) -> list[str]:
     rows = _get_tx_rows()
     counts: dict[str, int] = {}
     for r in rows:
-        if len(r) < 14 or str(r[13]).upper() != "TRUE":
+        if not is_confirmed(r):
             continue
         # Only outgoing
         if len(r) > 6 and r[6] == "Tiền vào":
@@ -3049,15 +3053,6 @@ def clear_state(chat_id: str):
     set_state(chat_id, preserved)
 
 
-# ─── Monthly Report archive ───────────────────────────────────
-def archive_report(month_key: str, results: list[dict]):
-    ws = _sheet(S.MONTHLY_REPORTS)
-    from datetime import datetime
-    now = datetime.utcnow().isoformat()
-    for b in results:
-        ws.append_row([month_key, b["name"], b["allocated"], b["spent"], b["remaining"], f"{b['pct']}%", now])
-
-
 # ─── Category / Sub-category management ──────────────────────
 def update_bucket(month_key: str, bucket_id: str, updates: dict) -> bool:
     """Update name and/or allocated amount for a bucket.
@@ -3117,7 +3112,7 @@ def count_bucket_transactions(bucket_id: str, month_key: str) -> int:
     count = 0
     for r in rows:
         if (len(r) >= 15 and r[14] == month_key
-                and r[10] == bucket_id and str(r[13]).upper() == "TRUE"):
+                and r[10] == bucket_id and is_confirmed(r)):
             count += 1
     return count
 
@@ -3397,12 +3392,6 @@ def is_ledger_applied(tx_row_num: int) -> bool:
 def mark_ledger_applied(tx_row_num: int):
     ws = _sheet(S.TRANSACTIONS)
     ws.update_cell(tx_row_num, 20, "TRUE")
-    _invalidate_tx_rows_cache()
-
-
-def unmark_ledger_applied(tx_row_num: int):
-    ws = _sheet(S.TRANSACTIONS)
-    ws.update_cell(tx_row_num, 20, "FALSE")
     _invalidate_tx_rows_cache()
 
 
@@ -3725,39 +3714,3 @@ def append_cc_payment_external(
     return (row_num, "ok")
 
 
-def get_recent_unresolved_txs(source_key: str, hours: int = 24) -> list[dict]:
-    """Find Transactions rows in the last `hours` that have empty account_id.
-
-    Used by new-account onboarding to backfill recent tx that arrived before
-    the user finished setting up the account. We don't store the resolver's
-    source_key per-row (it's redundant with description + source), so we
-    return the raw rows and let the caller verify each via the resolver.
-    """
-    import time
-    cutoff = time.time() - hours * 3600
-    out: list[dict] = []
-    rows = _get_tx_rows()
-    for i, r in enumerate(rows):
-        if len(r) < 17:
-            continue
-        if (r[16] or "").strip():  # already has account_id
-            continue
-        # B=date, parse loose
-        try:
-            dt = _parse_dt(str(r[1]))
-            if not dt or dt.timestamp() < cutoff:
-                continue
-        except Exception:
-            continue
-        out.append({
-            "row_num":     i + 2,
-            "tx_date":     r[1],
-            "description": r[5] if len(r) > 5 else "",
-            "tx_type":     r[6] if len(r) > 6 else "",
-            "amount":      _parse_amount(r[7]) if len(r) > 7 else 0.0,
-            "ref_code":    r[8] if len(r) > 8 else "",
-            "currency":    row_currency(r),
-            "confirmed":   str(r[13] or "").upper() == "TRUE" if len(r) > 13 else False,
-            "_row":        r,
-        })
-    return out

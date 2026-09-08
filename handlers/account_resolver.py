@@ -39,10 +39,6 @@ class ResolveResult:
     source_key:  Optional[str] = None   # full "{source}:{identifier}"
 
 
-def _norm(s: str | None) -> str:
-    return (s or "").strip()
-
-
 def _build_source_key(source: str, identifier: str) -> str:
     return f"{source}:{identifier.strip().lower()}"
 

@@ -169,7 +169,7 @@ def _scan_period(period_code: str) -> dict:
         ledger_tx_type = (r[17] if len(r) > 17 else "").strip()
         account_id = (r[16] if len(r) > 16 else "").strip()
         bucket_id = (r[10] if len(r) > 10 else "").strip()
-        confirmed = (len(r) > 13 and str(r[13]).upper() == "TRUE")
+        confirmed = sh.is_confirmed(r)
 
         tx_count += 1
 
