@@ -8,7 +8,11 @@ All notable changes to MyMoneyWent will be documented in this file.
 - The MCC map can be corrected, not just extended. `<pattern> <mcc> [label]` now
   re-points a pattern that already exists instead of refusing it as a duplicate,
   `ren <old> <new>` fixes the keyword itself while keeping its MCC and label, and
-  `del <pattern>` turns one off. Both were only possible by opening the Google
+  `del <pattern>` turns one off. `skip <pattern>` / `unskip <pattern>` manage the
+  no-cashback list, which until now could only be added to by tapping a button on
+  a live transaction — so a merchant could not be excluded until it charged you
+  again, and once excluded there was no way to see it or undo it. The list is now
+  shown at the bottom of the MCC screen. Both were only possible by opening the Google
   Sheet by hand — which the bot then ignored, because the MCC cache has no TTL and
   a manual sheet edit invalidates nothing.
 - Debit cards are documented as a first-class thing the bot tracks, alongside
