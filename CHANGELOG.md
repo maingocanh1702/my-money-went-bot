@@ -5,6 +5,74 @@ All notable changes to MyMoneyWent will be documented in this file.
 ## Unreleased
 
 ### Added
+- `/cancel_tx [row]` — cancel a transaction that already happened. It gives the
+  credit limit back, claws the cashback back, and recomputes the whole billing
+  cycle, so a later transaction that was refused as `mcc_cap_full` can become
+  eligible again. Cancelling is a soft delete: both ledgers key on the row
+  number, so the row stays and is marked cancelled, which is also what makes
+  restore possible. Income rows and anything older than 30 days are refused in
+  both directions. Shipped 2026-09-08 and, for a day, documented nowhere — the
+  entry below about the MCC commands says this had already happened once.
+
+### Fixed
+- The interactive API docs were public. `/docs` and `/openapi.json` enumerated
+  every webhook and trigger route on a live financial bot, and spelled out that
+  `/trigger/*` authenticated by query parameter — the hint you need before going
+  looking in logs for one. They are off, and the trigger routes read an
+  `Authorization` header now; `?secret=` still works so an existing crontab does
+  not break.
+- The logs carried the owner's bank account number and a timestamped spend
+  history. `append_transaction` logged the raw source key, which IS the account
+  number, beside the amount; the ledger, dedup and excluded-event lines logged
+  amounts; and the SePay handler logged the raw bank memo, directly under a
+  comment telling it never to log bank data.
+- The `/recat` picker rendered the bank memo unescaped inside a Markdown code
+  span while every sibling call site escaped it. A memo is chosen by whoever
+  sends you money, and a leading backtick closes the span and turns the rest
+  into a live link inside a message you trust as coming from your own bot.
+- Cashback rates were read by the money parser, which treats three digits after
+  a separator as thousands grouping. A rate of `0.015` came back as `15.0`, so
+  an ordinary 1.5% card would have paid fifteen million đồng on a one-million
+  đồng purchase and filled its cycle cap on the spot. Rates have their own
+  parser now, which also accepts `1,5%` and refuses anything outside 0–1.
+- Money shorthand threw its unit away whenever the number carried a thousands
+  group: `1.500k` parsed as 1.500đ, not 1.500.000đ. That number goes straight
+  into a ledger leg through `/transfer` and `/cc pay`, and into the opening
+  balance through the account wizard.
+- Cross-source dedup treated a transaction with no known source as a duplicate
+  candidate, contradicting the docstring one screen above it. Since
+  `/transfer` and both credit-card payment writers never record a source, a
+  transfer followed a minute later by a genuine card spend of the same amount
+  ate the card spend.
+- A bank notification arriving mid-flow could throw the flow away. The guard
+  listing which steps to protect had not been updated when `/manage` grew an
+  editable daily cap, so typing a cap was unprotected. It lists what may be
+  interrupted now instead, which cannot go stale the same way.
+- A notification arriving while a category picker was open replaced it, so
+  tapping the picker logged the right category against the *new* transaction's
+  amount, drew the wrong day's bar, and destroyed the arriving transaction's
+  own flow. It queues behind now, as it already did on Zalo.
+- `/accounts assign` counted cancelled transactions into the totals it asks you
+  to confirm, on both channels.
+- The email amount parser stripped dots but never commas, so an amount with
+  decimal places returned 0.0 — writing a 0đ row that the ledger skips, every
+  report skips, and nobody is told about.
+
+### Changed
+- CI pins Python through `.python-version` rather than repeating `3.11` in the
+  workflow, and the GitHub Actions are pinned to commit SHAs — which
+  `dependabot.yml` had claimed for a while without it being true. `ruff` is in
+  `requirements-dev.txt`, so the lint gate is reproducible from
+  CONTRIBUTING's instructions instead of only inside CI.
+- The privacy guard no longer labels its digests. A bank account number is ten
+  digits and a project id is pattern-constrained, so an unsalted SHA-256 of
+  either is recoverable by enumeration, and the labels said which digest was
+  worth the trouble. Service-account addresses and deployment hostnames are
+  matched by shape now, which does not leak at all.
+- The scheduled cron workflow skips itself while `BOT_URL` is still the
+  template placeholder, instead of failing red about seven times a month on
+  this repository. Fork it and set `BOT_URL` and the schedule starts working.
+
 - The MCC map can be corrected, not just extended. `<pattern> <mcc> [label]` now
   re-points a pattern that already exists instead of refusing it as a duplicate,
   `ren <old> <new>` fixes the keyword itself while keeping its MCC and label, and

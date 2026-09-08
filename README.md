@@ -585,6 +585,7 @@ Full details, including troubleshooting: [Zalo setup](docs/ZALO_BOT_SETUP.md) ·
 | `/transfer <amount> <from> <to>` | Record an internal transfer between tracked accounts. |
 | `/cc pay <amount> [bank] <cc>` | Record a credit-card payment. |
 | `/recat [row]` | Re-categorize a past transaction. No argument → pick from the 8 most recent; `/recat <row>` targets a sheet row directly. |
+| `/cancel_tx [row]` | Cancel a past transaction: gives the credit limit back and claws the cashback back. No argument → pick from the 3 most recent, page back up to 30 days. Reversible. |
 | `/pending` | Categorize transactions queued while you were mid-flow. |
 | `/lang` | Switch bot language (vi/en). |
 | `/cancel` | Abort the current multi-step flow. |
