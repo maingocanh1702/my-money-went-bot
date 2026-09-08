@@ -32,6 +32,10 @@ EXPECTED_DIVERGENCE=(
   test_postgres_direct_creator.py       # public-only: the Postgres source-of-truth work
   requirements-dev.txt                  # storage/ drivers are public-only for now
   test_privacy_guard.py                 # public-only: private has no check_no_personal_data.py to test
+  test_repo_hygiene_2026_09_08.py       # same job, different repo: this one checks the wiki and the
+                                        # privacy guard, private's checks its Techcombank parser and
+                                        # that it has a CI workflow at all
+  .env.example                          # public-only: the Postgres source-of-truth variables
 )
 
 echo "public : $(git rev-parse --short HEAD)"
