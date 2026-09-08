@@ -44,13 +44,15 @@ def world(monkeypatch, fake_ss):
     return {"month": month}
 
 
-def _tx(month, desc="WCM_WINMART HCM", amount=300_000, days_ago=0, hour=10):
+def _tx(month, desc="WCM_WINMART HCM", amount=300_000, days_ago=0, hour=10,
+        source_key=""):
     when = datetime.now(TZ) - timedelta(days=days_ago)
     when = when.replace(hour=hour, minute=0, second=0, microsecond=0)
     return sh.append_transaction(
         when.strftime("%Y-%m-%dT%H:%M:%S"), desc, amount,
         f"REF{desc[:4]}{days_ago}{hour}", month,
-        account_id="cake_cc", ledger_tx_type="expense")
+        account_id="cake_cc", ledger_tx_type="expense",
+        account_source_key=source_key)
 
 
 def _active(account="cake_cc"):
@@ -400,11 +402,11 @@ def test_dedup_ignores_a_cancelled_row(world):
     # Same instant the row carries, so the pair falls inside the dedup window.
     when = datetime.now(TZ).replace(hour=10, minute=0, second=0, microsecond=0)
     when = when.strftime("%Y-%m-%dT%H:%M:%S")
-    r = _tx(world["month"], amount=150_000)
-    assert sh.find_recent_duplicate(150_000, "Tiền ra", when) is True
+    r = _tx(world["month"], amount=150_000, source_key="email_cake:cake_cc")
+    assert sh.find_recent_duplicate(150_000, "Tiền ra", when, source="sepay") is True
 
     ctx.cancel(r)
-    assert sh.find_recent_duplicate(150_000, "Tiền ra", when) is False
+    assert sh.find_recent_duplicate(150_000, "Tiền ra", when, source="sepay") is False
 
 
 @pytest.mark.asyncio

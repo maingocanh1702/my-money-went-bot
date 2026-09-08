@@ -466,18 +466,18 @@ async def _handle_transaction(payload: dict, *, trusted_email: bool, authenticat
     # overwrote the state. Queue the tx instead; /pending drains the queue.
     existing_state = sh.get_state(CHAT_ID) or {}
     existing_step = existing_state.get("step", "")
-    _CRITICAL_STEPS = (
-        "await_manage_amount", "await_manage_rename", "await_sub_rename",
-        "await_add_cat_name", "await_add_cat_amount",
-        "await_alloc_amount", "await_edit_bucket_amount",
-        "await_new_bucket_name", "await_new_bucket_amount",
-        "await_keyword_input", "await_edit_keyword",
-        "cb_cfg", "cb_mcc", "cb_addr", "cb_cycle", "cb_redit",
-        "await_new_account_name", "await_new_account_balance",
-        "await_credit_limit", "await_credit_outstanding",
-        "await_credit_statement", "await_credit_due",
-        "await_freetext", "await_inline_new_cat_name", "await_daily_excuse",
-    )
+    # Only the transaction picker itself may be interrupted, and even then the
+    # new transaction is queued rather than shown — see below. Everything else
+    # is a step the user is part-way through, so it is protected.
+    #
+    # This deliberately lists what may be REPLACED rather than what must be
+    # protected. The allow-list this replaces had already rotted: it was
+    # written before /manage grew an editable daily cap, and
+    # "await_manage_daily_cap" was never added to it, so a webhook arriving
+    # while the user typed a cap silently threw the flow away. A deny-list
+    # cannot rot that way — a new step is protected the day it is added. The
+    # Zalo side has always worked this way.
+    _REPLACEABLE_STEPS = ("await_parent", "await_sub")
     # Built before the branch below: the Zalo picker needs the same bucket
     # choices whether or not the Telegram side is mid-flow. Previously this was
     # only bound in the else-branch, so a mid-flow Telegram user silently lost
@@ -486,21 +486,35 @@ async def _handle_transaction(payload: dict, *, trusted_email: bool, authenticat
     buttons = tg.build_bucket_buttons(buckets, f"p_{row_num}", include_new=True,
                                       frequent_ids=frequent)
 
-    if existing_step in _CRITICAL_STEPS:
+    queue_item = {
+        "row_num": row_num,
+        "amount": amount,
+        "currency": currency,
+        "description": description,
+        "tx_direction": "out",
+        "tx_date": tx_date.isoformat() if hasattr(tx_date, "isoformat") else str(tx_date),
+    }
+
+    if existing_step:
+        # Mid-flow, including mid-picker. Replacing the state under a live
+        # picker left the buttons on screen pointing at a row whose amount,
+        # date and currency had just been overwritten by this transaction, and
+        # _finalize reads those from the state — so tapping the old picker
+        # logged the right category against the wrong amount, and destroyed
+        # this transaction's own flow on the way out.
         pending = existing_state.get("pending_tx_queue") or []
-        pending.append({
-            "row_num": row_num,
-            "amount": amount,
-            "currency": currency,
-            "description": description,
-            "tx_direction": "out",
-            "tx_date": tx_date.isoformat() if hasattr(tx_date, "isoformat") else str(tx_date),
-        })
+        already = {existing_state.get("row_num")}
+        already.update(q.get("row_num") for q in pending if isinstance(q, dict))
+        if row_num not in already:
+            pending.append(queue_item)
         sh.set_state(CHAT_ID, {**existing_state, "pending_tx_queue": pending})
+        hint = ("Chọn xong giao dịch hiện tại là mình hỏi tiếp."
+                if existing_step in _REPLACEABLE_STEPS
+                else "Hoàn tất thao tác hiện tại rồi dùng /pending để phân loại.")
         await tg.send_text(
             f"💸 *-{sh.fmt_amount(amount, currency)}*\n"
             f"`{md_safe(description)}`\n\n"
-            f"📌 _Giao dịch đã ghi nhận. Hoàn tất thao tác hiện tại rồi dùng /pending để phân loại._"
+            f"📌 _Giao dịch đã ghi nhận. {hint}_"
         )
     else:
         sh.set_state(CHAT_ID, {
