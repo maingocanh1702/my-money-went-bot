@@ -5,17 +5,17 @@ from utils import parse_money, parse_budget_amount
 
 
 def test_parse_money_accepts_vietnamese_thousand_formats():
-    assert main._parse_money("100.000đ") == 100_000
-    assert main._parse_money("1.000đ") == 1_000
-    assert main._parse_money("1,000 VND") == 1_000
-    assert main._parse_money("1.000.000đ") == 1_000_000
+    assert main.parse_money("100.000đ") == 100_000
+    assert main.parse_money("1.000đ") == 1_000
+    assert main.parse_money("1,000 VND") == 1_000
+    assert main.parse_money("1.000.000đ") == 1_000_000
 
 
 def test_parse_money_accepts_plain_and_decimal_formats():
-    assert main._parse_money("100000") == 100_000
-    assert main._parse_money("100.50") == 100.5
-    assert main._parse_money("1,5") == 1.5
-    assert main._parse_money("-100.000đ") == -100_000
+    assert main.parse_money("100000") == 100_000
+    assert main.parse_money("100.50") == 100.5
+    assert main.parse_money("1,5") == 1.5
+    assert main.parse_money("-100.000đ") == -100_000
 
 
 @pytest.mark.parametrize("text,expected", [
@@ -36,7 +36,7 @@ def test_parse_money_accepts_shorthand(text, expected):
     """Previously '500k' silently became 500đ (digit-strip). Now the
     Vietnamese shorthand parses to the intended value."""
     assert parse_money(text) == expected
-    assert main._parse_money(text) == expected
+    assert main.parse_money(text) == expected
 
 
 @pytest.mark.parametrize("text", ["", "   ", "abc", "tr", "k", "5tr/tháng", "1e9999", None])

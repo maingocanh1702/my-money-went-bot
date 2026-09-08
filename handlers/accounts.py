@@ -43,6 +43,7 @@ import messenger
 import sheets as sh
 import telegram_api as tg
 from i18n.core import t
+from utils import parse_money
 
 
 # ─── Helpers ──────────────────────────────────────────────────
@@ -275,16 +276,6 @@ async def _on_currency_picked(currency: str, message_id: int):
         await _commit({**state, "pending_account": pending})
 
 
-def _parse_money(text: str) -> float | None:
-    """Parse a money amount — delegates to utils.parse_money.
-
-    Fixes the old digit-strip version which REJECTED Vietnamese-style
-    dotted amounts ("30.000.000" → float error → None) and mis-read
-    shorthand ("500k" → 500). Now both parse correctly."""
-    from utils import parse_money
-    return parse_money(text)
-
-
 # ─── Credit setup — channel-agnostic core ──────────────────────
 # Credit cards are one shared entity (the Accounts tab); the Telegram and Zalo
 # wizards differ only in state store + messenger. The field rules and prompt
@@ -330,7 +321,7 @@ def parse_billing_day(text: str) -> tuple[int | None, bool, str | None]:
 # under the old prompt-for-balance flow (state="await_new_account_balance").
 # The new flow skips straight from currency → commit for non-credit accounts.
 async def handle_new_account_balance(text: str, state: dict):
-    val = _parse_money(text)
+    val = parse_money(text)
     if val is None or val < 0:
         await tg.send_text("⚠️ Số không hợp lệ. Nhập số dương (vd `1000000`).")
         return
@@ -345,7 +336,7 @@ async def handle_credit_limit(text: str, state: dict):
     at the user's real debt (not 0). Without this, /report shows 'dư nợ 0'
     on day one even if the card already has prior-cycle debt.
     """
-    val = _parse_money(text)
+    val = parse_money(text)
     if val is None or val <= 0:
         await tg.send_text("⚠️ Hạn mức phải là số dương.")
         return
@@ -360,7 +351,7 @@ async def handle_credit_outstanding(text: str, state: dict):
     billing cycle (statement → due day) before committing — same steps the
     Zalo wizard runs.
     """
-    val = _parse_money(text)
+    val = parse_money(text)
     if val is None or val < 0:
         await tg.send_text("⚠️ Dư nợ phải ≥ 0. Nhập số hợp lệ (vd `3000000` hoặc `0`).")
         return
@@ -749,7 +740,7 @@ async def cmd_transfer(text: str):
             "Vd: `/transfer 1000000 bank_main cake_main`"
         )
         return
-    amount = _parse_money(parts[1])
+    amount = parse_money(parts[1])
     if amount is None or amount <= 0:
         await tg.send_text("⚠️ Số tiền không hợp lệ.")
         return
@@ -797,110 +788,6 @@ async def cmd_transfer(text: str):
         f"📊 Số dư mới:\n"
         f"  {from_acc['name']}: {sh.fmt_amount(from_after['running_balance'], cur)}\n"
         f"  {to_acc['name']}: {sh.fmt_amount(to_after['running_balance'], cur)}"
-    )
-
-
-async def cmd_cc_pay(text: str):
-    """`/cc pay <amount> <cc_id>`                 — external payment (source not tracked)
-    `/cc pay <amount> <bank_id> <cc_id>`         — paid from tracked bank account
-
-    The 2-arg form decreases the credit's outstanding without writing a
-    bank −leg — use when the payment came from an account the bot doesn't
-    onboard (friend, cash deposit, salary auto-pay from an unregistered
-    bank). The 3-arg form is unchanged.
-    """
-    parts = text.strip().split()
-    # parts[0]="/cc", parts[1]="pay", parts[2]=amount, parts[3]=bank|cc, parts[4]=cc?
-    if len(parts) < 4 or parts[1].lower() != "pay":
-        await tg.send_text(
-            "Usage:\n"
-            "`/cc pay <amount> <cc_id>` — trả từ nguồn ngoài (không track)\n"
-            "`/cc pay <amount> <bank_id> <cc_id>` — trả từ bank account đã onboard\n\n"
-            "Vd: `/cc pay 2450000 cake_visa_8421`"
-        )
-        return
-    amount = _parse_money(parts[2])
-    if amount is None or amount <= 0:
-        await tg.send_text("⚠️ Số tiền không hợp lệ.")
-        return
-
-    iso, month_key, ts = _now_for_tx()
-
-    # 2-arg form: external source
-    if len(parts) == 4:
-        cc_id = parts[3].strip()
-        cc_acc = sh.find_account_by_id(cc_id)
-        if not cc_acc:
-            await tg.send_text(f"⚠️ CC `{cc_id}` không tồn tại.")
-            return
-        if cc_acc["type"] != "credit":
-            await tg.send_text(
-                f"⚠️ `{cc_id}` không phải credit card (type={cc_acc['type']})."
-            )
-            return
-
-        desc = f"cc payment external → {cc_id}"
-        ref = f"CCPAYEXT_{cc_id}_{ts}"
-        row_num, status = sh.append_cc_payment_external(
-            cc_account_id=cc_id,
-            amount=amount, currency=cc_acc["currency"],
-            description=desc, tx_date=iso, ref_code=ref, month_key=month_key,
-        )
-        if status != "ok":
-            await tg.send_text(f"⚠️ {status}")
-            return
-
-        sh.invalidate_accounts_cache()
-        cc_after = sh.find_account_by_id(cc_id)
-        cur = cc_acc["currency"]
-        await tg.send_text(
-            f"✅ *CC payment ghi nhận* (external)\n"
-            f"  → {cc_acc['name']}\n"
-            f"  Số tiền: *{sh.fmt_amount(amount, cur)}*\n\n"
-            f"📊 Sau payment:\n"
-            f"  {cc_acc['name']} dư nợ: "
-            f"{sh.fmt_amount(cc_after['outstanding_balance'], cur)}"
-        )
-        return
-
-    # 3-arg form: tracked bank → CC (existing behavior)
-    bank_id, cc_id = parts[3].strip(), parts[4].strip()
-    bank_acc = sh.find_account_by_id(bank_id)
-    cc_acc = sh.find_account_by_id(cc_id)
-    if not bank_acc:
-        await tg.send_text(f"⚠️ Bank `{bank_id}` không tồn tại.")
-        return
-    if not cc_acc:
-        await tg.send_text(f"⚠️ CC `{cc_id}` không tồn tại.")
-        return
-    if cc_acc["type"] != "credit":
-        await tg.send_text(
-            f"⚠️ `{cc_id}` không phải credit card (type={cc_acc['type']})."
-        )
-        return
-
-    desc = f"cc payment {bank_id} → {cc_id}"
-    ref = f"CCPAY_{bank_id}_{cc_id}_{ts}"
-    row_num, status = sh.append_cc_payment(
-        bank_account_id=bank_id, cc_account_id=cc_id,
-        amount=amount, currency=bank_acc["currency"],
-        description=desc, tx_date=iso, ref_code=ref, month_key=month_key,
-    )
-    if status != "ok":
-        await tg.send_text(f"⚠️ {status}")
-        return
-
-    sh.invalidate_accounts_cache()
-    bank_after = sh.find_account_by_id(bank_id)
-    cc_after = sh.find_account_by_id(cc_id)
-    cur = bank_acc["currency"]
-    await tg.send_text(
-        f"✅ *CC payment ghi nhận*\n"
-        f"  {bank_acc['name']} → {cc_acc['name']}\n"
-        f"  Số tiền: *{sh.fmt_amount(amount, cur)}*\n\n"
-        f"📊 Sau payment:\n"
-        f"  {bank_acc['name']}: {sh.fmt_amount(bank_after['running_balance'], cur)}\n"
-        f"  {cc_acc['name']} dư nợ: {sh.fmt_amount(cc_after['outstanding_balance'], cur)}"
     )
 
 

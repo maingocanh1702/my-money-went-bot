@@ -258,13 +258,6 @@ def make_bar(pct: int, length: int = 10) -> str:
     return "█" * filled + "░" * (length - filled)
 
 
-def days_left_in_month() -> int:
-    tz = pytz.timezone(TIMEZONE)
-    now = datetime.now(tz)
-    last = date(now.year, now.month + 1, 1) if now.month < 12 else date(now.year + 1, 1, 1)
-    return (last - now.date()).days
-
-
 # ─── Bucket helpers ───────────────────────────────────────────
 def get_active_buckets(month_key: str, force_refresh: bool = False) -> list[dict]:
     global _buckets_cache
@@ -3049,15 +3042,6 @@ def clear_state(chat_id: str):
     set_state(chat_id, preserved)
 
 
-# ─── Monthly Report archive ───────────────────────────────────
-def archive_report(month_key: str, results: list[dict]):
-    ws = _sheet(S.MONTHLY_REPORTS)
-    from datetime import datetime
-    now = datetime.utcnow().isoformat()
-    for b in results:
-        ws.append_row([month_key, b["name"], b["allocated"], b["spent"], b["remaining"], f"{b['pct']}%", now])
-
-
 # ─── Category / Sub-category management ──────────────────────
 def update_bucket(month_key: str, bucket_id: str, updates: dict) -> bool:
     """Update name and/or allocated amount for a bucket.
@@ -3400,12 +3384,6 @@ def mark_ledger_applied(tx_row_num: int):
     _invalidate_tx_rows_cache()
 
 
-def unmark_ledger_applied(tx_row_num: int):
-    ws = _sheet(S.TRANSACTIONS)
-    ws.update_cell(tx_row_num, 20, "FALSE")
-    _invalidate_tx_rows_cache()
-
-
 def append_ledger_entry(
     *,
     tx_row_num: int,
@@ -3725,39 +3703,3 @@ def append_cc_payment_external(
     return (row_num, "ok")
 
 
-def get_recent_unresolved_txs(source_key: str, hours: int = 24) -> list[dict]:
-    """Find Transactions rows in the last `hours` that have empty account_id.
-
-    Used by new-account onboarding to backfill recent tx that arrived before
-    the user finished setting up the account. We don't store the resolver's
-    source_key per-row (it's redundant with description + source), so we
-    return the raw rows and let the caller verify each via the resolver.
-    """
-    import time
-    cutoff = time.time() - hours * 3600
-    out: list[dict] = []
-    rows = _get_tx_rows()
-    for i, r in enumerate(rows):
-        if len(r) < 17:
-            continue
-        if (r[16] or "").strip():  # already has account_id
-            continue
-        # B=date, parse loose
-        try:
-            dt = _parse_dt(str(r[1]))
-            if not dt or dt.timestamp() < cutoff:
-                continue
-        except Exception:
-            continue
-        out.append({
-            "row_num":     i + 2,
-            "tx_date":     r[1],
-            "description": r[5] if len(r) > 5 else "",
-            "tx_type":     r[6] if len(r) > 6 else "",
-            "amount":      _parse_amount(r[7]) if len(r) > 7 else 0.0,
-            "ref_code":    r[8] if len(r) > 8 else "",
-            "currency":    row_currency(r),
-            "confirmed":   str(r[13] or "").upper() == "TRUE" if len(r) > 13 else False,
-            "_row":        r,
-        })
-    return out

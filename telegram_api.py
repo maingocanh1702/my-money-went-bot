@@ -114,12 +114,6 @@ async def set_my_commands():
     await _client.post(f"{BASE}/setMyCommands", json={"commands": commands})
 
 
-async def drop_pending_updates():
-    """Call once after setting webhook to flush stale updates."""
-    r = await _client.get(f"{BASE}/getWebhookInfo")
-    print("Webhook info:", r.json())
-
-
 def build_bucket_buttons(buckets: list[dict], prefix: str, include_new: bool = False,
                          frequent_ids: list[str] | None = None) -> list[list]:
     """2-column grid of bucket buttons with optional frequent-first row.

@@ -5,7 +5,6 @@ Receives SePay webhooks, Telegram updates, and Zalo Bot events.
 import hmac as hmac_mod
 import re
 
-import httpx
 from fastapi import FastAPI, Request, BackgroundTasks, Query
 from fastapi.responses import JSONResponse
 import asyncio
@@ -21,7 +20,7 @@ from config import (
     ZALO_SECRET_TOKEN,
     TIMEZONE,
 )
-from utils import parse_money as _utils_parse_money, parse_budget_amount, md_safe
+from utils import parse_money, parse_budget_amount, md_safe
 import messenger
 import sheets as sh
 import telegram_api as tg
@@ -588,20 +587,6 @@ async def _handle_zalo_callback(cb: dict):
     print("[zalo] inline callback ignored: channel-safe callback routing is not implemented")
 
 
-async def _zalo_answer_callback(callback_query_id: str) -> None:
-    """Acknowledge Zalo callback_query (mirrors Telegram answerCallbackQuery)."""
-    if not callback_query_id:
-        return
-    from config import ZALO_BOT_TOKEN as token
-    if not token:
-        return
-    async with httpx.AsyncClient(timeout=5) as client:
-        await client.post(
-            f"https://bot-api.zaloplatforms.com/bot{token}/answerCallbackQuery",
-            json={"callback_query_id": callback_query_id},
-        )
-
-
 def _extract_zalo_update(body: dict) -> dict:
     """Normalize Zalo Bot webhook payloads to {event_name, message}.
 
@@ -618,18 +603,6 @@ def _extract_zalo_update(body: dict) -> dict:
 
 async def _zalo_send(chat_id: str, text: str):
     await messenger.send_text(text, channel="zalo", recipient_id=chat_id)
-
-
-def _parse_money(text: str) -> float | None:
-    """Parse money input. Delegates to utils.parse_money — supports plain
-    numbers with separators/decimals (1.000.000, 100.50, 1,5) AND Vietnamese
-    shorthand (500k, 3tr, 3tr5, 1m2, 2 triệu)."""
-    return _utils_parse_money(text)
-
-
-def _parse_zalo_money(text: str) -> float | None:
-    """Parse money from Zalo text input. Alias for _parse_money."""
-    return _parse_money(text)
 
 
 def _zalo_now_for_tx() -> tuple[str, str, str]:
@@ -1433,7 +1406,7 @@ async def _zalo_accounts_handle_type(
 async def _zalo_accounts_handle_credit_limit(
     chat_id: str, text: str, state: dict, state_key: str
 ):
-    val = _parse_zalo_money(text)
+    val = parse_money(text)
     if val is None or val <= 0:
         await _zalo_send(chat_id, "Hạn mức phải là số dương. Thử lại.")
         return
@@ -1454,7 +1427,7 @@ async def _zalo_accounts_handle_credit_limit(
 async def _zalo_accounts_handle_credit_outstanding(
     chat_id: str, text: str, state: dict, state_key: str
 ):
-    val = _parse_zalo_money(text)
+    val = parse_money(text)
     if val is None or val < 0:
         await _zalo_send(chat_id, "Dư nợ phải >= 0. Thử lại.")
         return
@@ -1680,7 +1653,7 @@ async def _zalo_cmd_transfer(chat_id: str, text: str):
     if len(parts) < 4:
         await _zalo_send(chat_id, "Usage: /transfer <amount> <from> <to>\nVd: /transfer 1000000 bank_main cake_main")
         return
-    amount = _parse_zalo_money(parts[1])
+    amount = parse_money(parts[1])
     if amount is None or amount <= 0:
         await _zalo_send(chat_id, "Số tiền không hợp lệ.")
         return
@@ -1741,7 +1714,7 @@ async def _zalo_cmd_cc_pay(chat_id: str, text: str):
             "/cc pay <amount> <bank_id> <cc_id> — trả từ bank account đã onboard",
         )
         return
-    amount = _parse_zalo_money(parts[2])
+    amount = parse_money(parts[2])
     if amount is None or amount <= 0:
         await _zalo_send(chat_id, "Số tiền không hợp lệ.")
         return
@@ -3257,7 +3230,7 @@ async def _tg_cmd_transfer(text: str):
     if len(parts) < 4:
         await tg.send_text("Usage: `/transfer <amount> <from> <to>`\nVd: `/transfer 1000000 bank_main cake_main`")
         return
-    amount = _parse_money(parts[1])
+    amount = parse_money(parts[1])
     if amount is None or amount <= 0:
         await tg.send_text("⚠️ Số tiền không hợp lệ.")
         return
@@ -3314,7 +3287,7 @@ async def _tg_cmd_cc_pay(text: str):
             "`/cc pay <amount> <bank_id> <cc_id>` — trả từ bank account"
         )
         return
-    amount = _parse_money(parts[2])
+    amount = parse_money(parts[2])
     if amount is None or amount <= 0:
         await tg.send_text("⚠️ Số tiền không hợp lệ.")
         return
