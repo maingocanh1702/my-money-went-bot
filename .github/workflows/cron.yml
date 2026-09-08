@@ -2,7 +2,8 @@
 # This is the CANONICAL cron for production (crontab.txt is the VPS reference).
 #
 # Times are UTC (ICT = UTC+7). CRON_SECRET lives in GitHub repo secrets and
-# must match the Railway env var of the same name.
+# must match the Railway env var of the same name. It is sent as an
+# "Authorization: Bearer" header — never in the URL, which gets logged.
 #
 # NOTE: GitHub pauses scheduled workflows after ~60 days without repo
 # activity — any push re-enables them.
@@ -60,8 +61,12 @@ jobs:
 
       - name: Fire trigger
         run: |
+          # The secret goes in a header, not the query string: a URL is copied
+          # into the runner log, the bot host's access log, and every proxy in
+          # between, and CRON_SECRET is long-lived.
           code=$(curl -s -o /tmp/resp.txt -w "%{http_code}" -X POST \
-            "$BOT_URL/trigger/${{ steps.ep.outputs.endpoint }}?secret=${{ secrets.CRON_SECRET }}")
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "$BOT_URL/trigger/${{ steps.ep.outputs.endpoint }}")
           echo "HTTP $code"
           cat /tmp/resp.txt
           [ "$code" = "200" ]

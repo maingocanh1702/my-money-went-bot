@@ -172,7 +172,7 @@ async def _handle_transaction(payload: dict, *, trusted_email: bool, authenticat
 
     # Log only safe fields for debugging (never log full payload — contains bank data)
     print(f"[sepay] incoming: transferType={data.get('transferType')!r} "
-          f"amount={data.get('transferAmount')} ref={data.get('referenceCode')!r}")
+          f"ref={data.get('referenceCode')!r}")
 
     # Try all known SePay field names for amount (use explicit None check to handle 0)
     raw_amount = next(
@@ -289,7 +289,7 @@ async def _handle_transaction(payload: dict, *, trusted_email: bool, authenticat
     # ─── Fuzzy dedup: pair one spend that arrived from two sources ──
     if sh.find_recent_duplicate(amount, tx_type_label, raw_date, currency=currency,
                                 source=source_family):
-        print(f"[dedup] skipped cross-source duplicate: {amount} {currency} "
+        print(f"[dedup] skipped cross-source duplicate: {currency} "
               f"{tx_type_label} ref={ref_code!r}")
         _require_recorded(
             ref_code=ref_code, source=source_family,
@@ -658,7 +658,9 @@ async def _ask_cashback_learn(account_id: str, row_num: int):
 
         # Check exclusion list — user previously said "no" for this pattern
         if sh.is_mcc_excluded(description):
-            print(f"[cashback] excluded pattern match for row {row_num}: {description}")
+            # The description is the raw bank memo — merchant, and sometimes
+            # the counterparty name. The row number is enough to trace this.
+            print(f"[cashback] excluded pattern match for row {row_num}")
             return
 
         # Also check if MCC map already covers this (race condition guard)

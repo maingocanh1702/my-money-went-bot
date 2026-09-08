@@ -5,7 +5,7 @@ Receives SePay webhooks, Telegram updates, and Zalo Bot events.
 import hmac as hmac_mod
 import re
 
-from fastapi import FastAPI, Request, BackgroundTasks, Query
+from fastapi import FastAPI, Request, BackgroundTasks, Query, Header
 from fastapi.responses import JSONResponse
 import asyncio
 
@@ -69,7 +69,15 @@ from handlers.lang        import cmd_lang, handle_lang_callback
 from handlers.zalo_render import render_zalo_logged_summary
 from handlers import zalo_queue as zq
 
-app = FastAPI(title="Financial Tracking Bot")
+# The interactive docs enumerate every webhook and trigger route, and spell
+# out how /trigger/* authenticates. A bot moving real money has no use for
+# them in production; a stranger who finds the host has every use.
+app = FastAPI(
+    title="Financial Tracking Bot",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 
 
 async def _set_telegram_commands_safe():
@@ -182,7 +190,7 @@ async def _process_email(payload: dict):
                 return True
             print("[email] retrying — transaction-shaped email had an unknown format")
             return False
-        print(f"[email] parsed: {parsed.get('_source')} amount={parsed.get('transferAmount')} type={parsed.get('transferType')}")
+        print(f"[email] parsed: {parsed.get('_source')} type={parsed.get('transferType')}")
         # The EMAIL_SECRET was verified at the HTTP boundary. The payload must
         # never be treated as an untrusted SePay delivery just because it lacks
         # SEPAY_SECRET.
@@ -2946,43 +2954,56 @@ async def _monthly_allocation_with_zalo():
             print(f"[cron] Zalo allocation prompt failed (non-fatal): {e}")
 
 
-def _cron_authorized(secret: str) -> bool:
-    """When CRON_SECRET is set, /trigger/* callers must pass ?secret=<value>.
-    Unset → legacy open behavior (warned at startup)."""
+def _cron_authorized(secret: str, authorization: str | None = None) -> bool:
+    """When CRON_SECRET is set, /trigger/* callers must present it.
+
+    Prefer ``Authorization: Bearer <secret>``. A query string is copied into
+    every access log and proxy the request passes through, and a cron secret
+    is long-lived, so a URL is the wrong place to carry one. ``?secret=`` is
+    still accepted so an existing crontab keeps working unchanged.
+
+    Unset → legacy open behavior (warned at startup).
+    """
     if not CRON_SECRET:
         return True
+    if authorization:
+        scheme, _, value = authorization.partition(" ")
+        if scheme.lower() in ("bearer", "apikey"):
+            value = value.strip()
+            if value and hmac_mod.compare_digest(value, CRON_SECRET):
+                return True
     return hmac_mod.compare_digest(secret or "", CRON_SECRET)
 
 
 @app.post("/trigger/weekly")
-async def trigger_weekly(secret: str = Query(default="")):
-    if not _cron_authorized(secret):
+async def trigger_weekly(secret: str = Query(default=""), authorization: str | None = Header(default=None)):
+    if not _cron_authorized(secret, authorization):
         return JSONResponse({"error": True, "message": "invalid cron secret"}, status_code=403)
     asyncio.create_task(run_weekly_summary())
     return {"ok": True}
 
 
 @app.post("/trigger/monthly-report")
-async def trigger_monthly_report(secret: str = Query(default="")):
-    if not _cron_authorized(secret):
+async def trigger_monthly_report(secret: str = Query(default=""), authorization: str | None = Header(default=None)):
+    if not _cron_authorized(secret, authorization):
         return JSONResponse({"error": True, "message": "invalid cron secret"}, status_code=403)
     asyncio.create_task(run_monthly_report())
     return {"ok": True}
 
 
 @app.post("/trigger/monthly-allocation")
-async def trigger_monthly_allocation(secret: str = Query(default="")):
-    if not _cron_authorized(secret):
+async def trigger_monthly_allocation(secret: str = Query(default=""), authorization: str | None = Header(default=None)):
+    if not _cron_authorized(secret, authorization):
         return JSONResponse({"error": True, "message": "invalid cron secret"}, status_code=403)
     asyncio.create_task(_monthly_allocation_with_zalo())
     return {"ok": True}
 
 
 @app.post("/trigger/auto-alloc-fallback")
-async def trigger_auto_alloc_fallback(secret: str = Query(default="")):
+async def trigger_auto_alloc_fallback(secret: str = Query(default=""), authorization: str | None = Header(default=None)):
     """Cron fires this 1h after monthly-allocation prompt.
     If the current month still has no buckets, auto-copy previous month's budget."""
-    if not _cron_authorized(secret):
+    if not _cron_authorized(secret, authorization):
         return JSONResponse({"error": True, "message": "invalid cron secret"}, status_code=403)
     asyncio.create_task(_auto_alloc_fallback())
     return {"ok": True}
@@ -3052,8 +3073,8 @@ async def _auto_alloc_fallback():
 
 
 @app.post("/trigger/daily-recap")
-async def trigger_daily_recap(secret: str = Query(default="")):
-    if not _cron_authorized(secret):
+async def trigger_daily_recap(secret: str = Query(default=""), authorization: str | None = Header(default=None)):
+    if not _cron_authorized(secret, authorization):
         return JSONResponse({"error": True, "message": "invalid cron secret"}, status_code=403)
     asyncio.create_task(send_daily_recap())
     return {"ok": True}
@@ -3086,7 +3107,9 @@ async def _process(body: dict):
     except Exception as e:
         import traceback
         print("ERROR:", traceback.format_exc())
-        await tg.send_text(f"⚠️ Bot gặp lỗi: `{e}`")
+        # The exception text carries spreadsheet ids, endpoints and response
+        # bodies, and its backticks break the Markdown parse. The log has it.
+        await tg.send_text("⚠️ Bot gặp lỗi khi xử lý cập nhật này — chi tiết đã ghi vào log.")
 
 
 # Valid Telegram callback prefixes & their minimum part counts. Anything
@@ -3116,14 +3139,15 @@ async def _handle_callback(cb: dict):
     if not callback_id:
         print("[callback] rejected: missing callback id")
         return
-    await tg.answer_callback(callback_id)
-
     # Only the configured owner may drive the bot — /webhook has no Telegram
-    # auth unless TELEGRAM_WEBHOOK_SECRET is set, so this check is the last line.
+    # auth unless TELEGRAM_WEBHOOK_SECRET is set, so this check is the last
+    # line. It runs before the ack so a forged callback costs no outbound call.
     cb_chat = cb.get("message", {}).get("chat", {}).get("id")
     if str(cb_chat) != str(CHAT_ID):
         print(f"[callback] rejected: chat_id={cb_chat} != CHAT_ID")
         return
+
+    await tg.answer_callback(callback_id)
 
     validated = _validate_callback(cb)
     if validated is None:
@@ -3420,7 +3444,7 @@ async def _tg_cmd_recat(text: str):
         desc = tx["description"][:25] + "…" if len(tx["description"]) > 25 else tx["description"]
         amount_str = sh.fmt_amount(tx["amount"], tx["currency"])
         status = f"→ {tx['bucket_name']}" if tx["bucket_name"] else "⚠️ chưa phân loại"
-        msg += f"  -{amount_str} `{desc}` {status}\n"
+        msg += f"  -{amount_str} `{md_safe(desc)}` {status}\n"
 
         btn_label = f"↩️ -{amount_str} {desc}"
         if len(btn_label) > 55:

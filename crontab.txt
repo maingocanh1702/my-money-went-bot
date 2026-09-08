@@ -4,26 +4,29 @@
 # .github/workflows/cron.yml (same schedules, CRON_SECRET in GitHub secrets).
 # This file is the reference for a VPS deployment. Add with: crontab -e
 #
-# NOTE: if CRON_SECRET is set in .env, append ?secret=<CRON_SECRET> to every
-# URL below (the endpoints return 403 without it). Example:
-#   curl -s -X POST "http://127.0.0.1:8000/trigger/weekly?secret=<CRON_SECRET>"
+# NOTE: if CRON_SECRET is set in .env, every URL below needs it or the
+# endpoint returns 403. Send it as a header — a query string is written to the
+# server access log and to any proxy in between, and this secret is long-lived:
+#   curl -s -X POST -H "Authorization: Bearer <CRON_SECRET>" \
+#     "http://127.0.0.1:8000/trigger/weekly"
+# ?secret=<CRON_SECRET> is still accepted, so an existing crontab keeps working.
 
 # 1st of every month at 9:00 AM (ICT = UTC+7, so 02:00 UTC)
-0 2 1 * * curl -s -X POST "http://127.0.0.1:8000/trigger/monthly-allocation?secret=<CRON_SECRET>"
+0 2 1 * * curl -s -X POST -H "Authorization: Bearer <CRON_SECRET>" "http://127.0.0.1:8000/trigger/monthly-allocation"
 
 # 1st of every month at 10:00 AM ICT (03:00 UTC) — 1h after allocation prompt
 # Auto-copies previous month's budget if user hasn't responded
-0 3 1 * * curl -s -X POST "http://127.0.0.1:8000/trigger/auto-alloc-fallback?secret=<CRON_SECRET>"
+0 3 1 * * curl -s -X POST -H "Authorization: Bearer <CRON_SECRET>" "http://127.0.0.1:8000/trigger/auto-alloc-fallback"
 
 # Every Sunday at 8:00 PM ICT (13:00 UTC)
-0 13 * * 0 curl -s -X POST "http://127.0.0.1:8000/trigger/weekly?secret=<CRON_SECRET>"
+0 13 * * 0 curl -s -X POST -H "Authorization: Bearer <CRON_SECRET>" "http://127.0.0.1:8000/trigger/weekly"
 
 # Last day of month at 9:00 PM ICT (14:00 UTC) — runs on day 28,29,30,31
 # The handler itself checks whether today is actually the last day
-0 14 28-31 * * curl -s -X POST "http://127.0.0.1:8000/trigger/monthly-report?secret=<CRON_SECRET>"
+0 14 28-31 * * curl -s -X POST -H "Authorization: Bearer <CRON_SECRET>" "http://127.0.0.1:8000/trigger/monthly-report"
 
 # (OPTIONAL — currently NOT scheduled anywhere) Daily recap at 11:00 PM ICT
 # (16:00 UTC). The endpoint exists and self-skips khi Daily Spending không có
 # daily cap. Uncomment here (VPS) hoặc thêm schedule tương ứng vào
 # .github/workflows/cron.yml (production) nếu muốn nhận recap cuối ngày.
-# 0 16 * * * curl -s -X POST "http://127.0.0.1:8000/trigger/daily-recap?secret=<CRON_SECRET>"
+# 0 16 * * * curl -s -X POST -H "Authorization: Bearer <CRON_SECRET>" "http://127.0.0.1:8000/trigger/daily-recap"
