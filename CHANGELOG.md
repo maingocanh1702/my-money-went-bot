@@ -86,6 +86,13 @@ All notable changes to MyMoneyWent will be documented in this file.
   parser needs no change there.
 - `card_templates/example_visa.yaml` replaces the Techcombank template as the
   second worked example: per-rule rates, calendar-month caps, no gate.
+- `/help` documents the MCC-editing commands, and Zalo finally shows the same
+  help as Telegram. The Zalo branch carried its own hand-written copy of the
+  command list — hardcoded in Vietnamese, so `/lang` did nothing there, and it
+  had drifted: `/recat`, `/pending` and the cashback commands were listed, the
+  MCC ones were not, and every future command would have had to be remembered
+  in two places. Both channels now render one string, with a short Zalo-only
+  note that choices there are made by replying with a number.
 
 ## v1.0.0 — 2026-09-01 (Open-Source Release)
 

@@ -275,6 +275,12 @@ STRINGS: dict[str, str] = {
         "/allocate — set a budget per category\n"
         "/keywords — auto-categorize rules\n"
         "/cashback — credit-card cashback\n\n"
+        "*🏷️ Edit the MCC map* (inside /cashback → card → MCC, type directly):\n"
+        "`WINMART 5411 Groceries` — add, or re-point an existing pattern\n"
+        "`ren <old> <new>` — rename a keyword, keeping its MCC\n"
+        "`del <pattern>` — drop a pattern from the map\n"
+        "`skip <pattern>` — never earn cashback here\n"
+        "`unskip <pattern>` — undo that\n\n"
         "*💰 Manual entries:*\n"
         "/transfer — transfer between accounts\n"
         "/cc pay — record a credit-card payment\n\n"
@@ -284,5 +290,10 @@ STRINGS: dict[str, str] = {
         "/lang — switch language vi/en\n"
         "/cancel — abort the current flow\n\n"
         "💡 _Tip: amounts accept Vietnamese shorthand — `500k`, `3tr`, `3tr5`, `1m2`._"
+    ),
+    "help.zalo_note": (
+        "On Zalo: when a transaction arrives the bot sends a numbered category "
+        "list — reply with the number to categorize it. Zalo has no buttons, so "
+        "every choice is made by number."
     ),
 }
