@@ -87,8 +87,8 @@ def pop_next_unconfirmed(chat_id: str) -> dict | None:
             row = sh.get_transaction_row(int(candidate.get("row_num") or 0))
         except Exception:
             row = []
-        if sh.is_confirmed(row):
-            continue  # finalized elsewhere — skip
+        if sh.is_confirmed(row) or sh.is_cancelled(row):
+            continue  # finalized or cancelled elsewhere — skip
         picked = candidate
         break
     set_parked(chat_id, items)

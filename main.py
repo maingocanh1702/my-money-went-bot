@@ -27,6 +27,7 @@ import telegram_api as tg
 from handlers.sepay        import handle_sepay_webhook, handle_trusted_email_transaction, has_valid_sepay_secret
 from handlers.email_parser import is_transaction_shaped_bank_email, parse_email
 from handlers.transaction import handle_parent_selected, handle_sub_selected, handle_freetext_sub, handle_recategorize, handle_inline_new_cat_name, handle_learn_rule
+import handlers.cancel_tx as ctx
 from handlers.allocation  import (
     start_monthly_allocation, handle_alloc_callback,
     handle_alloc_amount_input, handle_new_bucket_name, handle_new_bucket_amount,
@@ -358,6 +359,11 @@ async def _handle_zalo_text(body: dict):
             await _zalo_cmd_recat(chat_id, text, zalo_state_key)
             return
 
+        # /cancel_tx command — huỷ giao dịch cũ (hoàn hạn mức + cashback)
+        if cmd == "/cancel_tx":
+            await _zalo_cmd_cancel_tx(chat_id, text, zalo_state_key)
+            return
+
         # /pending command — drain transactions parked while user was mid-flow
         if cmd == "/pending":
             await _zalo_cmd_pending(chat_id, zalo_state_key)
@@ -479,6 +485,14 @@ async def _handle_zalo_text(body: dict):
         # ── Recat picker (no-arg /recat) ──
         if step == "zalo_recat_pick":
             await _zalo_recat_handle_pick(chat_id, text, state, zalo_state_key)
+            return
+
+        # ── Cancel-transaction picker + confirm (/cancel_tx) ──
+        if step == "zalo_cancel_tx_pick":
+            await _zalo_cancel_tx_handle_pick(chat_id, text, state, zalo_state_key)
+            return
+        if step == "zalo_cancel_tx_confirm":
+            await _zalo_cancel_tx_handle_confirm(chat_id, text, state, zalo_state_key)
             return
 
         # ── Keyword management states ──
@@ -941,7 +955,7 @@ async def _promote_next_zalo_queue_item(
         except Exception as e:
             print(f"[zalo] queued row read error row={row_num}: {e}")
             continue
-        if sh.is_confirmed(next_row):
+        if sh.is_confirmed(next_row) or sh.is_cancelled(next_row):
             continue
 
         sh.set_state(state_key, {
@@ -1552,7 +1566,7 @@ def _zalo_backfill_account(account_id: str, source_key: str, trigger_row: int | 
             row_num = int(trigger_row)
             sh.set_tx_account(row_num, account_id)
             row = sh.get_transaction_row(row_num)
-            confirmed = sh.is_confirmed(row)
+            confirmed = sh.is_confirmed(row) and not sh.is_cancelled(row)
             if confirmed and not sh.is_ledger_applied(row_num):
                 from handlers.transaction import _apply_ledger_for_row
                 _apply_ledger_for_row(row_num)
@@ -1690,6 +1704,151 @@ async def _zalo_recat_handle_pick(chat_id: str, text: str, state: dict, state_ke
     await _zalo_recat_row(chat_id, int(rows[idx]), state_key)
 
 
+async def _zalo_cmd_cancel_tx(chat_id: str, text: str, state_key: str):
+    """Zalo /cancel_tx — same core as Telegram, numbered instead of tapped.
+
+    /cancel_tx            → 3 giao dịch gần nhất, reply số để chọn
+    /cancel_tx <row_num>  → nhảy thẳng tới màn xác nhận
+    """
+    parts = text.strip().split()
+    if len(parts) >= 2 and parts[1].isdigit():
+        await _zalo_cancel_tx_show(chat_id, int(parts[1]), state_key)
+        return
+    await _zalo_cancel_tx_page(chat_id, 0, state_key)
+
+
+async def _zalo_cancel_tx_page(chat_id: str, offset: int, state_key: str):
+    """One numbered page of the picker; '0' pulls the next, older page."""
+    size = ctx.PAGE_SIZE if offset == 0 else ctx.MORE_PAGE_SIZE
+    txs = ctx.page(offset=offset, limit=size)
+    if not txs:
+        await _zalo_send(chat_id, f"Không có giao dịch nào trong {ctx.MAX_AGE_DAYS} ngày qua.")
+        sh.clear_state(state_key)
+        return
+
+    lines = ["Huỷ giao dịch — chọn giao dịch (reply số):", ""]
+    rows: list[int] = []
+    for i, tx in enumerate(txs, 1):
+        lines.append(f"{i}. {_ctx_line(tx)}")
+        rows.append(tx["row_num"])
+    lines.append("")
+    more = ctx.has_more(offset + len(txs))
+    if more:
+        lines.append(f"0. Xem {ctx.MORE_PAGE_SIZE} giao dịch cũ hơn")
+    lines.append("- /cancel để thoát")
+
+    sh.set_state(state_key, {
+        "step": "zalo_cancel_tx_pick",
+        "cancel_rows": rows,
+        "cancel_offset": offset,
+        "cancel_more": more,
+    })
+    await _zalo_send(chat_id, "\n".join(lines))
+
+
+async def _zalo_cancel_tx_handle_pick(chat_id: str, text: str, state: dict, state_key: str):
+    rows = state.get("cancel_rows") or []
+    choice = text.strip()
+    if not choice.isdigit():
+        await _zalo_send(chat_id, f"Reply bằng số (1-{len(rows)}) hoặc /cancel.")
+        return
+    idx = int(choice)
+    if idx == 0:
+        if not state.get("cancel_more"):
+            await _zalo_send(chat_id, "Hết giao dịch trong 30 ngày.")
+            return
+        await _zalo_cancel_tx_page(
+            chat_id, int(state.get("cancel_offset") or 0) + len(rows), state_key)
+        return
+    if idx < 1 or idx > len(rows):
+        await _zalo_send(chat_id, f"Số không hợp lệ (1-{len(rows)}).")
+        return
+    await _zalo_cancel_tx_show(chat_id, int(rows[idx - 1]), state_key)
+
+
+async def _zalo_cancel_tx_show(chat_id: str, row_num: int, state_key: str):
+    """Confirmation screen: what cancelling gives back, or an offer to restore."""
+    row, reason = ctx.check(row_num)
+
+    if reason == "already":
+        info = ctx.describe(row)
+        head = (f"Giao dịch này đã huỷ:\n"
+                f"{_ctx_when(info['date'])} · -{sh.fmt_amount(info['amount'], info['currency'])}\n"
+                f"{info['description']}\n\n")
+        blocked = ctx._blocking_reason(row)
+        if blocked:   # restore would only refuse — say so instead of asking
+            sh.clear_state(state_key)
+            await _zalo_send(chat_id, head + _CTX_REFUSALS.get(
+                blocked, "Không khôi phục được."))
+            return
+        sh.set_state(state_key, {"step": "zalo_cancel_tx_confirm",
+                                 "row_num": row_num, "mode": "restore"})
+        await _zalo_send(
+            chat_id, head + "Khôi phục lại? Reply 'co' để khôi phục, gì khác để thôi.")
+        return
+
+    if reason:
+        sh.clear_state(state_key)
+        await _zalo_send(chat_id, _CTX_REFUSALS.get(reason, f"Không huỷ được ({reason})."))
+        return
+
+    info = ctx.describe(row)
+    cb_amount = sh.cashback_total_for_tx(row_num)
+    msg = (f"Huỷ giao dịch này?\n"
+           f"{_ctx_when(info['date'])} · -{sh.fmt_amount(info['amount'], info['currency'])}\n"
+           f"{info['description']}\n\nSẽ hoàn lại:\n"
+           f"- Hạn mức {sh.fmt_amount(info['amount'], info['currency'])}")
+    if info["account_id"]:
+        msg += f" cho {info['account_id']}"
+    if cb_amount > 0:
+        msg += (f"\n- Thu hồi {sh.fmt_amount(cb_amount)} cashback "
+                f"→ trả cap lại cho các giao dịch sau")
+    msg += "\n\nReply 'co' để huỷ, gì khác để thôi."
+
+    sh.set_state(state_key, {"step": "zalo_cancel_tx_confirm",
+                             "row_num": row_num, "mode": "cancel"})
+    await _zalo_send(chat_id, msg)
+
+
+async def _zalo_cancel_tx_handle_confirm(chat_id: str, text: str, state: dict, state_key: str):
+    row_num = int(state.get("row_num") or 0)
+    mode = state.get("mode") or "cancel"
+    sh.clear_state(state_key)
+
+    # Mirrors the /cashback delete confirm: accept the accented and bare forms.
+    if text.strip().lower() not in ("co", "có", "y", "yes", "ok"):
+        await _zalo_send(chat_id, "Đã thôi, không thay đổi gì.")
+        return
+
+    if mode == "restore":
+        result = ctx.restore(row_num)
+        if not result.get("ok"):
+            await _zalo_send(chat_id, _CTX_REFUSALS.get(result.get("reason"),
+                                                        "Không khôi phục được."))
+            return
+        msg = (f"Đã khôi phục: -{sh.fmt_amount(result['amount'], result['currency'])} · "
+               f"{result['description']}")
+        if result.get("cashback_reclaimed", 0) > 0:
+            msg += f"\nCashback tính lại: {sh.fmt_amount(result['cashback_reclaimed'])}."
+        msg += _ctx_cashback_warning(result)
+        await _zalo_send(chat_id, msg)
+        return
+
+    result = ctx.cancel(row_num)
+    if not result.get("ok"):
+        await _zalo_send(chat_id, _CTX_REFUSALS.get(result.get("reason"), "Không huỷ được."))
+        return
+    msg = (f"Đã huỷ: -{sh.fmt_amount(result['amount'], result['currency'])} · "
+           f"{result['description']}\nĐã hoàn hạn mức.")
+    if result.get("cashback_reclaimed", 0) > 0:
+        msg += f" Thu hồi {sh.fmt_amount(result['cashback_reclaimed'])} cashback"
+        msg += ("." if result.get("cashback_recomputed") is False
+                else " và tính lại cả kỳ.")
+    msg += _ctx_cashback_warning(result)
+    msg += "\n\nGõ /cancel_tx rồi chọn lại giao dịch này nếu muốn khôi phục."
+    await _zalo_send(chat_id, msg)
+
+
 async def _zalo_recat_row(chat_id: str, row_num: int, state_key: str):
     """Re-categorize one sheet row via the Zalo numbered picker."""
     if row_num < 2:
@@ -1714,6 +1873,12 @@ async def _zalo_recat_row(chat_id: str, row_num: int, state_key: str):
     ledger_type = (row[17] if len(row) > 17 else "").strip().lower()
     if ledger_type in ("transfer", "cc_payment"):
         await _zalo_send(chat_id, "Giao dịch chuyển khoản / trả thẻ có ledger riêng — không recat.")
+        return
+
+    # A cancelled row is out of the books; recategorizing it would clear
+    # Confirmed and walk the user through a flow that changes nothing.
+    if sh.is_cancelled(row):
+        await _zalo_send(chat_id, "Giao dịch này đã huỷ — gõ /cancel_tx để khôi phục trước khi sửa phân loại.")
         return
 
     from datetime import datetime
@@ -2929,6 +3094,7 @@ async def _process(body: dict):
 _CALLBACK_MIN_PARTS = {
     "p": 2, "s": 2, "al": 2, "recat": 2, "mg": 2, "kw": 2,
     "cb": 2, "acc": 2, "asg": 2, "rpt": 2, "lang": 2, "lr": 2,
+    "ctx": 3,   # ctx_<action>_<row|offset>
 }
 
 
@@ -2989,6 +3155,8 @@ async def _handle_callback(cb: dict):
         await handle_lang_callback(parts, message_id)
     elif prefix == "lr":
         await handle_learn_rule(parts, message_id)
+    elif prefix == "ctx":
+        await handle_cancel_tx_callback(parts, message_id)
 
 
 async def _handle_message(message: dict):
@@ -3287,6 +3455,12 @@ async def _tg_recat_by_row(row_num: int):
         await tg.send_text("ℹ️ Giao dịch chuyển khoản / trả thẻ có ledger riêng — không recat.")
         return
 
+    # A cancelled row is out of the books; recategorizing it would clear
+    # Confirmed and walk the user through a flow that changes nothing.
+    if sh.is_cancelled(row):
+        await tg.send_text("ℹ️ Giao dịch này đã huỷ — gõ `/cancel_tx` để khôi phục trước khi sửa phân loại.")
+        return
+
     amount = sh._parse_amount(row[7]) if len(row) > 7 else 0
     description = row[5] if len(row) > 5 else ""
     currency = sh.row_currency(row)
@@ -3326,6 +3500,197 @@ async def _tg_recat_by_row(row_num: int):
     )
 
 
+# ── /cancel_tx — cancel a past transaction ────────────────────────────────
+# Grab reverses a fare, a merchant double-charges, a booking falls through:
+# the bank only ever emails ADDITIONS, so without this the books can only grow
+# and the card's per-MCC cashback cap fills with money that was never spent.
+
+
+def _ctx_when(raw: str) -> str:
+    """Sheet timestamp → short 'dd/mm HH:MM' for a picker line."""
+    dt = sh._parse_local_datetime(raw)
+    return dt.strftime("%d/%m %H:%M") if dt else "—"
+
+
+def _ctx_line(tx: dict) -> str:
+    desc = tx["description"][:28] + "…" if len(tx["description"]) > 28 else tx["description"]
+    amount = sh.fmt_amount(tx["amount"], tx["currency"])
+    mark = "🚫 " if tx.get("is_cancelled") else ""
+    return f"{mark}{_ctx_when(tx['date'])} · -{amount} · {desc}"
+
+
+async def _tg_cancel_tx_page(offset: int = 0, message_id: int | None = None):
+    """Render one page of the picker (edit in place when paging)."""
+    size = ctx.PAGE_SIZE if offset == 0 else ctx.MORE_PAGE_SIZE
+    txs = ctx.page(offset=offset, limit=size)
+    if not txs:
+        msg = (f"📭 Không có giao dịch nào trong {ctx.MAX_AGE_DAYS} ngày qua."
+               if offset == 0 else "📭 Hết giao dịch trong 30 ngày.")
+        if message_id:
+            await tg.edit_message(message_id, msg, inline_keyboard=[])
+        else:
+            await tg.send_text(msg)
+        return
+
+    msg = ("🚫 *Huỷ giao dịch*\n\n"
+           "Chọn giao dịch cần huỷ — hạn mức và cashback sẽ được hoàn lại:\n\n")
+    buttons = []
+    for tx in txs:
+        line = _ctx_line(tx)
+        msg += f"  {md_safe(line)}\n"
+        label = line if len(line) <= 55 else line[:52] + "…"
+        buttons.append([{"text": label, "callback_data": f"ctx_pick_{tx['row_num']}"}])
+
+    nav = []
+    if offset > 0:
+        prev = max(0, offset - ctx.MORE_PAGE_SIZE)
+        nav.append({"text": "⬆️ Mới hơn", "callback_data": f"ctx_more_{prev}"})
+    if ctx.has_more(offset + len(txs)):
+        nav.append({"text": f"⬇️ {ctx.MORE_PAGE_SIZE} giao dịch cũ hơn",
+                    "callback_data": f"ctx_more_{offset + len(txs)}"})
+    if nav:
+        buttons.append(nav)
+
+    if message_id:
+        await tg.edit_message(message_id, msg, inline_keyboard=buttons)
+    else:
+        await tg.send_with_buttons(msg, buttons)
+
+
+def _ctx_cashback_warning(result: dict) -> str:
+    """Say so when the cashback rebuild did not commit.
+
+    The credit line is already back at that point, so the operation is not
+    rolled back — but the old cashback lines are still holding the per-MCC cap
+    down, which is the very thing cancelling was meant to release. Silence here
+    would leave the user believing it was fixed.
+    """
+    warns = []
+    if result.get("ledger_reapplied") is False:
+        warns.append("⚠️ Hạn mức CHƯA ghi lại được (Sheets lỗi) — số dư thẻ đang "
+                     "thiếu khoản này. Chạy /recat rồi phân loại lại để ghi lại.")
+    if result.get("cashback_recomputed") is False:
+        warns.append("⚠️ Cashback CHƯA tính lại được (Sheets lỗi). Chạy "
+                     "/cashback recompute để trả cap cho các giao dịch sau.")
+    return ("\n\n" + "\n".join(warns)) if warns else ""
+
+
+_CTX_REFUSALS = {
+    "not_found":     "⚠️ Không tìm thấy giao dịch này.",
+    "two_leg":       "⚠️ Chuyển khoản / trả thẻ có ledger 2 vế — không huỷ ở đây. "
+                     "Ghi một giao dịch ngược lại thay vì huỷ.",
+    "too_old":       f"⚠️ Giao dịch quá {ctx.MAX_AGE_DAYS} ngày — kỳ sao kê đó "
+                     "nhiều khả năng đã chốt, huỷ bây giờ sẽ ghi đè kỳ bạn đã đối soát.",
+    "income":        "⚠️ Đây là giao dịch tiền vào — huỷ ở đây sẽ TRỪ tiền chứ không hoàn. "
+                     "Ghi một giao dịch ngược lại thay vì huỷ.",
+    "bad_date":      "⚠️ Ngày giao dịch không đọc được — sửa cột Date trong sheet trước.",
+    "not_cancelled": "⚠️ Giao dịch này đang bình thường, không có gì để khôi phục.",
+}
+
+
+async def _tg_cancel_tx_confirm(row_num: int, message_id: int | None = None):
+    """Show what cancelling this row will give back, then ask."""
+    row, reason = ctx.check(row_num)
+
+    if reason == "already":
+        info = ctx.describe(row)
+        msg = (f"🚫 *Giao dịch đã huỷ*\n\n"
+               f"{_ctx_when(info['date'])} · -{sh.fmt_amount(info['amount'], info['currency'])}\n"
+               f"`{md_safe(info['description'])}`\n\n")
+        # restore() enforces the same guards as cancel, so don't offer a button
+        # that can only ever answer with a refusal (a row cancelled on day 29
+        # and looked at on day 31 is past the window).
+        blocked = ctx._blocking_reason(row)
+        if blocked:
+            msg += _CTX_REFUSALS.get(blocked, "Không khôi phục được.")
+            buttons = [[{"text": "← Quay lại", "callback_data": "ctx_more_0"}]]
+        else:
+            msg += "Khôi phục lại giao dịch này?"
+            buttons = [[{"text": "♻️ Khôi phục", "callback_data": f"ctx_undo_{row_num}"},
+                        {"text": "← Quay lại",   "callback_data": "ctx_more_0"}]]
+    elif reason:
+        msg, buttons = _CTX_REFUSALS.get(reason, f"⚠️ Không huỷ được ({reason})."), []
+    else:
+        info = ctx.describe(row)
+        cb_amount = sh.cashback_total_for_tx(row_num)
+        msg = (f"🚫 *Huỷ giao dịch?*\n\n"
+               f"{_ctx_when(info['date'])} · *-{sh.fmt_amount(info['amount'], info['currency'])}*\n"
+               f"`{md_safe(info['description'])}`\n\n"
+               f"Sẽ hoàn lại:\n"
+               f"  • Hạn mức {sh.fmt_amount(info['amount'], info['currency'])}")
+        if info["account_id"]:
+            msg += f" cho `{md_safe(info['account_id'])}`"
+        msg += "\n"
+        if cb_amount > 0:
+            msg += (f"  • Thu hồi {sh.fmt_amount(cb_amount)} cashback "
+                    f"→ trả cap lại cho các giao dịch sau\n")
+        buttons = [[{"text": "🚫 Huỷ giao dịch", "callback_data": f"ctx_do_{row_num}"},
+                    {"text": "← Thôi",          "callback_data": "ctx_more_0"}]]
+
+    if message_id:
+        await tg.edit_message(message_id, msg, inline_keyboard=buttons)
+    elif buttons:
+        await tg.send_with_buttons(msg, buttons)
+    else:
+        await tg.send_text(msg)
+
+
+async def _tg_cmd_cancel_tx(text: str):
+    """/cancel_tx → picker of the 3 most recent; /cancel_tx <row> → straight to confirm."""
+    parts = text.strip().split()
+    if len(parts) >= 2 and parts[1].isdigit():
+        await _tg_cancel_tx_confirm(int(parts[1]))
+        return
+    await _tg_cancel_tx_page(0)
+
+
+async def handle_cancel_tx_callback(parts: list, message_id: int):
+    """ctx_pick_<row> | ctx_more_<offset> | ctx_do_<row> | ctx_undo_<row>"""
+    action, arg = parts[1], parts[2]
+    if not arg.isdigit():
+        return
+    n = int(arg)
+
+    if action == "more":
+        await _tg_cancel_tx_page(n, message_id)
+    elif action == "pick":
+        await _tg_cancel_tx_confirm(n, message_id)
+    elif action == "do":
+        result = ctx.cancel(n)
+        if not result.get("ok"):
+            await tg.edit_message(
+                message_id,
+                _CTX_REFUSALS.get(result.get("reason"), "⚠️ Không huỷ được."),
+                inline_keyboard=[])
+            return
+        msg = (f"✅ *Đã huỷ giao dịch*\n\n"
+               f"-{sh.fmt_amount(result['amount'], result['currency'])} · "
+               f"`{md_safe(result['description'])}`\n\n"
+               f"Đã hoàn hạn mức.")
+        if result.get("cashback_reclaimed", 0) > 0:
+            msg += f" Thu hồi {sh.fmt_amount(result['cashback_reclaimed'])} cashback"
+            msg += ("." if result.get("cashback_recomputed") is False
+                    else " và tính lại cả kỳ.")
+        msg += _ctx_cashback_warning(result)
+        msg += "\n\n_Gõ_ `/cancel_tx` _rồi chọn lại giao dịch này nếu muốn khôi phục._"
+        await tg.edit_message(message_id, msg, inline_keyboard=[])
+    elif action == "undo":
+        result = ctx.restore(n)
+        if not result.get("ok"):
+            await tg.edit_message(
+                message_id,
+                _CTX_REFUSALS.get(result.get("reason"), "⚠️ Không khôi phục được."),
+                inline_keyboard=[])
+            return
+        msg = (f"♻️ *Đã khôi phục*\n\n"
+               f"-{sh.fmt_amount(result['amount'], result['currency'])} · "
+               f"`{md_safe(result['description'])}`")
+        if result.get("cashback_reclaimed", 0) > 0:
+            msg += f"\n\nCashback tính lại: {sh.fmt_amount(result['cashback_reclaimed'])}."
+        msg += _ctx_cashback_warning(result)
+        await tg.edit_message(message_id, msg, inline_keyboard=[])
+
+
 async def _handle_command(text: str):
     cmd = text.split()[0].lower()
     if   cmd == "/cancel":    await _tg_cmd_cancel()
@@ -3339,6 +3704,7 @@ async def _handle_command(text: str):
     elif cmd == "/transfer":  await _cmd_transfer(text)
     elif cmd == "/cc":        await _cmd_cc_pay(text)
     elif cmd == "/recat":     await _tg_cmd_recat(text)
+    elif cmd == "/cancel_tx": await _tg_cmd_cancel_tx(text)
     elif cmd == "/pending":   await _tg_cmd_pending()
     elif cmd == "/lang":      await cmd_lang()
     elif cmd in ("/help", "/start"):
@@ -3382,7 +3748,7 @@ async def _tg_cmd_pending():
             row = sh.get_transaction_row(int(candidate.get("row_num") or 0))
         except Exception:
             row = []
-        if sh.is_confirmed(row):
+        if sh.is_confirmed(row) or sh.is_cancelled(row):
             continue
         item = candidate
         break

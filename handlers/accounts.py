@@ -808,7 +808,7 @@ def _backfill_recent(account_id: str, source_key: str, trigger_row: int | None) 
         # the ledger entry now so balance reflects it.
         try:
             row = sh.get_transaction_row(int(trigger_row))
-            confirmed = sh.is_confirmed(row)
+            confirmed = sh.is_confirmed(row) and not sh.is_cancelled(row)
             if confirmed and not sh.is_ledger_applied(int(trigger_row)):
                 amount = sh._parse_amount(row[7]) if len(row) > 7 else 0
                 currency = sh.row_currency(row)

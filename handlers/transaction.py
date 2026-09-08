@@ -91,9 +91,14 @@ def _apply_ledger_for_row(row_num: int):
       - ledger already applied (col T = TRUE)
       - tx is transfer/cc_payment (those are written via dedicated paths)
       - currency mismatch between tx and account
+      - the tx was cancelled (/cancel_tx already gave the credit line back;
+        this is the single choke point every finalize path funnels through,
+        so guarding here keeps a cancelled row from silently re-spending)
     """
     row = sh.get_transaction_row(row_num)
     if len(row) < 18:
+        return
+    if sh.is_cancelled(row):
         return
 
     account_id = (row[16] or "").strip()       # col Q
@@ -280,6 +285,12 @@ async def handle_recategorize(parts: list[str], message_id: int):
     ledger_type = (row[17] if len(row) > 17 else "").strip().lower()
     if ledger_type in ("transfer", "cc_payment"):
         await tg.send_text("ℹ️ Giao dịch chuyển khoản / trả thẻ có ledger riêng — không recat.")
+        return
+
+    # A cancelled row is out of the books; recategorizing it would clear
+    # Confirmed and walk the user through a flow that changes nothing.
+    if sh.is_cancelled(row):
+        await tg.send_text("ℹ️ Giao dịch này đã huỷ — gõ `/cancel_tx` để khôi phục trước khi sửa phân loại.")
         return
 
     # Capture old category BEFORE reset
