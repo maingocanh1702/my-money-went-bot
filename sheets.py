@@ -726,6 +726,30 @@ def _ensure_excluded_events_tab():
     return _ensure_tab_with_header(S.EXCLUDED_EVENTS, EXCLUDED_EVENTS_HEADER, rows=500)
 
 
+def excluded_event_exists(ref_code: str, reason: str = "") -> bool:
+    """Whether this reference already has a line in the Excluded Events tab.
+
+    A cancellation writes no transaction row, so the claim cache — which is
+    per-process and confirms itself by looking for a committed ROW — cannot
+    prove one was already applied once the process restarts. This tab can: it
+    is the durable record of every event the bot handled without writing a
+    transaction. Without it, a redelivered cancellation would look for a match
+    again and, where two identical purchases exist, cancel the wrong one.
+    """
+    if not ref_code:
+        return False
+    try:
+        rows = _ensure_excluded_events_tab().get_all_values()[1:]
+    except Exception as e:
+        # Fail CLOSED: an unreadable ledger must not license a second cancel.
+        raise RuntimeError(f"could not read the excluded-events ledger: {e}") from e
+    for r in rows:
+        if len(r) > 3 and str(r[3]).strip() == ref_code:
+            if not reason or (len(r) > 7 and str(r[7]).strip() == reason):
+                return True
+    return False
+
+
 def record_excluded_event(*, ref_code: str, source: str, occurred_at: str, amount,
                           currency: str, tx_type: str, reason: str,
                           description: str = "") -> bool:

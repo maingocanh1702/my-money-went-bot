@@ -19,6 +19,7 @@ from handlers.account_resolver import resolve_account
 from handlers.accounts import prompt_new_account, prompt_zalo_new_account
 from handlers.zalo_render import render_zalo_logged_summary
 from handlers import zalo_queue as zq
+from handlers import cancel_tx as ctx
 
 
 async def _ensure_buckets(month_key: str) -> tuple[list[dict], int]:
@@ -85,6 +86,130 @@ def _require_recorded(**fields) -> None:
             f"could not record excluded event ({fields.get('reason')}) "
             f"for ref={fields.get('ref_code')!r}"
         )
+
+
+def resolved_account_id_for_cancel(data: dict) -> str:
+    """The account a cancellation belongs to, or "" when it cannot be resolved.
+
+    Resolution must not create or prompt for an account here: a cancellation
+    for a card the bot does not know about has nothing to reverse either way.
+    """
+    try:
+        return resolve_account(data).account_id or ""
+    except Exception as e:
+        print(f"[cancel] account resolution failed: {e}")
+        return ""
+
+
+async def _handle_cancellation(*, ref_code: str, source_family: str, amount: float,
+                               currency: str, description: str, tx_date_aware,
+                               resolved_account_id: str) -> None:
+    """Apply a bank's cancellation notice to the transaction it reverses.
+
+    The bank tells us a charge was reversed; it does not tell us which row that
+    was, and it sends no signed amount. Writing an income row instead would
+    leave the purchase in its bucket total and its cashback intact, and put a
+    payment the user never received on the books. Cancelling the original gives
+    back the credit line AND the cashback, and rebuilds the cycle cap — which is
+    what actually happened at the bank.
+
+    Idempotent through the Excluded Events tab rather than the claim cache: no
+    transaction row is written here, so the claim's own "is it in the sheet
+    yet?" confirmation has nothing to find after a restart, and a redelivered
+    notice would go looking for a match a second time.
+    """
+    occurred_at = tx_date_aware.strftime("%Y-%m-%d %H:%M:%S")
+    common = dict(ref_code=ref_code, source=source_family, occurred_at=occurred_at,
+                  amount=amount, currency=currency, tx_type="Huỷ giao dịch",
+                  description=description)
+
+    if sh.excluded_event_exists(ref_code):
+        print(f"[cancel] notice already applied, ref={ref_code!r}")
+        return
+
+    row_num = ctx.find_original_for_cancellation(
+        amount=amount, description=description, currency=currency,
+        account_id=resolved_account_id, before=tx_date_aware,
+    )
+
+    if row_num is None:
+        # Most often a card payment the bank declined outright: the notice
+        # arrives with no purchase behind it, and nothing moved. Recorded
+        # either way — an authenticated financial event that leaves no trace is
+        # the one thing this ledger exists to prevent.
+        print(f"[cancel] no matching transaction for ref={ref_code!r}")
+        _require_recorded(reason="cancellation_no_match", **common)
+        await _notify_cancellation_unmatched(amount, currency, description)
+        return
+
+    result = ctx.cancel(row_num)
+    if not result.get("ok"):
+        reason = result.get("reason") or "unknown"
+        if reason == "already":
+            print(f"[cancel] row {row_num} was already cancelled")
+            _require_recorded(reason="cancellation_already_applied", **common)
+            return
+        print(f"[cancel] refused row {row_num}: {reason}")
+        _require_recorded(reason=f"cancellation_refused_{reason}", **common)
+        await _notify_cancellation_unmatched(amount, currency, description)
+        return
+
+    _require_recorded(reason="cancellation_applied", **common)
+    await _notify_cancellation_applied(row_num, result, amount, currency, description)
+
+
+async def _notify_cancellation_applied(row_num, result, amount, currency, description) -> None:
+    reclaimed = result.get("cashback_reclaimed") or 0
+    tail = ""
+    if reclaimed:
+        tail = f"\n💳 Thu hồi {sh.fmt_amount(reclaimed, currency)} cashback đã ghi."
+    if result.get("cashback_recomputed") is False or result.get("ledger_reapplied") is False:
+        tail += "\n⚠️ _Một phần cập nhật vào Sheet chưa xong — kiểm tra lại /report._"
+    text = (
+        f"↩️ *Giao dịch bị huỷ* — ngân hàng đã hoàn tiền.\n"
+        f"`{md_safe(description)}`\n"
+        f"💸 {sh.fmt_amount(amount, currency)} · dòng {row_num}\n\n"
+        f"Đã hoàn lại hạn mức.{tail}"
+    )
+    try:
+        await tg.send_text(text)
+    except Exception as e:
+        print(f"[cancel] telegram notify failed: {e}")
+    await _notify_zalo(
+        f"Giao dịch bị huỷ — ngân hàng đã hoàn tiền.\n"
+        f"{description}\n"
+        f"{sh.fmt_amount(amount, currency)} · dòng {row_num}\n"
+        f"Đã hoàn lại hạn mức."
+        + (f"\nThu hồi {sh.fmt_amount(reclaimed, currency)} cashback." if reclaimed else "")
+    )
+
+
+async def _notify_cancellation_unmatched(amount, currency, description) -> None:
+    text = (
+        f"↩️ *Ngân hàng báo huỷ một giao dịch*\n"
+        f"`{md_safe(description)}`\n"
+        f"💸 {sh.fmt_amount(amount, currency)}\n\n"
+        f"_Không tìm thấy giao dịch gốc để huỷ. Nếu đây là giao dịch bị từ chối "
+        f"ngay từ đầu thì không có gì phải làm._"
+    )
+    try:
+        await tg.send_text(text)
+    except Exception as e:
+        print(f"[cancel] telegram notify failed: {e}")
+    await _notify_zalo(
+        f"Ngân hàng báo huỷ một giao dịch:\n{description}\n"
+        f"{sh.fmt_amount(amount, currency)}\n"
+        f"Không tìm thấy giao dịch gốc để huỷ."
+    )
+
+
+async def _notify_zalo(text: str) -> None:
+    if not (ZALO_ENABLED and ZALO_CHAT_ID):
+        return
+    try:
+        await messenger.send_text(text, channel="zalo", recipient_id=ZALO_CHAT_ID)
+    except Exception as e:
+        print(f"[cancel] zalo notify failed: {e}")
 
 
 async def _append_claimed_transaction(ref_code: str, *args, **kwargs) -> int:
@@ -281,6 +406,15 @@ async def _handle_transaction(payload: dict, *, trusted_email: bool, authenticat
             occurred_at=tx_date_aware.strftime("%Y-%m-%d %H:%M:%S"),
             amount=amount, currency=currency, tx_type=tx_type_label,
             reason=excluded_reason, description=description,
+        )
+        return
+
+    # ─── A cancellation reverses a row; it does not add one ──────
+    if str(data.get("_event_kind") or "").strip() == "cancellation":
+        await _handle_cancellation(
+            ref_code=ref_code, source_family=source_family,
+            amount=amount, currency=currency, description=description,
+            tx_date_aware=tx_date_aware, resolved_account_id=resolved_account_id_for_cancel(data),
         )
         return
 

@@ -14,7 +14,7 @@ total skips the row (`sheets.is_cancelled`).
 Channel-agnostic on purpose: main.py drives Telegram inline buttons and Zalo
 numbered replies over this same core, so the two can't drift apart.
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytz
 
@@ -103,6 +103,60 @@ def _blocking_reason(row: list) -> str:
     if (_now() - tx_dt).days > MAX_AGE_DAYS:
         return "too_old"
     return ""
+
+
+def find_original_for_cancellation(*, amount: float, description: str, currency: str,
+                                   account_id: str = "", before: datetime | None = None,
+                                   max_age_days: int = MAX_AGE_DAYS) -> int | None:
+    """The row a bank cancellation notice is reversing, or None.
+
+    Cake's cancellation e-mail is a byte-for-byte copy of the purchase e-mail
+    with a later timestamp and a different status line, so the pairing key is
+    everything the two share: card, merchant string, amount and currency.
+
+    Newest first, because the notice reverses the most recent matching charge.
+    Cancelled rows are skipped — otherwise a second notice for a merchant the
+    user visits often would keep re-matching the row it already reversed
+    instead of finding nothing. Rows dated after the notice are skipped too: a
+    reversal cannot precede what it reverses, and without that guard a later
+    identical purchase would be the "newest match" and get cancelled instead.
+
+    Returns None rather than guessing. A card payment that was declined outright
+    produces this same notice with no purchase behind it, and inventing a match
+    for it would cancel a real transaction.
+    """
+    want_desc = (description or "").strip().lower()
+    want_cur = (currency or "VND").upper().strip() or "VND"
+    want_acct = (account_id or "").strip()
+    cutoff = (before or _now())
+    if cutoff.tzinfo is None:
+        cutoff = pytz.timezone(TIMEZONE).localize(cutoff)
+    oldest = cutoff - timedelta(days=max_age_days)
+
+    best_row = None
+    best_dt = None
+    for idx, row in enumerate(sh._get_tx_rows(), start=2):
+        if len(row) < 8 or sh.is_cancelled(row):
+            continue
+        if (row[5] if len(row) > 5 else "").strip().lower() != want_desc:
+            continue
+        if sh.row_currency(row) != want_cur:
+            continue
+        if want_acct and (row[16] if len(row) > 16 else "").strip() != want_acct:
+            continue
+        try:
+            if abs(sh._parse_amount(row[7]) - amount) >= 1:
+                continue
+        except (ValueError, TypeError):
+            continue
+        row_dt = sh._parse_local_datetime(row[1] if len(row) > 1 else "")
+        if row_dt is None or row_dt > cutoff or row_dt < oldest:
+            continue
+        if _blocking_reason(row):
+            continue          # income, a transfer leg, out of the cancel window
+        if best_dt is None or row_dt > best_dt:
+            best_dt, best_row = row_dt, idx
+    return best_row
 
 
 def _reapply_ledger(row_num: int) -> None:
