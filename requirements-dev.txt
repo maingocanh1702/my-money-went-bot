@@ -3,9 +3,9 @@
 # Pulls in the runtime set too, so one command gives a working test environment.
 -r requirements.txt
 
-pytest==9.0.3
+pytest==9.1.1
 pytest-asyncio==1.4.0
-freezegun==1.5.1
+freezegun==1.5.5
 
 # storage/ (the PostgreSQL source-of-truth work) is not imported by the running
 # bot yet, so its drivers stay out of the deploy image until the cutover lands.
