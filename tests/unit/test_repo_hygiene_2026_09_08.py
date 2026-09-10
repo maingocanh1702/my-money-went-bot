@@ -4,6 +4,7 @@ Documentation drift is invisible until somebody needs the doc, so the two
 things that actually drifted — the Python version and the command list — are
 checked here rather than trusted.
 """
+import os
 import re
 from pathlib import Path
 
@@ -113,10 +114,16 @@ def test_every_command_appears_in_the_wiki_command_reference():
 def test_env_example_documents_every_variable_the_code_reads():
     example = _read(".env.example")
     read_vars: set[str] = set()
-    for py in ROOT.rglob("*.py"):
-        rel = py.relative_to(ROOT).as_posix()
-        if rel.startswith((".venv/", "venv/", "tests/", ".autopilot/")):
-            continue
+    # os.walk, pruned in place: rglob would descend into .autopilot/, which
+    # holds tens of megabytes of old agent logs, and filtering the results
+    # afterwards still pays for the walk — two seconds of every CI run.
+    skip = {".venv", "venv", "tests", ".autopilot", ".git", "__pycache__",
+            ".pytest_cache", ".ruff_cache", "node_modules"}
+    sources: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(ROOT):
+        dirnames[:] = [d for d in dirnames if d not in skip]
+        sources += [Path(dirpath) / f for f in filenames if f.endswith(".py")]
+    for py in sources:
         src = py.read_text(encoding="utf-8", errors="ignore")
         read_vars |= set(re.findall(r'os\.environ\.get\(\s*"([A-Z][A-Z0-9_]+)"', src))
         read_vars |= set(re.findall(r'os\.getenv\(\s*"([A-Z][A-Z0-9_]+)"', src))

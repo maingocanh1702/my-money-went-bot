@@ -221,6 +221,32 @@ def _parse_cake(subject: str, body: str, date: str) -> dict | None:
                 description = val
                 break
 
+    # ── Cancellation ─────────────────────────────────────────────
+    # Cake sends the SAME table twice. The purchase is
+    #   "[CAKE] ... thẻ Cake thành công"  /  Tình trạng: Thành công
+    # and its reversal is
+    #   "[CAKE] ... thẻ Cake bị huỷ"      /  Tình trạng: Thất bại
+    # with every other field — card, merchant, amount — byte-identical; only
+    # "Vào lúc" moves on. Nothing in the body carries a sign, so the direction
+    # keywords below never saw it and all 292 card e-mails in this account's
+    # history were recorded as spending, refunds included.
+    #
+    # "Thất bại" here does not mean the notification failed. It means the card
+    # transaction was cancelled and the money given back, so the right response
+    # is to cancel the original row — not to write an income row, which would
+    # leave the purchase in the bucket total and its cashback intact.
+    status = ""
+    st_match = re.search(r'Tình trạng[:\s]+(.+?)(?:\n|$)', body, re.IGNORECASE)
+    if st_match:
+        status = st_match.group(1).strip().lower()
+    subject_says_cancelled = any(kw in subject_lower for kw in (
+        "bị huỷ", "bị hủy", "bi huy", "huỷ giao dịch", "huy giao dich",
+    ))
+    status_says_failed = any(kw in status for kw in (
+        "thất bại", "that bai", "bị huỷ", "bị hủy", "bi huy", "đã huỷ", "đã hủy", "da huy",
+    ))
+    is_cancellation = subject_says_cancelled or status_says_failed
+
     # ── Date ────────────────────────────────────────────────────
     tx_date = _parse_cake_date(body) or date
 
@@ -260,6 +286,7 @@ def _parse_cake(subject: str, body: str, date: str) -> dict | None:
         "referenceCode":   ref_code,
         "_source":         "email_cake",
         "_account_hint":   account_hint,
+        "_event_kind":     "cancellation" if is_cancellation else "transaction",
     }
 
 
