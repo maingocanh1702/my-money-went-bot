@@ -2,7 +2,7 @@ fastapi==0.141.1
 starlette==1.6.0
 uvicorn[standard]==0.52.4
 gspread==6.2.1
-google-auth==2.57.1
+google-auth==2.58.0
 cryptography==50.0.1
 pyasn1==0.6.4
 httpx==0.28.1
