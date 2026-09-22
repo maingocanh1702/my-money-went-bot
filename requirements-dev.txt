@@ -9,7 +9,7 @@ freezegun==1.5.5
 
 # storage/ (the PostgreSQL source-of-truth work) is not imported by the running
 # bot yet, so its drivers stay out of the deploy image until the cutover lands.
-SQLAlchemy==2.0.52
+SQLAlchemy==2.0.54
 psycopg[binary]==3.3.5
 
 # The only lint CI enforces (E9,F63,F7,F82). Pinned so a local run and the
