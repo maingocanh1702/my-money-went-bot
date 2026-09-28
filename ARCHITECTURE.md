@@ -1,28 +1,32 @@
-# Kiến trúc My Money Went Bot
+# My Money Went Bot architecture
 
-Tài liệu này giải thích bot được ghép từ những phần nào và một giao dịch đi
-qua hệ thống ra sao, từ lúc ngân hàng báo tiền ra/vào cho tới lúc nó nằm trong
-Google Sheet và hiện lên Telegram/Zalo. Nó viết cho người muốn đọc hoặc sửa
-code; nếu bạn chỉ cần dựng bot, hãy đọc [README](README.vi.md) và
+[🇻🇳 Tiếng Việt](ARCHITECTURE.vi.md)
+
+This document explains what the bot is made of and how one transaction moves
+through it, from the moment a bank reports money in or out until it sits in
+your Google Sheet and shows up on Telegram or Zalo. It is written for people
+who want to read or change the code; if you only want to run a bot, start with
+the [README](README.md) and the
 [wiki](https://github.com/maingocanh1702/my-money-went-bot/wiki).
 
 ---
 
-## 1. Tổng quan một câu
+## 1. The one-sentence version
 
-Bot là **một ứng dụng FastAPI duy nhất** (một process, một người dùng) nhận
-webhook từ **SePay** (tài khoản ngân hàng) và **Google Apps Script** (email báo
-giao dịch thẻ), ghi mỗi giao dịch thành một dòng trong **Google Sheet của chính
-bạn**, rồi hỏi/nhận phân loại qua **Telegram** (và tuỳ chọn **Zalo**). Không có
-database: Google Sheet là toàn bộ backend.
+The bot is **a single FastAPI application** (one process, one user) that
+receives webhooks from **SePay** (bank accounts) and **Google Apps Script**
+(card notification emails), writes each transaction as one row in **your own
+Google Sheet**, and asks for or receives its category over **Telegram** (and
+optionally **Zalo**). There is no database: the Google Sheet is the whole
+backend.
 
 ```mermaid
 flowchart LR
-    subgraph Nguồn giao dịch
-      SP[🏦 SePay<br/>webhook tài khoản NH]
-      GM[📧 Gmail + Apps Script<br/>email báo quẹt thẻ]
+    subgraph Transaction sources
+      SP[🏦 SePay<br/>bank account webhook]
+      GM[📧 Gmail + Apps Script<br/>card swipe emails]
     end
-    subgraph Kênh chat
+    subgraph Chat channels
       TG[Telegram]
       ZL[Zalo Bot]
     end
@@ -37,453 +41,473 @@ flowchart LR
     APP[🤖 FastAPI app<br/>main.py] --> SH[(📊 Google Sheet<br/>sheets.py / gspread)]
 ```
 
-| Thành phần | Công nghệ |
+| Piece | Technology |
 |---|---|
-| Ngôn ngữ | Python 3.11 (`.python-version`, `runtime.txt`) |
+| Language | Python 3.11 (`.python-version`, `runtime.txt`) |
 | Web framework | FastAPI + uvicorn (`requirements.txt`) |
-| Lưu trữ | Google Sheets qua `gspread` + service account |
-| HTTP ra ngoài | `httpx` (Telegram Bot API, Zalo Bot API) |
-| Deploy | Railway, nixpacks, `uvicorn main:app` (`railway.toml`) |
-| Lịch chạy định kỳ | GitHub Actions gọi `/trigger/*` (`.github/workflows/cron.yml`) |
-| Test | pytest với spreadsheet giả trong bộ nhớ (`tests/conftest.py`) |
+| Storage | Google Sheets via `gspread` and a service account |
+| Outbound HTTP | `httpx` (Telegram Bot API, Zalo Bot API) |
+| Deployment | Railway, nixpacks, `uvicorn main:app` (`railway.toml`) |
+| Scheduled jobs | GitHub Actions calling `/trigger/*` (`.github/workflows/cron.yml`) |
+| Tests | pytest with an in-memory fake spreadsheet (`tests/conftest.py`) |
 
-**Single-tenant:** mỗi người tự chạy một bot riêng. Mọi thứ được "khoá" vào
-một `CHAT_ID` Telegram (và một `ZALO_CHAT_ID`); tin nhắn từ chat khác bị bỏ qua.
+**Single-tenant:** everyone runs their own bot. Everything is pinned to one
+Telegram `CHAT_ID` (and one `ZALO_CHAT_ID`); messages from any other chat are
+ignored.
 
 ---
 
-## 2. Bản đồ mã nguồn
+## 2. Source map
 
 ```
-main.py                 Điểm vào FastAPI: mọi route, bộ điều phối Telegram,
-                        toàn bộ luồng Zalo (state machine dạng text), cron.
-config.py               Đọc biến môi trường, kiểm tra fail-fast, tên các tab Sheet.
-sheets.py               Lớp dữ liệu: mọi đọc/ghi Google Sheets, cache, lock,
-                        sổ chống trùng, state hội thoại, ledger, cashback I/O.
-telegram_api.py         Wrapper Telegram Bot API (send/edit/delete, nút inline, menu lệnh).
-messenger.py            Lớp gửi tin đa kênh: Telegram giữ Markdown; Zalo bỏ
-                        Markdown, biến nút thành danh sách đánh số, chia nhỏ tin dài.
-utils.py                Đọc số tiền ("50k", "1tr2", "1.234.567"), md_safe cho text từ ngoài.
+main.py                 FastAPI entry point: every route, the Telegram dispatcher,
+                        all Zalo flows (text state machines), scheduled jobs.
+config.py               Environment variables, fail-fast validation, sheet tab names.
+sheets.py               Data layer: every Google Sheets read/write, caches, locks,
+                        the dedup ledger, conversation state, ledger, cashback I/O.
+telegram_api.py         Telegram Bot API wrapper (send/edit/delete, inline buttons, command menu).
+messenger.py            Multi-channel send: Telegram keeps Markdown; Zalo strips it,
+                        turns buttons into a numbered list and chunks long messages.
+utils.py                Money parsing ("50k", "1tr2", "1.234.567"), md_safe for outside text.
 handlers/
-  sepay.py              ★ Pipeline giao dịch: xác thực → lọc → chống trùng →
-                        gán tài khoản → ghi Sheet → cashback → phân loại.
-  email_parser.py       Email ngân hàng → payload giống SePay (bản công khai: chỉ Cake).
-  account_resolver.py   Giao dịch này thuộc tài khoản/thẻ nào (source_key).
-  accounts.py           /accounts, wizard onboarding tài khoản mới, gán ngược lịch sử.
-  transaction.py        Chọn danh mục (parent → sub), finalize, ghi ledger, học keyword.
-  keywords.py           /keywords — luật tự phân loại theo từ khoá.
-  allocation.py         /allocate — ngân sách tháng theo danh mục.
-  manage.py             /manage — thêm/sửa/xoá danh mục, hạn mức ngày.
-  report.py             /report — 2 góc nhìn (tài khoản × danh mục) × 4 kỳ.
-  reports.py            /today, recap cuối ngày.
-  cashback.py           /cashback — UI cấu hình thẻ, rule, MCC, kỳ sao kê.
-  cashback_engine.py    ★ Toán cashback thuần (không I/O), dễ test.
-  cancel_tx.py          /cancel_tx — huỷ giao dịch, hoàn hạn mức + cashback.
-  zalo_render.py        Định dạng tin Zalo.
-  zalo_queue.py         Hàng đợi giao dịch chờ phân loại bên Zalo.
+  sepay.py              ★ Transaction pipeline: authenticate → filter → dedup →
+                        resolve account → write sheet → cashback → categorize.
+  email_parser.py       Bank email → SePay-shaped payload (public repo: Cake only).
+  account_resolver.py   Which account/card a transaction belongs to (source_key).
+  accounts.py           /accounts, new-account onboarding wizard, history backfill.
+  transaction.py        Category picker (parent → sub), finalize, ledger write, keyword learning.
+  keywords.py           /keywords — auto-categorize rules.
+  allocation.py         /allocate — monthly budget per category.
+  manage.py             /manage — add/edit/delete categories, daily cap.
+  report.py             /report — 2 lenses (account × category) × 4 periods.
+  reports.py            /today, end-of-day recap.
+  cashback.py           /cashback — UI for card config, rules, MCC, statement cycle.
+  cashback_engine.py    ★ Pure cashback math (no I/O), easy to test.
+  cancel_tx.py          /cancel_tx — cancel a transaction, give back credit line + cashback.
+  zalo_render.py        Zalo message formatting.
+  zalo_queue.py         Queue of Zalo transactions waiting to be categorized.
   lang.py               /lang
-i18n/                   Chuỗi vi/en, hàm t(); ngôn ngữ lưu trong Bot State.
-card_templates/         YAML định nghĩa thẻ (cake_freedom, example_visa) + schema + validator.
-google_apps_script.js   Script chạy trong Google Apps Script: quét Gmail mỗi phút, gửi email về bot.
-storage/                Kết nối PostgreSQL (TLS nghiêm ngặt) — CHƯA được dùng, xem §10.
-scripts/                Công cụ vận hành: giả lập webhook, kiểm tra dữ liệu cá nhân,
-                        so sánh parity với repo private, đối soát cashback, lấy Zalo chat id.
-tests/unit/             ~550 test, chạy không cần mạng.
+i18n/                   vi/en strings and t(); the language is stored in Bot State.
+card_templates/         YAML card definitions (cake_freedom, example_visa) + schema + validator.
+google_apps_script.js   Runs in Google Apps Script: scans Gmail every minute, posts emails to the bot.
+storage/                PostgreSQL connection (strict TLS) — NOT used yet, see §10.
+scripts/                Operational tools: webhook simulator, personal-data guard,
+                        parity check against the private repo, cashback reconcile, Zalo chat id lookup.
+tests/unit/             ~550 tests, run without network access.
 ```
 
-Hai file lớn nhất là `main.py` (~3.800 dòng) và `sheets.py` (~3.900 dòng). Nếu
-chỉ đọc ba file để hiểu bot, hãy đọc `handlers/sepay.py`, `sheets.py` và
-`main.py` theo thứ tự đó.
+The two largest files are `main.py` (~3,800 lines) and `sheets.py` (~3,900
+lines). If you read only three files to understand the bot, read
+`handlers/sepay.py`, `sheets.py` and `main.py`, in that order.
 
 ---
 
-## 3. Các endpoint HTTP
+## 3. HTTP endpoints
 
-Tất cả nằm trong `main.py`. Trang docs tự sinh của FastAPI bị tắt
-(`docs_url=None`) để người lạ không liệt kê được route.
+All of them live in `main.py`. FastAPI's generated docs are turned off
+(`docs_url=None`) so a stranger cannot list the routes.
 
-| Route | Ai gọi | Xác thực | Xử lý |
+| Route | Called by | Authentication | Handling |
 |---|---|---|---|
-| `POST /webhook` | Telegram **và** SePay (chung một URL) | Telegram: header `X-Telegram-Bot-Api-Secret-Token` = `TELEGRAM_WEBHOOK_SECRET`. SePay: header `Authorization: Apikey <SEPAY_SECRET>` | Có `update_id` → Telegram, trả 200 ngay và xử lý nền. Không có → SePay, **xử lý xong rồi mới trả lời** |
-| `POST /webhook/email` | Google Apps Script | `secret` trong body = `EMAIL_SECRET` | Parse email → cùng pipeline với SePay |
-| `POST /zalo/webhook` | Zalo Bot Platform | header `X-Bot-Api-Secret-Token` = `ZALO_SECRET_TOKEN` | Chỉ khi `ZALO_ENABLED`; xử lý nền |
-| `POST /trigger/weekly`, `/monthly-report`, `/monthly-allocation`, `/auto-alloc-fallback`, `/daily-recap` | GitHub Actions / crontab | `Authorization: Bearer <CRON_SECRET>` (hoặc `?secret=`) | Chạy job nền, trả 200 ngay |
-| `GET /healthz`, `GET /` | Railway healthcheck | — | Trả OK |
+| `POST /webhook` | Telegram **and** SePay (same URL) | Telegram: header `X-Telegram-Bot-Api-Secret-Token` = `TELEGRAM_WEBHOOK_SECRET`. SePay: header `Authorization: Apikey <SEPAY_SECRET>` | Has `update_id` → Telegram, answer 200 at once and process in the background. Otherwise → SePay, **finish processing before answering** |
+| `POST /webhook/email` | Google Apps Script | `secret` in the body = `EMAIL_SECRET` | Parse the email → same pipeline as SePay |
+| `POST /zalo/webhook` | Zalo Bot Platform | header `X-Bot-Api-Secret-Token` = `ZALO_SECRET_TOKEN` | Only when `ZALO_ENABLED`; processed in the background |
+| `POST /trigger/weekly`, `/monthly-report`, `/monthly-allocation`, `/auto-alloc-fallback`, `/daily-recap` | GitHub Actions / crontab | `Authorization: Bearer <CRON_SECRET>` (or `?secret=`) | Run the job in the background, answer 200 at once |
+| `GET /healthz`, `GET /` | Railway healthcheck | — | Return OK |
 
-So sánh secret luôn dùng `hmac.compare_digest` (chống timing attack).
+Secrets are always compared with `hmac.compare_digest` (no timing attacks).
 
-**Vì sao SePay/email được xử lý đồng bộ còn Telegram thì không?** Với tin chat,
-mất một cập nhật chỉ gây phiền. Với tiền, trả 200 trước rồi mới ghi Sheet thì
-nếu ghi lỗi giao dịch sẽ biến mất vĩnh viễn (SePay không gửi lại, Apps Script
-đánh dấu email đã xử lý). Vì vậy route SePay/email chỉ trả thành công khi dòng
-đã được ghi; lỗi tạm thời trả **503** để nguồn tự retry. SePay còn đòi body
-`{"success": true}`, nếu không nó retry mãi.
+**Why are SePay and email handled synchronously but Telegram is not?** Losing a
+chat update is an annoyance. With money, answering 200 before writing the sheet
+means a failed write makes the transaction disappear for good (SePay won't
+resend, Apps Script marks the email processed). So the SePay and email routes
+only report success once the row is written; a transient error returns **503**
+so the source retries. SePay also requires a `{"success": true}` body, or it
+retries forever.
 
 ---
 
-## 4. Hành trình của một giao dịch (luồng chính)
+## 4. The life of a transaction (main flow)
 
-Đây là phần quan trọng nhất. Hàm trung tâm là
-`handlers/sepay.py::_handle_transaction`, dùng chung cho cả SePay lẫn email.
+This is the most important part. The central function is
+`handlers/sepay.py::_handle_transaction`, shared by SePay and email alike.
 
 ```mermaid
 flowchart TD
-    A[Webhook đến] --> B{Xác thực secret}
-    B -->|sai| X1[401, bỏ]
-    B -->|đúng| C[Chuẩn hoá: số tiền, chiều vào/ra,<br/>mô tả, tiền tệ, ngày, ref_code]
-    C --> D{Trước INGESTION_START_AT<br/>hoặc quá cũ?}
-    D -->|có| E1[Ghi tab Excluded Events, dừng]
-    D -->|không| F{Là email huỷ giao dịch?}
-    F -->|có| G[Đảo ngược dòng gốc<br/>cancel_tx]
-    F -->|không| H{Trùng chéo nguồn?<br/>SePay ↔ email}
-    H -->|có| E2[Ghi Excluded Events<br/>cross_source_duplicate]
-    H -->|không| I[resolve_account<br/>→ account_id / source_key]
+    A[Webhook arrives] --> B{Secret valid?}
+    B -->|no| X1[401, drop]
+    B -->|yes| C[Normalize: amount, in/out,<br/>description, currency, date, ref_code]
+    C --> D{Before INGESTION_START_AT<br/>or too old?}
+    D -->|yes| E1[Write to Excluded Events, stop]
+    D -->|no| F{Cancellation email?}
+    F -->|yes| G[Reverse the original row<br/>cancel_tx]
+    F -->|no| H{Cross-source duplicate?<br/>SePay ↔ email}
+    H -->|yes| E2[Write Excluded Events<br/>cross_source_duplicate]
+    H -->|no| I[resolve_account<br/>→ account_id / source_key]
     I --> J{Claim ref_code<br/>tx_exists}
-    J -->|đã commit| X2[Bỏ qua - webhook lặp]
-    J -->|đang xử lý / lỗi đọc| X3[Raise → 503 → nguồn retry]
-    J -->|claim mới| K[append_transaction<br/>ghi 1 dòng tab Đầu ra]
+    J -->|already committed| X2[Skip - repeated webhook]
+    J -->|in progress / read error| X3[Raise → 503 → source retries]
+    J -->|new claim| K[append_transaction<br/>one row in Đầu ra tab]
     K --> L[mark_ref_committed]
-    L --> M{Tiền vào?}
-    M -->|có| N[Báo 💚 +số tiền<br/>không hỏi danh mục]
-    M -->|tiền ra| O[Cashback nếu là thẻ tín dụng]
-    O --> P{Keyword rule khớp?}
-    P -->|có| Q[Tự phân loại + finalize]
-    P -->|không| R{User đang dở thao tác khác?}
-    R -->|có| S[Xếp vào pending_tx_queue<br/>/pending để phân loại sau]
-    R -->|không| T[Gửi bộ chọn danh mục<br/>Telegram nút / Zalo số]
-    N --> U{Nguồn chưa gắn tài khoản?}
+    L --> M{Money in?}
+    M -->|yes| N[Notify 💚 +amount<br/>no category question]
+    M -->|money out| O[Cashback if credit card]
+    O --> P{Keyword rule matches?}
+    P -->|yes| Q[Auto-categorize + finalize]
+    P -->|no| R{User mid-way through another flow?}
+    R -->|yes| S[Queue in pending_tx_queue<br/>/pending categorizes later]
+    R -->|no| T[Send category picker<br/>Telegram buttons / Zalo numbers]
+    N --> U{Source not linked to an account?}
     Q --> U
     S --> U
     T --> U
-    U -->|có| V[Mời chạy wizard onboarding]
+    U -->|yes| V[Offer the onboarding wizard]
 ```
 
-### 4.1 Hai nguồn, một định dạng
+### 4.1 Two sources, one shape
 
-- **SePay**: SePay theo dõi tài khoản ngân hàng đã liên kết và POST JSON cho
-  mỗi giao dịch (`transferAmount`, `transferType` in/out, `content`,
-  `accountNumber`, `id`…).
-- **Email thẻ** (tín dụng hoặc ghi nợ): `google_apps_script.js` chạy trong
-  tài khoản Google của bạn, mỗi phút tìm email từ các địa chỉ trong
-  `BANK_SENDERS`, gửi từng email tới `/webhook/email`. Nó chống trùng **theo
-  message ID** (lưu trong `PropertiesService`) chứ không theo thread, vì Gmail
-  gộp hai lần quẹt cùng tiêu đề vào một thread. Chỉ email gửi thành công mới
-  được đánh dấu đã xử lý, nên bot trả 503 là email sẽ được gửi lại lần sau.
-- `handlers/email_parser.py` nhận diện ngân hàng từ người gửi (kể cả email
-  forward), parse và trả về **đúng dạng payload SePay** kèm `_source =
-  "email_<bank>"`. Từ đây trở đi mọi bước đều giống nhau. Thêm một ngân hàng =
-  thêm sender vào `BANK_SENDERS` + viết một hàm `_parse_<bank>` (xem
-  `_parse_cake`). Email "trông giống giao dịch" nhưng parse hỏng sẽ trả 503 để
-  không mất giao dịch khi ngân hàng đổi mẫu email.
+- **SePay** watches linked bank accounts and POSTs JSON for each transaction
+  (`transferAmount`, `transferType` in/out, `content`, `accountNumber`, `id`…).
+- **Card emails** (credit or debit): `google_apps_script.js` runs in your
+  Google account, looks every minute for mail from the addresses in
+  `BANK_SENDERS`, and posts each email to `/webhook/email`. It deduplicates
+  **by message ID** (kept in `PropertiesService`), not by thread, because Gmail
+  groups two swipes with the same subject into one thread. Only emails that
+  were delivered successfully are marked processed, so a 503 from the bot means
+  the email is sent again on the next run.
+- `handlers/email_parser.py` identifies the bank from the sender (forwarded
+  emails included), parses the email and returns **exactly a SePay-shaped
+  payload** with `_source = "email_<bank>"`. From here on every step is
+  identical. Adding a bank = adding its sender to `BANK_SENDERS` + writing a
+  `_parse_<bank>` function (see `_parse_cake`). An email that "looks like a
+  transaction" but fails to parse returns 503, so a change in the bank's
+  template does not lose transactions.
 
-### 4.2 Danh tính giao dịch (`ref_code`)
+### 4.2 Transaction identity (`ref_code`)
 
-Theo thứ tự ưu tiên:
+In order of preference:
 
-1. SePay có `id` → `ref_code = "sepay:<id>"` (ổn định qua các lần retry).
-2. Không có → `referenceCode` của ngân hàng.
-3. Không có nữa → md5 của `số tiền|mô tả|ngày` (16 ký tự).
+1. SePay sent an `id` → `ref_code = "sepay:<id>"` (stable across retries).
+2. Otherwise → the bank's `referenceCode`.
+3. Otherwise → md5 of `amount|description|date` (16 characters).
 
-`ref_code` được lưu ở **cột I** của tab `Đầu ra`. Cờ `SEPAY_LEGACY_REF_LOOKUP`
-tạm thời kiểm tra cả khoá cũ để một retry vắt qua lần nâng cấp danh tính không
-tạo dòng đôi.
+`ref_code` is stored in **column I** of the `Đầu ra` tab. The
+`SEPAY_LEGACY_REF_LOOKUP` flag also checks the old key for a while, so a retry
+that spans the identity upgrade does not create a duplicate row.
 
-### 4.3 Ranh giới thời gian
+### 4.3 Time boundary
 
-Khi mới đăng ký webhook, SePay có thể gửi lại lịch sử cũ. Bot chặn bằng:
+When a webhook is first registered, SePay may replay old history. The bot
+blocks it with:
 
-- `INGESTION_START_AT` (khuyến nghị): giao dịch xảy ra trước mốc này bị loại.
-- Nếu không đặt: giao dịch SePay cũ hơn `TX_MAX_AGE_MINUTES` (mặc định 10 phút),
-  email cũ hơn `EMAIL_TX_MAX_AGE_MINUTES` (mặc định 7 ngày) bị loại.
+- `INGESTION_START_AT` (recommended): transactions before this instant are excluded.
+- If unset: SePay transactions older than `TX_MAX_AGE_MINUTES` (default 10
+  minutes) and emails older than `EMAIL_TX_MAX_AGE_MINUTES` (default 7 days)
+  are excluded.
 
-Giao dịch bị loại **không bị vứt im lặng**: nó được ghi vào tab
-`Excluded Events` kèm lý do. Nếu chính việc ghi này lỗi, bot từ chối trả 200
-(`_require_recorded`) để nguồn retry.
+Excluded transactions are **never dropped silently**: they are written to the
+`Excluded Events` tab with a reason. If that write itself fails, the bot
+refuses to answer 200 (`_require_recorded`) so the source retries.
 
-### 4.4 Chống trùng: hai lớp
+### 4.4 Deduplication: two layers
 
-1. **Trùng chéo nguồn** (`sheets.find_recent_duplicate`): cùng một lần quẹt
-   thẻ có thể đến cả qua SePay lẫn email. Bot so 50 dòng gần nhất theo số
-   tiền, chiều, tiền tệ, thời gian gần nhau và khác nguồn.
-2. **Webhook lặp** (`sheets.tx_exists`, tab `Processed Refs`): trước khi ghi,
-   bot "claim" `ref_code` với trạng thái `processing`, ghi dòng giao dịch, rồi
-   đổi sang `committed`. Nếu ghi Sheet timeout mà không rõ đã ghi hay chưa,
-   `_append_claimed_transaction` đọc lại Sheet theo `ref_code` trước khi quyết
-   định. Mọi trạng thái không chắc chắn đều **fail-closed**: raise lỗi để nguồn
-   retry, không bao giờ đoán.
+1. **Cross-source duplicates** (`sheets.find_recent_duplicate`): the same card
+   swipe can arrive both from SePay and by email. The bot compares the last 50
+   rows by amount, direction, currency, time proximity and a *different*
+   source. Two events from the same source are never paired, because two
+   coffees at the same price in the same minute are two transactions.
+2. **Repeated webhooks** (`sheets.tx_exists`, `Processed Refs` tab): before
+   writing, the bot "claims" the `ref_code` as `processing`, writes the row,
+   then flips it to `committed`. If a sheet write times out and it is unclear
+   whether it landed, `_append_claimed_transaction` re-reads the sheet by
+   `ref_code` before deciding. Every uncertain state **fails closed**: raise so
+   the source retries, never guess.
 
-`tx_write_lock` (một `threading.RLock`) bảo vệ cả claim lẫn append nên hai
-webhook đồng thời không ghi đè cùng một dòng.
+`tx_write_lock` (a `threading.RLock`) guards both the claim and the append, so
+two concurrent webhooks cannot overwrite the same row.
 
-### 4.5 Gán tài khoản (`account_resolver.py`)
+### 4.5 Account resolution (`account_resolver.py`)
 
-Từ payload bot rút ra một định danh (số tài khoản SePay, hoặc gợi ý như
-`cake_cc`/`cake_main` từ email) và tạo `source_key = "<nguồn>:<định danh>"`,
-ví dụ `sepay:1903xxxx888` hoặc `email_cake:cake_cc`. Kết quả có ba trạng thái:
+From the payload the bot extracts an identifier (the SePay account number, or a
+hint such as `cake_cc`/`cake_main` from email) and builds
+`source_key = "<source>:<identifier>"`, e.g. `sepay:1903xxxx888` or
+`email_cake:cake_cc`. The result has three states:
 
-| Trạng thái | Nghĩa | Hành vi |
+| State | Meaning | Behavior |
 |---|---|---|
-| `matched` | Một tài khoản trong tab `Accounts` đã sở hữu `source_key` | Ghi `account_id` vào dòng |
-| `new_identifier` | Có định danh nhưng chưa ai sở hữu | Vẫn ghi dòng (account_id rỗng, lưu `source_key` ở cột U), rồi mời onboarding |
-| `no_identifier` | Không rút được gì | Ghi dòng, im lặng |
+| `matched` | An account in the `Accounts` tab already owns this `source_key` | Write `account_id` on the row |
+| `new_identifier` | There is an identifier, but no account owns it | Still write the row (empty account_id, `source_key` kept in column U), then offer onboarding |
+| `no_identifier` | Nothing could be extracted | Write the row, stay quiet |
 
-Wizard onboarding (`handlers/accounts.py`): tên → loại (bank / debit / credit /
-cash) → xong. Thẻ tín dụng hỏi thêm hạn mức, dư nợ hiện tại, ngày sao kê, ngày
-đến hạn. Lời mời được lưu ở tab `Pending Accounts` 24 giờ nên nhiều giao dịch
-sau đó cũng không làm mất nút "Setup". Khi hoàn tất, bot **gán ngược** mọi
-dòng cũ có cùng `source_key` (`backfill_account_id_by_source_key`) và tính lại
-cashback cho chúng.
+Onboarding wizard (`handlers/accounts.py`): name → type (bank / debit / credit
+/ cash) → done. A credit card also asks for its limit, current outstanding
+balance, statement day and due day. The invitation is kept in the
+`Pending Accounts` tab for 24 hours, so later transactions don't lose the
+"Setup" button. On completion the bot **backfills** every earlier row with the
+same `source_key` (`backfill_account_id_by_source_key`) and recomputes their
+cashback.
 
-### 4.6 Ghi dòng giao dịch
+### 4.6 Writing the transaction row
 
-`sheets.append_transaction` ghi đúng một dòng A–U vào tab `Đầu ra`:
+`sheets.append_transaction` writes exactly one row, columns A–U, to the
+`Đầu ra` tab:
 
-| Cột | Nội dung | Cột | Nội dung |
+| Column | Content | Column | Content |
 |---|---|---|---|
-| B | Ngày giờ (ISO, giờ VN) | O | Tháng (`fmt_month`) |
-| F | Mô tả | P | Tiền tệ (mặc định VND) |
-| G | `Tiền ra` / `Tiền vào` | Q | `account_id` |
-| H | Số tiền | R | `expense` / `income` / `transfer` / `cc_payment` |
-| I | `ref_code` | S | Dòng liên kết (chuyển khoản, trả thẻ) |
-| K, L | Danh mục cha, con | T | Đã ghi ledger chưa |
-| M | Là "Daily Spending"? | U | `source_key` gốc |
-| N | Đã xác nhận phân loại | V | Thời điểm huỷ (`/cancel_tx`) |
+| B | Date/time (ISO, Vietnam time) | O | Month (`fmt_month`) |
+| F | Description | P | Currency (default VND) |
+| G | `Tiền ra` (out) / `Tiền vào` (in) | Q | `account_id` |
+| H | Amount | R | `expense` / `income` / `transfer` / `cc_payment` |
+| I | `ref_code` | S | Linked row (transfers, card payments) |
+| K, L | Parent category, sub-category | T | Ledger written yet? |
+| M | Is it "Daily Spending"? | U | Original `source_key` |
+| N | Categorization confirmed | V | Cancellation time (`/cancel_tx`) |
 
-Thứ tự cột A–P là di sản, **không được đổi**; cột mới chỉ được thêm ở cuối.
-Dòng không bao giờ bị xoá vì ledger và cashback tham chiếu theo số dòng.
+The order of columns A–P is legacy and **must not change**; new columns are
+only ever added at the end. Rows are never deleted, because the ledger and
+cashback refer to them by row number.
 
-### 4.7 Sau khi ghi
+### 4.7 After the write
 
-- **Tiền vào**: chỉ báo "💚 +X vừa vào tài khoản", không hỏi danh mục (mục
-  tiêu của bot là theo dõi chi).
-- **Tiền ra**:
-  1. Nếu tài khoản là thẻ tín dụng có cấu hình cashback → tính cashback (§6).
-  2. Đảm bảo tháng này có danh mục: copy từ tháng trước, hoặc tạo bộ mặc định
-     và gửi lời chào (`_ensure_buckets`, có `bootstrap_lock`).
-  3. Mô tả khớp một keyword rule (tab `Keyword Rules`) → tự phân loại, không hỏi.
-  4. Không khớp → gửi bộ chọn danh mục. Nếu người dùng đang dở một thao tác
-     khác (đang gõ ngân sách, đang chọn danh mục của giao dịch trước…), giao
-     dịch được **xếp hàng** vào `pending_tx_queue` thay vì phá thao tác đang dở;
-     `/pending` sẽ lấy ra phân loại sau.
-- Cuối cùng, nếu nguồn chưa gắn tài khoản → mời onboarding.
+- **Money in**: just a "💚 +X just arrived" notice, no category question (the
+  bot's goal is tracking spending).
+- **Money out**:
+  1. If the account is a credit card with cashback configured → compute
+     cashback (§6).
+  2. Make sure this month has categories: copy last month's, or create the
+     default set and send a welcome (`_ensure_buckets`, under `bootstrap_lock`).
+  3. The description matches a keyword rule (`Keyword Rules` tab) →
+     auto-categorize, no question.
+  4. No match → send the category picker. If the user is mid-way through
+     another flow (typing a budget, picking the previous transaction's
+     category…), the transaction is **queued** in `pending_tx_queue` instead of
+     breaking that flow; `/pending` brings it back later.
+- Finally, if the source isn't linked to an account → offer onboarding.
 
-### 4.8 Phân loại và finalize (`handlers/transaction.py`)
+### 4.8 Categorizing and finalizing (`handlers/transaction.py`)
 
-Người dùng bấm danh mục cha (`p_<row>_…`) → danh mục con (`s_…`) hoặc gõ tự do.
-`_finalize` sẽ:
+The user taps a parent category (`p_<row>_…`) → a sub-category (`s_…`) or types
+one. `_finalize` then:
 
-1. Ghi danh mục vào cột K/L, đặt N = TRUE.
-2. Ghi một dòng vào `Account Ledger` (idempotent, kiểm tra cột T, bỏ qua nếu
-   khác tiền tệ hoặc dòng đã huỷ). Ledger là nguồn sự thật cho số dư; cột
-   `running_balance`/`outstanding_balance` trong `Accounts` chỉ là cache.
-3. Báo lại tiến độ ngân sách danh mục / hạn mức ngày.
-4. Có thể đề nghị "học" từ khoá từ mô tả (`lr_…`) để lần sau tự phân loại.
-5. Lấy giao dịch tiếp theo trong hàng đợi, nếu có.
+1. Writes the categories to columns K/L and sets N = TRUE.
+2. Writes one `Account Ledger` entry (idempotent via column T; skipped on a
+   currency mismatch or a cancelled row). The ledger is the source of truth for
+   balances; `running_balance`/`outstanding_balance` in `Accounts` are caches.
+3. Reports progress against the category budget / daily cap.
+4. May offer to "learn" a keyword from the description (`lr_…`) so the next
+   one is auto-categorized.
+5. Pulls the next transaction from the queue, if any.
 
 ---
 
-## 5. Hội thoại: state machine lưu trong Sheet
+## 5. Conversations: a state machine stored in the sheet
 
-Bot không có session trong bộ nhớ đáng tin (Railway có thể restart bất cứ lúc
-nào), nên trạng thái hội thoại là một JSON lưu trong tab `Bot State`, một dòng
-cho mỗi khoá:
+The bot has no in-memory session it can trust (Railway may restart it at any
+time), so conversation state is JSON stored in the `Bot State` tab, one row
+per key:
 
-| Khoá | Dùng cho |
+| Key | Used for |
 |---|---|
-| `<CHAT_ID>` | Luồng Telegram: `step`, `row_num`, `amount`, `pending_tx_queue`, `lang`… |
-| `zalo:<ZALO_CHAT_ID>` | Luồng Zalo: `step`, `queue`, `buckets` đánh số… |
-| khoá "parked" của Zalo (`zalo_queue.py`) | Giao dịch Zalo đỗ lại khi user đang dở thao tác |
+| `<CHAT_ID>` | Telegram flow: `step`, `row_num`, `amount`, `pending_tx_queue`, `lang`… |
+| `zalo:<ZALO_CHAT_ID>` | Zalo flow: `step`, `queue`, numbered `buckets`… |
+| Zalo "parked" key (`zalo_queue.py`) | Zalo transactions parked while the user finishes another flow |
 
-`sheets.get_state/set_state` có cache trong process nên luồng "nóng" không đọc
-lại cả tab.
+`sheets.get_state/set_state` cache in-process, so "warm" flows don't re-read
+the whole tab.
 
 **Telegram** (`main.py::_process`):
 
-- `callback_query` (bấm nút) → kiểm tra chat = `CHAT_ID`, `answerCallback`,
-  kiểm tra định dạng `callback_data` theo tiền tố (`p`, `s`, `al`, `recat`,
-  `mg`, `kw`, `cb`, `acc`, `asg`, `rpt`, `lang`, `lr`, `ctx`) rồi chuyển tới
-  handler tương ứng.
-- Tin nhắn bắt đầu bằng `/` → xoá state (giữ lại `pending_tx_queue` và
-  `lang`) rồi chạy lệnh. Người dùng không bao giờ bị kẹt trong một luồng.
-- Tin nhắn thường → chuyển theo `state.step` (`await_alloc_amount`,
+- `callback_query` (button tap) → check the chat is `CHAT_ID`,
+  `answerCallback`, validate the `callback_data` shape by prefix (`p`, `s`,
+  `al`, `recat`, `mg`, `kw`, `cb`, `acc`, `asg`, `rpt`, `lang`, `lr`, `ctx`),
+  then route to the matching handler.
+- A message starting with `/` → clear state (keeping `pending_tx_queue` and
+  `lang`) and run the command. The user can never get stuck in a flow.
+- Any other message → routed by `state.step` (`await_alloc_amount`,
   `await_keyword_input`, `cb_setup_*`, `await_credit_limit`…).
 
-**Zalo** (`main.py::_handle_zalo_text` và các hàm `_zalo_*`): Zalo Bot API chỉ
-gửi được text thuần, không có nút, không sửa tin. Vì thế mọi bộ nút được
-`messenger.py` hiển thị thành danh sách đánh số và người dùng trả lời bằng số.
-Mỗi tính năng có một phiên bản state machine dạng text riêng bên Zalo, nhưng
-dùng chung phần lõi (sheets, cashback engine, cancel_tx, `_cmd_transfer`,
-`_cmd_cc_pay`…) để hai kênh không lệch nhau. Giao dịch mới được gửi song song
-tới cả hai kênh; phân loại ở kênh nào cũng ghi cùng một dòng.
+**Zalo** (`main.py::_handle_zalo_text` and the `_zalo_*` functions): the Zalo
+Bot API only sends plain text, with no buttons and no message editing. So
+`messenger.py` renders every button set as a numbered list, and the user
+answers with a number. Each feature has its own text state machine on the Zalo
+side, but they share the core (sheets, cashback engine, cancel_tx,
+`_cmd_transfer`, `_cmd_cc_pay`…) so the two channels cannot drift apart. New
+transactions go to both channels in parallel; categorizing in either writes the
+same row.
 
-Các lệnh (menu `/` được đăng ký lúc khởi động qua `set_my_commands`):
+Commands (the `/` menu is registered at startup via `set_my_commands`):
 `/report`, `/today`, `/accounts`, `/manage`, `/keywords`, `/allocate`,
 `/cashback`, `/recat`, `/cancel_tx`, `/pending`, `/transfer`, `/cc`, `/lang`,
 `/cancel`, `/help`.
 
 ---
 
-## 6. Cashback thẻ tín dụng
+## 6. Credit-card cashback
 
-Chia làm hai tầng có chủ đích:
+Deliberately split into two layers:
 
-- `handlers/cashback_engine.py` — **toán thuần**, không đọc/ghi gì. Mọi trạng
-  thái (đã dùng bao nhiêu cap, hôm nay đã bao nhiêu giao dịch…) được truyền vào.
-- `sheets.compute_and_record_cashback` — gom dữ liệu từ Sheet, gọi engine, ghi
-  kết quả vào `Cashback Ledger`.
+- `handlers/cashback_engine.py` — **pure math**, no reads or writes. All state
+  (cap already used, transactions so far today…) is passed in.
+- `sheets.compute_and_record_cashback` — gathers the data from the sheet, calls
+  the engine, writes the result to `Cashback Ledger`.
 
-Thứ tự áp dụng cho một giao dịch:
+Order applied to one transaction:
 
-1. **Đoán MCC** từ mô tả qua tab `MCC Map` (tự học: không đoán được thì bot
-   hỏi một lần bằng nút là các nhóm MCC của thẻ, rồi nhớ câu trả lời). Không
-   có MCC → dòng 0đ lý do `mcc_unknown`.
-2. MCC không có rule nào trong `Cashback Rules` → 0đ `mcc_not_eligible`
-   (cũng áp dụng khi dưới `min_tx_amount`).
-3. Vượt giới hạn số giao dịch/ngày của nhóm → 0đ `daily_limit`.
-4. `tỷ lệ × số tiền`, cắt theo **cap mỗi giao dịch** theo bậc số tiền
+1. **Infer the MCC** from the description via the `MCC Map` tab (self-learning:
+   when it can't tell, the bot asks once with the card's MCC groups as buttons
+   and remembers the answer). No MCC → a 0đ line with reason `mcc_unknown`.
+2. No rule for that MCC in `Cashback Rules` → 0đ `mcc_not_eligible` (also
+   applies below `min_tx_amount`).
+3. Over the group's per-day transaction limit → 0đ `daily_limit`.
+4. `rate × amount`, capped by the **per-transaction cap** for the amount band
    (`Cashback Tx Tiers`).
-5. Cắt theo **cap mỗi nhóm MCC trong kỳ**; đầy rồi → 0đ `mcc_cap_full`.
-6. **Cổng kích hoạt**: tổng chi hợp lệ trong kỳ chưa đạt `min_eligible_spend`
-   → trạng thái `pending`; đạt rồi → `eligible` (và các dòng pending của kỳ
-   được nâng lên).
+5. Capped by the **per-MCC cap for the cycle**; already full → 0đ `mcc_cap_full`.
+6. **Activation gate**: while eligible spend this cycle is below
+   `min_eligible_spend` the line is `pending`; once reached it is `eligible`
+   (and the cycle's pending lines are promoted).
 
-Kỳ được tính theo **ngày sao kê** của thẻ (`cap_period: statement_cycle`) hoặc
-theo tháng dương lịch. Cấu hình thẻ có thể nạp từ `card_templates/*.yaml`
-(`/cashback seed cake_freedom`), tạo bằng wizard (`/cashback setup`) hoặc xuất
-ngược thành template (`/cashback export`). Mọi lỗi cashback đều bị nuốt và ghi
-log: nó **không bao giờ** được chặn việc ghi giao dịch.
+The cycle follows the card's **statement day** (`cap_period: statement_cycle`)
+or the calendar month. Card config can be loaded from `card_templates/*.yaml`
+(`/cashback seed cake_freedom`), built with a wizard (`/cashback setup`), or
+exported back into a template (`/cashback export`). Every cashback error is
+swallowed and logged: it must **never** block writing the transaction.
 
 ---
 
-## 7. Các tab trong Google Sheet
+## 7. Google Sheet tabs
 
-Tên tab khai báo trong `config.SHEETS`. Tab mới được tự tạo kèm header ở lần
-dùng đầu (`_ensure_*_tab`).
+Tab names are declared in `config.SHEETS`. New tabs are created with their
+header on first use (`_ensure_*_tab`).
 
-| Tab | Vai trò |
+| Tab | Role |
 |---|---|
-| `Đầu ra` | Mỗi giao dịch một dòng (bảng chính, cột A–V ở §4.6) |
-| `Budget Config` | Danh mục theo tháng + ngân sách + hạn mức ngày |
-| `Sub-category Config` | Danh mục con |
-| `Keyword Rules` | Từ khoá → danh mục (tự phân loại) |
-| `Accounts` | Tài khoản/thẻ: loại, `source_keys`, hạn mức, ngày sao kê, số dư cache |
-| `Account Ledger` | Sổ phát sinh append-only, nguồn sự thật cho số dư |
-| `Pending Accounts` | Lời mời onboarding còn hiệu lực 24h |
-| `Bot State` | JSON trạng thái hội thoại theo khoá |
-| `Processed Refs` | Sổ claim `ref_code` (processing / committed / failed), giữ 7 ngày |
-| `Excluded Events` | Giao dịch cố ý không ghi và lý do |
-| `Cashback Rules`, `Cashback Tx Tiers`, `Cashback Card Config` | Cấu hình cashback |
-| `Cashback Ledger` | Mỗi giao dịch thẻ một dòng cashback (kể cả 0đ, có lý do) |
-| `MCC Map` (+ tab loại trừ MCC) | Mẫu mô tả → mã MCC |
-| `Monthly Reports`, `Archive` | Tên đã khai báo trong `config.py` nhưng hiện chưa có code nào đọc/ghi |
+| `Đầu ra` | One row per transaction (the main table, columns A–V in §4.6) |
+| `Budget Config` | Categories per month + budget + daily cap |
+| `Sub-category Config` | Sub-categories |
+| `Keyword Rules` | Keyword → category (auto-categorize) |
+| `Accounts` | Accounts/cards: type, `source_keys`, limit, statement day, cached balance |
+| `Account Ledger` | Append-only entries, source of truth for balances |
+| `Pending Accounts` | Onboarding invitations, valid for 24h |
+| `Bot State` | Conversation state JSON per key |
+| `Processed Refs` | `ref_code` claim ledger (processing / committed / failed), kept 7 days |
+| `Excluded Events` | Transactions deliberately not written, and why |
+| `Cashback Rules`, `Cashback Tx Tiers`, `Cashback Card Config` | Cashback configuration |
+| `Cashback Ledger` | One cashback line per card transaction (0đ lines included, with a reason) |
+| `MCC Map` (+ MCC exclusion tab) | Description pattern → MCC code |
+| `Monthly Reports`, `Archive` | Declared in `config.py`, but no code reads or writes them today |
 
-**Hiệu năng và quota Google:** `sheets.py` cache các dòng giao dịch 30 giây,
-cache danh mục/tài khoản/rule cho tới khi có ghi, gộp nhiều ô vào một lệnh
-`update`, và bọc gspread bằng `QuotaBackoffHTTPClient` (retry lỗi 429 sau 1, 2,
-4, 8 giây rồi bỏ cuộc thay vì treo request mãi).
+**Performance and Google quota:** `sheets.py` caches transaction rows for 30
+seconds, caches categories/accounts/rules until the next write, batches cells
+into a single `update`, and wraps gspread in `QuotaBackoffHTTPClient` (retries a
+429 after 1, 2, 4 and 8 seconds, then gives up instead of hanging the request).
 
 ---
 
-## 8. Các job định kỳ
+## 8. Scheduled jobs
 
-GitHub Actions (`.github/workflows/cron.yml`) là lịch chính thức cho bản chạy
-trên Railway; `crontab.txt` là phiên bản tương đương cho VPS. Giờ tính theo UTC
+GitHub Actions (`.github/workflows/cron.yml`) is the canonical schedule for the
+Railway deployment; `crontab.txt` is the equivalent for a VPS. Times are in UTC
 (ICT = UTC+7).
 
-| Lịch (ICT) | Endpoint | Việc làm |
+| Schedule (ICT) | Endpoint | What it does |
 |---|---|---|
-| 09:00 ngày 1 | `/trigger/monthly-allocation` | Mời đặt ngân sách tháng mới |
-| 10:00 ngày 1 | `/trigger/auto-alloc-fallback` | Chưa trả lời thì copy ngân sách tháng trước |
-| 20:00 Chủ nhật | `/trigger/weekly` | Tóm tắt tuần |
-| 21:00 ngày 28–31 | `/trigger/monthly-report` | Báo cáo tháng (handler tự kiểm tra có phải ngày cuối tháng) |
-| (tuỳ chọn) 23:00 | `/trigger/daily-recap` | Recap cuối ngày, tự bỏ qua nếu không đặt hạn mức ngày |
+| 09:00 on the 1st | `/trigger/monthly-allocation` | Asks you to set the new month's budget |
+| 10:00 on the 1st | `/trigger/auto-alloc-fallback` | No answer yet → copies last month's budget |
+| 20:00 Sunday | `/trigger/weekly` | Weekly summary |
+| 21:00 on the 28th–31st | `/trigger/monthly-report` | Monthly report (the handler checks it is really the last day) |
+| (optional) 23:00 | `/trigger/daily-recap` | End-of-day recap, skips itself when no daily cap is set |
 
-Workflow tự bỏ qua khi `BOT_URL` vẫn là placeholder, nên bản fork chưa cấu
-hình sẽ không đỏ.
+The workflow skips itself while `BOT_URL` is still the placeholder, so an
+unconfigured fork doesn't go red.
 
 ---
 
-## 9. Cấu hình, bảo mật và vận hành
+## 9. Configuration, security and operations
 
-- **Biến môi trường** (`config.py`, `.env.example`): bắt buộc `BOT_TOKEN`,
-  `CHAT_ID`, `SHEET_ID`, `GOOGLE_CREDS_JSON` (hoặc `GOOGLE_CREDS`),
+- **Environment variables** (`config.py`, `.env.example`): required are
+  `BOT_TOKEN`, `CHAT_ID`, `SHEET_ID`, `GOOGLE_CREDS_JSON` (or `GOOGLE_CREDS`),
   `SEPAY_SECRET`, `TELEGRAM_WEBHOOK_SECRET`, `EMAIL_SECRET`, `CRON_SECRET`;
-  thêm `ZALO_BOT_TOKEN`, `ZALO_CHAT_ID`, `ZALO_SECRET_TOKEN` khi `ZALO_ENABLED`.
-  Thiếu một biến → app **từ chối khởi động** (credentials Google cũng được
-  parse thử lúc khởi động). Chế độ test được nhận diện khi `BOT_TOKEN` bắt đầu
-  bằng `test:`.
-- **Chỉ chủ bot**: mọi update Telegram/Zalo từ chat khác `CHAT_ID`/`ZALO_CHAT_ID`
-  bị bỏ qua.
-- **Không log dữ liệu ngân hàng**: log chỉ in trường an toàn (loại, ref), không
-  in số tiền hay số tài khoản; lỗi gửi cho người dùng không chứa chi tiết
-  exception.
-- **Text từ bên ngoài** (mô tả giao dịch, tên người chuyển) đi qua `md_safe`
-  trước khi chèn vào Markdown Telegram.
-- **CI** (`.github/workflows/ci.yml`): `scripts/check_no_personal_data.py` (chặn
-  số tài khoản thật/secret lọt vào repo), `ruff` cho lỗi nghiêm trọng
-  (tên chưa định nghĩa, cú pháp), rồi `pytest`.
-- **Deploy**: Railway build bằng nixpacks, chạy `uvicorn main:app`,
-  healthcheck `/healthz`. Sau deploy cần đăng ký webhook Telegram (kèm
-  `secret_token`), webhook SePay và (tuỳ chọn) webhook Zalo trỏ về domain Railway.
+  plus `ZALO_BOT_TOKEN`, `ZALO_CHAT_ID`, `ZALO_SECRET_TOKEN` when `ZALO_ENABLED`.
+  A missing one → the app **refuses to start** (the Google credentials are also
+  test-parsed at startup). Test mode is detected by a `BOT_TOKEN` starting with
+  `test:`.
+- **Owner only**: every Telegram/Zalo update from a chat other than
+  `CHAT_ID`/`ZALO_CHAT_ID` is ignored.
+- **No bank data in logs**: logs print only safe fields (type, ref), never
+  amounts or account numbers; errors shown to the user carry no exception
+  details.
+- **Outside text** (transaction descriptions, sender names) goes through
+  `md_safe` before being inserted into Telegram Markdown.
+- **CI** (`.github/workflows/ci.yml`): `scripts/check_no_personal_data.py`
+  (blocks real account numbers/secrets from entering the repo), `ruff` for
+  serious errors (undefined names, syntax), then `pytest`.
+- **Deployment**: Railway builds with nixpacks, runs `uvicorn main:app`,
+  healthcheck `/healthz`. After deploying, register the Telegram webhook (with
+  `secret_token`), the SePay webhook and (optionally) the Zalo webhook against
+  the Railway domain.
 
 ---
 
-## 10. Quan hệ với repo `financial-tracking`
+## 10. Relationship with the `financial-tracking` repository
 
-`maingocanh1702/financial-tracking` là **repo private, bản chạy thật** của chủ
-dự án (deploy trên Railway). `my-money-went-bot` là **bản open-source** được
-tách ra từ đó (`scripts/publish_oss_v1.sh` trong repo private ghi lại lần tách)
-và giữ cùng kiến trúc, cùng file, cùng test. Hai repo không gọi nhau, không
-chia sẻ dữ liệu hay database; mỗi bản deploy có Google Sheet riêng.
+`maingocanh1702/financial-tracking` is the **private repository that runs in
+production** for the project's owner (deployed on Railway).
+`my-money-went-bot` is the **open-source edition** split off from it
+(`scripts/publish_oss_v1.sh` in the private repo records the split) and keeps
+the same architecture, the same files and the same tests. The two repositories
+don't call each other and share no data or database; each deployment has its
+own Google Sheet.
 
-Khác biệt có chủ đích, được liệt kê trong `scripts/check_parity.sh`:
+Deliberate differences, listed in `scripts/check_parity.sh`:
 
-- Bản private parse email của các ngân hàng chủ dự án dùng (Techcombank, Hang
-  Seng) và có template thẻ `techcombank_visa.yaml`; bản công khai chỉ có Cake
-  làm ví dụ và `example_visa.yaml`.
-- `google_apps_script.js` bản công khai dùng placeholder.
-- Bản công khai có thêm `storage/postgres_connection.py`, test privacy guard
-  và biến Postgres trong `.env.example`.
+- The private edition parses email from the banks its owner uses (Techcombank,
+  Hang Seng) and has a `techcombank_visa.yaml` card template; the public edition
+  has only Cake as the worked example and `example_visa.yaml`.
+- `google_apps_script.js` in the public edition uses placeholders.
+- The public edition additionally has `storage/postgres_connection.py`, the
+  privacy-guard test and the Postgres variables in `.env.example`.
 
-Chạy `scripts/check_parity.sh <đường-dẫn-repo-private>` để thấy mọi khác biệt
-ngoài danh sách trên ("drift").
+Run `scripts/check_parity.sh <path-to-private-checkout>` to see any difference
+outside that list ("drift").
 
-**Về PostgreSQL:** `storage/postgres_connection.py` mới chỉ là lớp kết nối TLS
-chặt chẽ (xem `docs/postgres-sot-direct-creator-r25-decision-table.md`).
-Chưa có code nào gọi nó; Google Sheets vẫn là nguồn sự thật duy nhất.
-
----
-
-## 11. Nguyên tắc thiết kế xuyên suốt
-
-Đọc code bạn sẽ gặp đi gặp lại các quy tắc này; hãy giữ chúng khi sửa:
-
-1. **Không mất tiền trong im lặng.** Mọi sự kiện đã xác thực phải hoặc thành
-   một dòng giao dịch, hoặc thành một dòng `Excluded Events`, hoặc khiến nguồn
-   retry. Không có lựa chọn thứ tư.
-2. **Fail-closed khi không chắc.** Không đọc được sổ chống trùng → raise, không
-   đoán là "chưa có".
-3. **Chỉ append, không xoá.** Huỷ giao dịch đánh dấu cột V và void các dòng
-   ledger/cashback; không xoá dòng vì mọi thứ tham chiếu theo số dòng.
-4. **Tính năng phụ không được chặn việc ghi giao dịch.** Cashback, thông báo
-   Zalo, onboarding đều bọc `try/except`.
-5. **Không phá thao tác người dùng đang làm.** Giao dịch mới vào hàng đợi thay
-   vì ghi đè state.
-6. **Một lõi, hai kênh.** Logic nghiệp vụ viết một lần; kênh chỉ quyết định
-   cách hiển thị.
+**About PostgreSQL:** `storage/postgres_connection.py` is only a strict TLS
+connection layer so far (see
+`docs/postgres-sot-direct-creator-r25-decision-table.md`). Nothing calls it
+yet; Google Sheets remains the only source of truth.
 
 ---
 
-## 12. Bắt đầu sửa code ở đâu
+## 11. Design rules that run through the code
 
-| Muốn… | Sửa ở |
+You will meet these rules again and again; keep them when you change things:
+
+1. **Never lose money silently.** Every authenticated event must become either
+   a transaction row, an `Excluded Events` row, or a retry from the source.
+   There is no fourth outcome.
+2. **Fail closed when unsure.** If the dedup ledger can't be read → raise;
+   never assume "not there yet".
+3. **Append, never delete.** Cancelling a transaction stamps column V and voids
+   its ledger/cashback lines; rows are not removed because everything refers to
+   them by row number.
+4. **Side features must not block the transaction write.** Cashback, Zalo
+   notifications and onboarding are all wrapped in `try/except`.
+5. **Don't break what the user is doing.** New transactions are queued instead
+   of overwriting state.
+6. **One core, two channels.** Business logic is written once; the channel only
+   decides how it is shown.
+
+---
+
+## 12. Where to start changing code
+
+| To… | Change |
 |---|---|
-| Thêm ngân hàng đọc qua email | `handlers/email_parser.py` (`BANK_SENDERS`, `_parse_<bank>`) + `BANK_SENDERS` trong `google_apps_script.js` |
-| Thêm một thẻ cashback | Một file `card_templates/<thẻ>.yaml`, kiểm tra bằng `card_templates/validate.py` |
-| Thêm lệnh mới | Handler trong `handlers/`, nối vào `_handle_command` (Telegram) và `_handle_zalo_text` (Zalo) trong `main.py`, thêm vào `set_my_commands` |
-| Thêm cột cho giao dịch | Chỉ thêm ở cuối (sau cột V) trong `append_transaction` |
-| Thêm chuỗi hiển thị | `i18n/vi.py` và `i18n/en.py`, dùng `t("key")` |
-| Thử một webhook không cần ngân hàng | `scripts/sim_webhook.py` |
+| Read a new bank's emails | `handlers/email_parser.py` (`BANK_SENDERS`, `_parse_<bank>`) + `BANK_SENDERS` in `google_apps_script.js` |
+| Add a cashback card | A `card_templates/<card>.yaml` file, checked with `card_templates/validate.py` |
+| Add a command | A handler in `handlers/`, wired into `_handle_command` (Telegram) and `_handle_zalo_text` (Zalo) in `main.py`, plus an entry in `set_my_commands` |
+| Add a transaction column | Only at the end (after column V) in `append_transaction` |
+| Add user-facing text | `i18n/vi.py` and `i18n/en.py`, used through `t("key")` |
+| Try a webhook without a bank | `scripts/sim_webhook.py` |
 
-Chạy test: `pip install -r requirements-dev.txt && pytest tests/unit/ -q`.
-Trước khi mở PR: `python3 scripts/check_no_personal_data.py`.
+Run the tests: `pip install -r requirements-dev.txt && pytest tests/unit/ -q`.
+Before opening a PR: `python3 scripts/check_no_personal_data.py`.
